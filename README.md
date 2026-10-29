@@ -8,11 +8,12 @@ food with AI, and never invents a menu fact.
 Two faces, one database: a Telegram bot (reminders, photo intake, questions) and a phone-first web app at
 `social.nutrimeals.au` behind the Fuadijan login hub (This week · Month · Day).
 
-- **Cut 1** (this build): calendar seed, hub login, the three read-only screens with Copy/Share and status
-  buttons, the Telegram bot, photo intake and crops, copy packs (`caption.txt`, `canva-brief.txt`,
-  `reel-pack.txt`), the morning brief, shoot reminders, post-time and evening nudges.
-- **Cut 2**: rendered designs (satori + resvg, plate cutout), Day screen Edit + Upload, the Sunday review with
-  Claude, the email fallback.
+- **Cut 1**: calendar seed, hub login, the three screens with Copy/Share and status buttons, the Telegram bot,
+  photo intake and crops, copy packs (`caption.txt`, `canva-brief.txt`, `reel-pack.txt`), the morning brief,
+  shoot reminders, post-time and evening nudges.
+- **Cut 2**: rendered designs (satori + resvg; plate cutout with a local Apache-2.0 segmentation model), the
+  render stage in the pipeline, Day screen Edit + Upload, the Sunday review written by Claude from computed facts,
+  the smtp2go email fallback, `npm run render-samples`.
 
 `PROMPT.md` is the brief, `PLAN.md` the approved plan.
 
@@ -99,7 +100,8 @@ plus `posted N`, `skip N`, `ok`. Every question has buttons; a free-text reply a
 
 ## What arrives at post time
 
-For a feed day: the plain crops as files (4:5 and 9:16; rendered designs come in Cut 2), the caption block
+For a feed day: the rendered `feed.png` and `story.png` as files (carousels one PNG per page, reels a
+`reel-cover.png`; the plain crops when nothing could be rendered), the caption block
 (caption, CTA, 📍 address, alt text, story text, Facebook caption, post time), a separate message with only the
 hashtags (one-tap copy), and "Reply `posted N` when it's up". For a reel day the pack opens with the hook, the
 on-screen text in order, the shot list, the length and the music note. Every pack is also written to
@@ -113,6 +115,27 @@ days before, feed photos the day before, gated rows 4 days before) · every minu
 or 18:00) · 12:00 story reminder · 21:30 evening nudge if today's row isn't posted · Sunday 17:00 review.
 At most one of each per day per row. `/pause` silences them.
 
+## Rendered designs (Cut 2)
+
+`brand/brand.json` holds the social palette (Night, Charcoal, Cream, Sand, Ember, Saffron), the fonts
+(Instrument Serif for headlines, Inter for body, Playfair Display and DM Sans as fallbacks, all OFL TTFs in
+`brand/fonts/`), the logo and the layout constants matched to the six approved Canva samples in `brand/reference/`.
+Templates: `hero-photo` (layout A = plate cutout on Night with the text column left; layout B = full-bleed photo
+with a Night gradient), `review`, `carousel`, `story`, `reel-cover`, `text-only`. The registry in
+`src/render/registry.ts` maps every sheet `template` value to one of them; boot fails on an unmapped value, and
+every template renders once at boot with sample data so a missing font fails loudly.
+
+`npm run render-samples` writes every template with the owner's real photos to `samples/out/`, next to the
+matching reference, for approval. Snapshot tests (`test/render.test.ts`, `test/__snapshots__/*.png`) compare a
+perceptual hash; delete a snapshot to re-record it after an intended change.
+
+**Background removal** is segmentation, never generation: `BACKGROUND_REMOVER=u2netp` (default; U²-Net, 4.7 MB,
+downloaded once into `data/models/` and checked against a pinned sha256), `isnet` (176 MB, sharper), `removebg`
+(`REMOVE_BG_KEY`) or `none`. The cutout is taken from the whole photo, feathered, cleaned of stray islands, given a
+drop shadow and an Ember glow; when the mask covers under 25 % or over 90 % of the frame, or Claude read the photo
+as a scene or people, the design falls back to layout B. `@imgly/background-removal-node` was rejected because it
+is AGPL-3.0.
+
 ## Layout
 
 ```
@@ -122,11 +145,12 @@ src/
   db/         pool.ts migrate.ts migrations/*.sql
   calendar/   rows.ts (status, edits, push, skip) suggest.ts
   intake/     caption.ts
-  images/     prep.ts (sharp: decode, HEIC, quality, crops)
+  images/     prep.ts (sharp: decode, HEIC, quality, crops) cutout.ts (segmentation, mask clean-up, shadow)
+  render/     brand.ts templates.ts (satori) text.ts (fit) compose.ts (sharp) index.ts registry.ts
   menu/       source.ts menu-screens.ts index.ts (file, pos)
   brain/      client.ts (Claude + fixtures + claude_calls) prompts.ts schemas.ts
-  pipeline/   stages.ts worker.ts questions.ts packs.ts
-  messaging/  telegram.ts commands.ts formats.ts messenger.ts
+  pipeline/   stages.ts render-stage.ts worker.ts questions.ts packs.ts
+  messaging/  telegram.ts commands.ts formats.ts messenger.ts email.ts (smtp2go + fallback)
   reminders/  index.ts brief.ts
   auth/       hubSession.ts
   api/        routes.ts

@@ -19,6 +19,7 @@ import { allSettings } from '../settings.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
 import { answeredQuestions, askQuestion, openQuestions, setQuestionMessageId } from './questions.js';
+import { RENDER_FILENAMES, renderForRow } from './render-stage.js';
 
 export type Stage = 'intake' | 'match' | 'prep' | 'resolve' | 'render' | 'pack' | 'notify' | 'done';
 
@@ -295,7 +296,18 @@ function fieldFor(u: Unresolved): string {
 
 // ─── 5. render (Cut 2) ─────────────────────────────────────────────────────────────────────────────────────
 
-export async function render(_ctx: StageContext): Promise<Outcome> {
+export async function render(ctx: StageContext): Promise<Outcome> {
+  const rowId = ctx.job.calendar_row_id ?? ctx.asset?.calendar_row_id;
+  if (!rowId) throw new Error('render needs a calendar row');
+  const row = await rowById(ctx.pool, rowId);
+  if (!row) throw new Error(`Row ${rowId} is gone.`);
+  const outputs = await renderForRow(ctx, row);
+  await ctx.pool.query('delete from renders where calendar_row_id = $1', [row.id]);
+  for (const o of outputs) {
+    const fileId = await putFile(ctx.pool, o.png, 'image/png');
+    await ctx.pool.query('insert into renders (asset_id, calendar_row_id, template, format, page, file_id) values ($1, $2, $3, $4, $5, $6)',
+      [ctx.asset?.id ?? null, row.id, row.template, o.format, o.page, fileId]);
+  }
   return { kind: 'advance', stage: 'pack' };
 }
 
@@ -313,7 +325,12 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
   const settings = { storeAddress: s.store_address ?? '', openHours: s.open_hours ?? '', websiteUrl: s.website_url ?? '', instagramHandle: s.instagram_handle ?? '@fuadijan' };
   const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
   const clips = Number((await ctx.pool.query<{ n: string }>("select count(*) n from assets where calendar_row_id = $1 and kind = 'video'", [row.id])).rows[0]!.n);
-  const layout: 'A' | 'B' = ctx.job.state.match?.composition === 'single-plate' ? 'A' : 'B';
+
+  const assets = (await ctx.pool.query<Asset>('select * from assets where calendar_row_id = $1 order by created_at', [row.id])).rows;
+  const hero = ctx.asset?.prepped ? ctx.asset : assets.find((a) => a.prepped);
+  // Layout A when the plate cutout was made and used by the render stage (render-stage stores it in prepped).
+  const layout: 'A' | 'B' = hero?.prepped?.cutout && (await ctx.pool.query("select 1 from renders where calendar_row_id = $1 and format = 'feed'", [row.id])).rowCount ? 'A' : 'B';
+  const sources: Record<string, unknown> = { assetIds: assets.map((a) => a.id), crops: {} as Record<string, string>, renders: {} as Record<string, string>, layout };
 
   const folderName = `${row.date} ${daySlug(row)}`;
   const folder = join(PACKS_DIR, folderName);
@@ -325,16 +342,22 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
   writeFileSync(join(folder, 'canva-brief.txt'), brief);
   if (reelText) writeFileSync(join(folder, 'reel-pack.txt'), reelText);
 
-  const sources: Record<string, unknown> = { assetIds: [] as number[], crops: {} as Record<string, string> };
-  const assets = (await ctx.pool.query<Asset>('select * from assets where calendar_row_id = $1 order by created_at', [row.id])).rows;
-  (sources.assetIds as number[]).push(...assets.map((a) => a.id));
-  const hero = ctx.asset?.prepped ? ctx.asset : assets.find((a) => a.prepped);
+  for (const r of (await ctx.pool.query<{ format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; file_id: string }>('select format, page, file_id from renders where calendar_row_id = $1 order by format, page', [row.id])).rows) {
+    const name = RENDER_FILENAMES[r.format](r.page);
+    (sources.renders as Record<string, string>)[name] = r.file_id;
+    const f = await getFile(ctx.pool, r.file_id);
+    if (f) writeFileSync(join(folder, name), f.bytes);
+  }
   if (hero?.prepped) {
-    sources.crops = hero.prepped;
-    for (const [key, fileId] of Object.entries(hero.prepped)) {
+    const crops: Record<string, string> = {};
+    for (const key of ['4x5', '9x16', '1x1'] as const) {
+      const fileId = hero.prepped[key];
+      if (!fileId) continue;
+      crops[key] = fileId;
       const f = await getFile(ctx.pool, fileId);
       if (f) writeFileSync(join(folder, `crop-${key}.jpg`), f.bytes);
     }
+    sources.crops = crops;
   }
 
   const inserted = await ctx.pool.query<{ id: number }>(
@@ -373,18 +396,13 @@ export async function notify(ctx: StageContext): Promise<Outcome> {
     return { kind: 'done' };
   }
 
-  const p = (await ctx.pool.query<{ caption_txt: string; reel_pack_txt: string | null; hashtags: string[]; folder: string; sources: { crops?: Record<string, string> } }>(
+  const p = (await ctx.pool.query<{ caption_txt: string; reel_pack_txt: string | null; hashtags: string[]; folder: string; sources: { crops?: Record<string, string>; renders?: Record<string, string> } }>(
     'select caption_txt, reel_pack_txt, hashtags, folder, sources from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
   if (!p) throw new Error('No pack to send.');
   const s = await allSettings(ctx.pool);
   const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
 
-  for (const key of ['4x5', '9x16'] as const) {
-    const id = p.sources.crops?.[key];
-    if (!id) continue;
-    const f = await getFile(ctx.pool, id);
-    if (f) await ctx.messenger.sendDocument(f.bytes, `day${row.day_no}-crop-${key}.jpg`);
-  }
+  await sendPackImages(ctx, row, p.sources);
   await ctx.messenger.sendText(`${fmt.packHeader(row, postTime)}\n\n${p.reel_pack_txt ? `${p.reel_pack_txt}\n` : ''}${p.caption_txt.replace(/\n=== HASHTAGS[\s\S]*?\n\n/, '\n')}`);
   await ctx.messenger.sendText(p.hashtags.join(' '));
   await ctx.messenger.sendText(fmt.packFooter(row));
@@ -392,21 +410,34 @@ export async function notify(ctx: StageContext): Promise<Outcome> {
   return { kind: 'done' };
 }
 
-export const STAGES: Record<Exclude<Stage, 'done'>, (ctx: StageContext) => Promise<Outcome>> = { intake, match, prep, resolve, render, pack, notify };
-
-/** Resend the latest pack for a row (post-time reminder, /pack N). */
-export async function resendPack(ctx: AppContext, row: CalendarRow): Promise<boolean> {
-  const p = (await ctx.pool.query<{ caption_txt: string; reel_pack_txt: string | null; hashtags: string[]; sources: { crops?: Record<string, string> } }>(
-    'select caption_txt, reel_pack_txt, hashtags, sources from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
-  if (!p) return false;
-  const s = await allSettings(ctx.pool);
-  const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
+/** The rendered designs as files (full quality); the plain crops when nothing was rendered. */
+async function sendPackImages(ctx: AppContext, row: CalendarRow, sources: { crops?: Record<string, string>; renders?: Record<string, string> }): Promise<void> {
+  const renders = Object.entries(sources.renders ?? {});
+  if (renders.length) {
+    for (const [name, id] of renders) {
+      const f = await getFile(ctx.pool, id);
+      if (f) await ctx.messenger.sendDocument(f.bytes, `day${row.day_no}-${name}`);
+    }
+    return;
+  }
   for (const key of ['4x5', '9x16'] as const) {
-    const id = p.sources.crops?.[key];
+    const id = sources.crops?.[key];
     if (!id) continue;
     const f = await getFile(ctx.pool, id);
     if (f) await ctx.messenger.sendDocument(f.bytes, `day${row.day_no}-crop-${key}.jpg`);
   }
+}
+
+export const STAGES: Record<Exclude<Stage, 'done'>, (ctx: StageContext) => Promise<Outcome>> = { intake, match, prep, resolve, render, pack, notify };
+
+/** Resend the latest pack for a row (post-time reminder, /pack N). */
+export async function resendPack(ctx: AppContext, row: CalendarRow): Promise<boolean> {
+  const p = (await ctx.pool.query<{ caption_txt: string; reel_pack_txt: string | null; hashtags: string[]; sources: { crops?: Record<string, string>; renders?: Record<string, string> } }>(
+    'select caption_txt, reel_pack_txt, hashtags, sources from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
+  if (!p) return false;
+  const s = await allSettings(ctx.pool);
+  const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
+  await sendPackImages(ctx, row, p.sources);
   await ctx.messenger.sendText(`${fmt.packHeader(row, postTime)}\n\n${p.reel_pack_txt ? `${p.reel_pack_txt}\n` : ''}${p.caption_txt.replace(/\n=== HASHTAGS[\s\S]*?\n\n/, '\n')}`);
   await ctx.messenger.sendText(p.hashtags.join(' '));
   await ctx.messenger.sendText(fmt.packFooter(row));

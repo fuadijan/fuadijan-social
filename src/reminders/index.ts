@@ -6,6 +6,10 @@ import cron from 'node-cron';
 import { config, TZ } from '../config.js';
 import type { AppContext } from '../context.js';
 import { rowsBetween, rowsOnDate, placeholders } from '../calendar/rows.js';
+import { WeeklyReview } from '../brain/schemas.js';
+import { findItem } from '../menu/source.js';
+import { briefLine } from '../messaging/formats.js';
+import { formatDay } from '../time.js';
 import * as fmt from '../messaging/formats.js';
 import { openQuestions } from '../pipeline/questions.js';
 import { resendPack } from '../pipeline/stages.js';
@@ -97,13 +101,58 @@ export async function eveningNudge(ctx: AppContext): Promise<void> {
   }
 }
 
-/** Cut 2: the Sunday review. Cut 1 sends the plain facts without Claude. */
+/**
+ * The Sunday review: the coming week, rows with no dish, dishes repeated back-to-back, dishes not on the menu or
+ * sold out, open questions. The facts are computed here; Claude writes the short note from them.
+ */
 export async function weeklyReview(ctx: AppContext): Promise<void> {
   if (await isPaused(ctx.pool)) return;
   const today = sydneyDate(ctx.now());
-  const lines = await weekLines(ctx, addDays(today, 1), addDays(today, 7));
-  const open = (await openQuestions(ctx.pool)).length;
-  await once(ctx, `review:${today}`, () => ctx.messenger.sendText(['🗓 The coming week:', '', ...lines.flatMap((l) => [l, '']), open ? `${open} open question${open === 1 ? '' : 's'} — /ask` : 'No open questions.'].join('\n')).then(() => {}));
+  await once(ctx, `review:${today}`, async () => {
+    const rows = await rowsBetween(ctx.pool, addDays(today, 1), addDays(today, 7));
+    const views = await rowViews(ctx, rows);
+    const lines = views.map((v) => briefLine(v.row, v.needs, v.suggestion));
+    const open = await openQuestions(ctx.pool);
+    const warnings: string[] = [];
+    let menu: Awaited<ReturnType<typeof ctx.menu.get>> | null = null;
+    try {
+      menu = await ctx.menu.get();
+    } catch {
+      warnings.push('The menu source could not be read, so dish availability was not checked.');
+    }
+    let prevDish: string | null = null;
+    for (const v of views) {
+      const dish = v.row.dish && !v.row.dish.startsWith('[') ? v.row.dish : null;
+      if (!dish) warnings.push(`Day ${v.row.day_no} (${formatDay(v.row.date)}) has no dish${v.suggestion ? ` — suggestion: ${v.suggestion}` : ''}.`);
+      else {
+        const first = dish.split(/[,+]/)[0]!.trim();
+        if (prevDish && first.toLowerCase() === prevDish.toLowerCase()) warnings.push(`Day ${v.row.day_no} repeats ${first} back-to-back.`);
+        prevDish = first;
+        if (menu) {
+          for (const part of dish.split(/[,+]/).map((d) => d.trim()).filter((d) => d && !/spread|highlights|confirmed|menu/i.test(d))) {
+            const item = findItem(menu, part);
+            if (!item) warnings.push(`Day ${v.row.day_no}: "${part}" is not on the current menu.`);
+            else if (item.soldOut) warnings.push(`Day ${v.row.day_no}: ${item.name} is sold out right now.`);
+          }
+        }
+      }
+      if (v.placeholders.length && v.row.status !== 'ready' && v.row.status !== 'posted') warnings.push(`Day ${v.row.day_no} still has ${v.placeholders.length} placeholder${v.placeholders.length === 1 ? '' : 's'} to confirm.`);
+    }
+    if (open.length) warnings.push(`${open.length} question${open.length === 1 ? '' : 's'} still unanswered (/ask).`);
+
+    let summary = '';
+    try {
+      const out = await ctx.claude.call({
+        purpose: 'weekly-review', fixtureKey: 'default', schema: WeeklyReview,
+        system: 'You write a short Sunday note to the owner of Fuadijan about next week of the Instagram calendar. Two short paragraphs, plain words, Australian spelling, no emojis, no invented facts: only what the facts list says. End with the single most useful thing to do first.',
+        user: `Coming week:\n${lines.join('\n')}\n\nFacts to mention:\n${warnings.length ? warnings.map((w) => `- ${w}`).join('\n') : '- Nothing is missing.'}`,
+      });
+      summary = out.summary;
+    } catch (e) {
+      ctx.log.warn(`weekly review without Claude: ${e instanceof Error ? e.message : e}`);
+    }
+    await ctx.messenger.sendText(['🗓 Sunday review — the coming week', '', ...(summary ? [summary, ''] : []), ...lines.flatMap((l) => [l, '']), warnings.length ? `Watch out:\n${warnings.map((w) => `• ${w}`).join('\n')}` : 'Nothing is missing.'].join('\n'));
+  });
 }
 
 export const REMINDERS: Record<Exclude<ReminderJob, 'worker-tick'>, (ctx: AppContext) => Promise<void>> = {

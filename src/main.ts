@@ -8,7 +8,10 @@ import { consoleLogger, type AppContext } from './context.js';
 import { createPool } from './db/pool.js';
 import { migrate } from './db/migrate.js';
 import { cachedMenuFromConfig } from './menu/index.js';
-import { ConsoleMessenger } from './messaging/messenger.js';
+import { ConsoleMessenger, type Messenger } from './messaging/messenger.js';
+import { EmailMessenger, FallbackMessenger } from './messaging/email.js';
+import { loadBrand } from './render/brand.js';
+import { checkTemplates } from './render/index.js';
 import { createBot, TelegramMessenger, wireBot } from './messaging/telegram.js';
 import { Worker } from './pipeline/worker.js';
 import { assertAllMapped } from './render/registry.js';
@@ -32,13 +35,23 @@ async function main(): Promise<void> {
     log.warn(`Menu source unavailable at boot: ${e instanceof Error ? e.message : e}`);
   }
 
+  // The brand kit and every template render once with sample data, so a missing font or token fails here.
+  const brand = loadBrand();
+  await checkTemplates(brand);
+  log.info(`Brand kit "${brand.name}" v${brand.version}: fonts and templates OK.`);
+
   const claude = claudeFromConfig(pool);
   if (claude.kind === 'fixture') log.warn('Claude is answering from fixtures (no ANTHROPIC_API_KEY or CLAUDE_FIXTURES=1).');
 
   const bot = config.telegram.token ? createBot(config.telegram.token) : null;
-  const messenger = bot && config.telegram.chatId ? new TelegramMessenger(bot, config.telegram.chatId, pool) : new ConsoleMessenger();
+  const email = config.email.apiKey && config.email.to ? new EmailMessenger(config.email.apiKey, config.email.from, config.email.to) : null;
+  let messenger: Messenger;
+  if (config.messenger === 'email' && email) messenger = email;
+  else if (bot && config.telegram.chatId) messenger = new FallbackMessenger(new TelegramMessenger(bot, config.telegram.chatId, pool), email, (m) => log.warn(m));
+  else messenger = new ConsoleMessenger();
   if (!bot) log.warn('TELEGRAM_BOT_TOKEN is not set — messages go to the console.');
   else if (!config.telegram.chatId) log.warn('TELEGRAM_CHAT_ID is not set — the bot will log the chat id of whoever messages it; outgoing messages go to the console until it is set.');
+  if (email) log.info(`Email fallback to ${config.email.to} is ${config.messenger === 'email' ? 'the primary channel' : 'ready'}.`);
 
   const ctx: AppContext = { pool, claude, menu, messenger, log, now: () => new Date() };
 

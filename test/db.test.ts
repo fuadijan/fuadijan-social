@@ -113,7 +113,10 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(pack.hashtags).toHaveLength(5);
     expect(pack.caption_txt).toContain('=== POST AT ===');
     const files = messenger.sent.filter((m) => m.file).map((m) => m.file);
-    expect(files).toEqual(['day2-crop-4x5.jpg', 'day2-crop-9x16.jpg']);
+    // The render stage made the designs, so the owner gets those as files rather than the plain crops.
+    expect(files).toEqual(['day2-feed.png', 'day2-story.png']);
+    const renders = (await pool.query<{ format: string }>('select format from renders where calendar_row_id = $1 order by format', [(await rowByDay(pool, 2))!.id])).rows.map((r) => r.format);
+    expect(renders).toEqual(['feed', 'story']);
     const assets = (await pool.query<{ quality: { verdict: string }; prepped: Record<string, string> }>('select quality, prepped from assets')).rows[0]!;
     expect(assets.quality.verdict).toBe('ok');
     expect(Object.keys(assets.prepped).sort()).toEqual(['1x1', '4x5', '9x16']);

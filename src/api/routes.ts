@@ -5,7 +5,9 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import type { AppContext } from '../context.js';
-import { allRows, markPosted, pushRow, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow } from '../calendar/rows.js';
+import { EDITABLE_FIELDS, allRows, editField, markPosted, pushRow, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow, type EditableField } from '../calendar/rows.js';
+import { receiveAsset } from '../pipeline/worker.js';
+import { redoRow } from '../pipeline/worker.js';
 import { getFile } from '../files.js';
 import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
@@ -103,6 +105,47 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     if (!Number.isInteger(days) || !days || Math.abs(days) > 30) return reply.code(400).send({ ok: false, error: 'days must be a whole number' });
     const next = await pushRow(ctx.pool, row, days, 'owner-web');
     return { ok: true, date: next };
+  });
+
+  // Cut 2: edit any text field (history kept in calendar_edits) and upload photos from the phone.
+  app.patch<{ Params: { dayNo: string }; Body: { field?: string; value?: string | null; redo?: boolean } }>('/api/rows/:dayNo', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const field = String(req.body?.field ?? '') as EditableField;
+    if (!EDITABLE_FIELDS.includes(field)) return reply.code(400).send({ ok: false, error: `field must be one of ${EDITABLE_FIELDS.join(', ')}` });
+    const raw = req.body?.value;
+    const value = raw === null || raw === undefined || String(raw).trim() === '' ? null : String(raw).trim();
+    try {
+      await editField(ctx.pool, row, field, value, 'owner-web');
+    } catch (e) {
+      return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    if (req.body?.redo) await redoRow(ctx.pool, row.id, null);
+    return { ok: true };
+  });
+
+  app.post<{ Params: { dayNo: string } }>('/api/rows/:dayNo/upload', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    if (!req.isMultipart()) return reply.code(400).send({ ok: false, error: 'multipart/form-data expected' });
+    let caption = '';
+    const files: { bytes: Buffer; mime: string; filename: string }[] = [];
+    for await (const part of req.parts()) {
+      if (part.type === 'file') {
+        const bytes = await part.toBuffer();
+        if (bytes.length) files.push({ bytes, mime: part.mimetype, filename: part.filename });
+      } else if (part.fieldname === 'caption') caption = String(part.value ?? '').trim();
+    }
+    if (!files.length) return reply.code(400).send({ ok: false, error: 'No file' });
+    const base = caption || (row.dish && !row.dish.startsWith('[') ? row.dish.split(',')[0]!.toLowerCase() : (row.theme ?? 'photo').toLowerCase());
+    const withDay = /#day\d+/i.test(base) ? base : `${base} #day${row.day_no}`;
+    const ids: number[] = [];
+    for (const f of files) {
+      const isVideo = f.mime.startsWith('video/');
+      const { asset } = await receiveAsset(ctx.pool, { kind: isVideo ? 'video' : 'document', bytes: isVideo ? undefined : f.bytes, mime: f.mime, filename: f.filename, caption: withDay });
+      ids.push(asset.id);
+    }
+    return { ok: true, assetIds: ids, caption: withDay };
   });
 
   app.get('/api/status', async () => ({ text: await statusText(ctx) }));

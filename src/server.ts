@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
+import multipart from '@fastify/multipart';
 import { config, hubMode } from './config.js';
 import type { AppContext } from './context.js';
 import { authenticate } from './auth/hubSession.js';
@@ -64,6 +65,7 @@ export function buildServer(ctx: AppContext, opts: ServerOptions = {}): FastifyI
   });
 
   app.decorateRequest('user', null);
+  app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 10 } });
 
   app.get('/health', async () => ({ ok: true, hub: hubMode, claude: ctx.claude.kind, menu: ctx.menu.status().source }));
 

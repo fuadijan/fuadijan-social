@@ -1,0 +1,41 @@
+{
+  "name": "Fuadijan social kit",
+  "version": 1,
+  "colors": {
+    "night": "#0F0D0B",
+    "charcoal": "#171412",
+    "cream": "#F3EBDD",
+    "sand": "#B8AC9A",
+    "ember": "#E8742E",
+    "saffron": "#F2B544"
+  },
+  "fonts": {
+    "heading": { "family": "Instrument Serif", "file": "fonts/InstrumentSerif-Regular.ttf", "italic": "fonts/InstrumentSerif-Italic.ttf", "fallback": "fonts/PlayfairDisplay-Regular.ttf" },
+    "body": { "family": "Inter", "file": "fonts/Inter-Regular.ttf", "medium": "fonts/Inter-Medium.ttf", "fallback": "fonts/DMSans-Regular.ttf" }
+  },
+  "logo": "logo.png",
+  "canvas": { "feed": [1080, 1350], "story": [1080, 1920], "square": [1080, 1080] },
+  "layout": {
+    "margin": 60,
+    "logoWidth": 220,
+    "textColumn": 460,
+    "ruleSize": [90, 3],
+    "label": { "size": 26, "tracking": 0.3 },
+    "headline": { "start": 130, "min": 84, "step": 8, "lineHeight": 0.95 },
+    "line": { "size": 34, "maxLines": 3 },
+    "footer": { "size": 22, "tracking": 0.25 },
+    "storySafeTop": 250,
+    "storySafeBottom": 300
+  },
+  "cutout": {
+    "widthRatio": 0.75,
+    "shadow": { "offsetY": 24, "blur": 40, "opacity": 0.55 },
+    "glow": { "color": "ember", "opacity": 0.12 },
+    "feather": 3,
+    "minCoverage": 0.25,
+    "maxCoverage": 0.9
+  },
+  "seriesLabels": ["FROM THE FIRE", "FROM THE KARAHI", "ROOTED IN TRADITION", "MODERN FUADIJAN", "BEHIND FUADIJAN"],
+  "brandLine": "SMOKED. GRILLED. ROOTED IN TRADITION.",
+  "ornament": "✻"
+}
