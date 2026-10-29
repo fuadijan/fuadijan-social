@@ -1,0 +1,1 @@
+Test photos for dry runs. karahi/plates/tikka-chips are the owner's real photos behind samples 1, 3 and 4. chapli.jpg is a STAND-IN (a copy of tikka-chips.jpg) until a real Chapli Kebab photo arrives.

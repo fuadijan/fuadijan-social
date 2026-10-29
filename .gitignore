@@ -7,3 +7,6 @@ web/dist/
 packs/
 calendar/Fuadijan-Posts-Calendar.xlsx
 samples/out/
+.local/
+data/
+*.log

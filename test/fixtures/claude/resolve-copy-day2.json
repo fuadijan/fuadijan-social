@@ -1,0 +1,20 @@
+{
+  "label": "FROM THE FIRE",
+  "headline": "Chapli\nKebab",
+  "line": "Bold flavour, a grilled finish, a place at the heart of the table.",
+  "caption": "Bold flavour, a beautifully grilled finish and a place at the heart of the table. Meet the Chapli Kebab at Fuadijan.",
+  "cta": "Have you tried Chapli Kebab? Tell us below.",
+  "hashtags": ["#Fuadijan", "#ChapliKebab", "#PakistaniCuisine", "#AuburnEats", "#FromTheFire"],
+  "alt_text": "A charcoal-grilled Chapli Kebab on a plate against a dark background.",
+  "story_text": "Poll: Have you tried Chapli Kebab? Yes / Not yet",
+  "facebook_caption": "Bold flavour, a beautifully grilled finish and a place at the heart of the table. Meet the Chapli Kebab at Fuadijan. Have you tried Chapli Kebab? Tell us below.",
+  "on_screen_text": [],
+  "unresolved": [
+    {
+      "field": "line",
+      "placeholder": "Boldly spiced. Hand-formed. Grilled over fire.",
+      "question": "The design line says \"Boldly spiced. Hand-formed. Grilled over fire.\" Can the kitchen confirm all three?",
+      "suggestions": ["Yes, all three are true", "Use: Bold flavour. Grilled over fire.", "Use the dish name only"]
+    }
+  ]
+}

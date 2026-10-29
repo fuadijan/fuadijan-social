@@ -1,0 +1,10 @@
+{
+  "row_id": null,
+  "confidence": 0.55,
+  "reason": "The caption names the dish but two upcoming rows feature it; the owner should confirm.",
+  "dish_canonical": "Chapli Kebab",
+  "alternatives": [],
+  "composition": "single-plate",
+  "background_clutter": "medium",
+  "shoot_tip": "The patterned table shows around the plate — shoot on the plain dark bench or tighter from above."
+}

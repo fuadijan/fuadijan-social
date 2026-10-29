@@ -1,0 +1,424 @@
+/**
+ * The seven stages, one function each. Each takes the job and returns what the worker should do next:
+ * advance to a stage (with state), wait on a question, or finish. Nothing here talks to Telegram directly; the
+ * messenger does, so the dry run can swap it for the console.
+ */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { AppContext } from '../context.js';
+import { MatchResult, ResolvedCopy, type Unresolved } from '../brain/schemas.js';
+import { matchPrompt, resolvePrompt } from '../brain/prompts.js';
+import { allRows, daySlug, rowById, rowsBetween, seriesLabel, setStatus, type CalendarRow } from '../calendar/rows.js';
+import { getFile, putFile } from '../files.js';
+import { crop, decode, measure, thumbnail, type Quality } from '../images/prep.js';
+import { hasTag, parseCaption, type ParsedCaption } from '../intake/caption.js';
+import { findItem } from '../menu/source.js';
+import * as fmt from '../messaging/formats.js';
+import { templateEntry } from '../render/registry.js';
+import { allSettings } from '../settings.js';
+import { addDays, sydneyDate, sydneyTime } from '../time.js';
+import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
+import { answeredQuestions, askQuestion, openQuestions, setQuestionMessageId } from './questions.js';
+
+export type Stage = 'intake' | 'match' | 'prep' | 'resolve' | 'render' | 'pack' | 'notify' | 'done';
+
+export interface Asset {
+  id: number;
+  telegram_file_id: string | null;
+  telegram_message_id: number | null;
+  kind: 'photo' | 'document' | 'video' | 'text';
+  filename: string | null;
+  mime: string | null;
+  caption_raw: string | null;
+  parsed_subject: string | null;
+  parsed_tags: string[];
+  parsed_note: string | null;
+  calendar_row_id: number | null;
+  set_key: string | null;
+  original_file_id: string | null;
+  width: number | null;
+  height: number | null;
+  quality: Quality | null;
+  prepped: Record<string, string> | null;
+}
+
+export interface JobState {
+  jpegFileId?: string;
+  qualityAccepted?: boolean;
+  match?: MatchResult;
+  unscheduled?: boolean;
+  copy?: ResolvedCopy;
+  note?: string | null;
+  packId?: number;
+  packFolder?: string;
+  isSetFollower?: boolean;
+  /** Which question ids this job has already asked and sent, so a re-run doesn't repeat them. */
+  askedQuestionIds?: number[];
+}
+
+export interface Job {
+  id: number;
+  asset_id: number | null;
+  calendar_row_id: number | null;
+  stage: Stage;
+  status: 'queued' | 'running' | 'waiting' | 'done' | 'failed';
+  state: JobState;
+  waiting_on_question_id: number | null;
+  attempts: number;
+}
+
+export type Outcome =
+  | { kind: 'advance'; stage: Stage; state?: Partial<JobState>; rowId?: number }
+  | { kind: 'wait'; questionId: number; state?: Partial<JobState>; rowId?: number }
+  | { kind: 'done'; state?: Partial<JobState> }
+  | { kind: 'cancel'; reason: string };
+
+export interface StageContext extends AppContext {
+  job: Job;
+  asset: Asset | null;
+}
+
+export const PACKS_DIR = join(process.cwd(), 'packs');
+
+async function loadJpeg(ctx: StageContext): Promise<Buffer> {
+  const id = ctx.job.state.jpegFileId ?? ctx.asset?.original_file_id;
+  if (!id) throw new Error('This job has no image.');
+  const f = await getFile(ctx.pool, id);
+  if (!f) throw new Error(`Image ${id} is missing from the files table.`);
+  return f.bytes;
+}
+
+function caption(asset: Asset | null): ParsedCaption {
+  return parseCaption(asset?.caption_raw);
+}
+
+async function sendQuestion(ctx: StageContext, q: { rowId: number | null; field: string; question: string; options: { key: string; label: string; value: string }[] }, header?: string) {
+  const question = await askQuestion(ctx.pool, { ...q, jobId: ctx.job.id });
+  if (header) await ctx.messenger.sendText(header);
+  const sent = await ctx.messenger.sendText(question.question, { buttons: question.options.map((o) => ({ key: `q:${question.id}:${o.key}`, label: o.label })), questionId: question.id });
+  await setQuestionMessageId(ctx.pool, question.id, sent.messageId);
+  return question;
+}
+
+// ─── 1. intake ─────────────────────────────────────────────────────────────────────────────────────────────
+
+export async function intake(ctx: StageContext): Promise<Outcome> {
+  const asset = ctx.asset;
+  if (!asset) throw new Error('intake needs an asset');
+  if (asset.kind === 'video' || asset.kind === 'text') return { kind: 'advance', stage: 'match' };
+
+  // A quality question answered → read the answer.
+  const answered = (await answeredQuestions(ctx.pool, asset.calendar_row_id ?? -1)).filter((q) => q.job_id === ctx.job.id && q.field === 'quality');
+  const lastAnswer = answered.at(-1)?.answer;
+  if (lastAnswer === 'resend') return { kind: 'cancel', reason: 'The owner will resend this photo as a File.' };
+
+  let jpegFileId = ctx.job.state.jpegFileId;
+  if (!jpegFileId) {
+    const original = await getFile(ctx.pool, asset.original_file_id ?? '');
+    if (!original) throw new Error('The original photo is missing.');
+    const { jpeg, width, height } = await decode(original.bytes, asset.mime, asset.filename);
+    jpegFileId = await putFile(ctx.pool, jpeg, 'image/jpeg');
+    const quality = await measure(jpeg);
+    await ctx.pool.query('update assets set width = $2, height = $3, quality = $4 where id = $1', [asset.id, width, height, JSON.stringify(quality)]);
+    asset.quality = quality;
+    asset.width = width;
+    asset.height = height;
+  }
+  const quality = asset.quality!;
+  const accepted = ctx.job.state.qualityAccepted || lastAnswer === 'use';
+  if (!accepted && quality.verdict !== 'ok') {
+    const text = quality.verdict === 'small' ? fmt.QUALITY_SMALL : fmt.qualityBad(quality.verdict);
+    const q = await sendQuestion(ctx, {
+      rowId: asset.calendar_row_id, field: 'quality', question: text,
+      options: [{ key: 'use', label: 'Use this one', value: 'use' }, { key: 'resend', label: "I'll resend as a File", value: 'resend' }],
+    });
+    return { kind: 'wait', questionId: q.id, state: { jpegFileId } };
+  }
+  return { kind: 'advance', stage: 'match', state: { jpegFileId, qualityAccepted: true } };
+}
+
+// ─── 2. match ──────────────────────────────────────────────────────────────────────────────────────────────
+
+async function candidateRows(ctx: StageContext): Promise<CalendarRow[]> {
+  const today = sydneyDate(ctx.now());
+  const rows = await rowsBetween(ctx.pool, addDays(today, -2), addDays(today, 10));
+  return rows.filter((r) => r.status !== 'posted');
+}
+
+function textScore(row: CalendarRow, cap: ParsedCaption): number {
+  const hay = `${row.dish ?? ''} ${row.theme ?? ''} ${row.type} ${row.template}`.toLowerCase();
+  const words = cap.subject.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+  return words.reduce((n, w) => n + (hay.includes(w) ? 1 : 0), 0);
+}
+
+async function assignRow(ctx: StageContext, row: CalendarRow, match: MatchResult | null): Promise<void> {
+  const asset = ctx.asset!;
+  // Several photos within 10 minutes for the same day are one set.
+  const recent = (await ctx.pool.query<{ set_key: string | null }>(
+    "select set_key from assets where calendar_row_id = $1 and id <> $2 and created_at > now() - interval '10 minutes' and set_key is not null order by created_at desc limit 1",
+    [row.id, asset.id])).rows[0];
+  const setKey = recent?.set_key ?? `row-${row.id}-${Date.now()}`;
+  await ctx.pool.query('update assets set calendar_row_id = $2, set_key = $3 where id = $1', [asset.id, row.id, setKey]);
+  asset.calendar_row_id = row.id;
+  asset.set_key = setKey;
+  if (match?.dish_canonical && (!row.dish || row.dish.startsWith('['))) {
+    // Never fill dish on the agent's own; it's a suggestion the owner sees in the pack questions instead.
+  }
+  await ctx.pool.query('update jobs set calendar_row_id = $2 where id = $1', [ctx.job.id, row.id]);
+  ctx.job.calendar_row_id = row.id;
+  ctx.job.state.isSetFollower = Boolean(recent?.set_key);
+}
+
+export async function match(ctx: StageContext): Promise<Outcome> {
+  const asset = ctx.asset;
+  if (!asset) throw new Error('match needs an asset');
+  const cap = caption(asset);
+
+  // The owner answered "Which day is this for?"
+  const prior = (await answeredQuestions(ctx.pool, asset.calendar_row_id ?? -1)).concat(
+    (await ctx.pool.query<import('./questions.js').Question>('select * from questions where job_id = $1 and field = $2 and answered_at is not null order by answered_at desc limit 1', [ctx.job.id, 'match'])).rows);
+  const matchAnswer = prior.find((q) => q.field === 'match' && q.job_id === ctx.job.id)?.answer;
+  if (matchAnswer === 'unscheduled') return { kind: 'advance', stage: asset.kind === 'video' ? 'done' : 'prep', state: { unscheduled: true } };
+  if (matchAnswer && /^\d+$/.test(matchAnswer)) {
+    const row = await rowById(ctx.pool, Number(matchAnswer));
+    if (row) {
+      await assignRow(ctx, row, null);
+      await ctx.messenger.sendText(fmt.photoReceived(row, cap.subject || asset.kind));
+      return { kind: 'advance', stage: asset.kind === 'video' ? 'resolve' : 'prep', rowId: row.id };
+    }
+  }
+
+  if (hasTag(cap, 'unscheduled')) return { kind: 'advance', stage: asset.kind === 'video' ? 'done' : 'prep', state: { unscheduled: true } };
+
+  if (cap.dayNo) {
+    const row = (await allRows(ctx.pool)).find((r) => r.day_no === cap.dayNo);
+    if (!row) throw new Error(`There is no Day ${cap.dayNo}.`);
+    await assignRow(ctx, row, null);
+    await ctx.messenger.sendText(fmt.photoReceived(row, cap.subject || asset.kind));
+    return { kind: 'advance', stage: asset.kind === 'video' ? 'resolve' : 'prep', rowId: row.id };
+  }
+
+  const candidates = await candidateRows(ctx);
+  const menu = await ctx.menu.get();
+  let result: MatchResult | null = null;
+  if (asset.kind !== 'video' && asset.kind !== 'text' && candidates.length) {
+    const jpeg = await loadJpeg(ctx);
+    const thumb = await thumbnail(jpeg, 512);
+    const prompt = matchPrompt(cap, candidates, menu, sydneyDate(ctx.now()));
+    result = await ctx.claude.call({ purpose: 'match-photo-to-row', fixtureKey: `day${cap.dayNo ?? ''}` || undefined, system: prompt.system, user: prompt.user, image: { bytes: thumb, mime: 'image/jpeg' }, schema: MatchResult, jobId: ctx.job.id });
+    if (result.shoot_tip && result.background_clutter !== 'low') await ctx.messenger.sendText(`Tip: ${result.shoot_tip}`);
+  }
+
+  const ranked = candidates
+    .map((r) => ({ r, score: (result?.row_id === r.id ? 10 : 0) + (result?.alternatives.some((a) => a.row_id === r.id) ? 3 : 0) + textScore(r, cap) }))
+    .sort((a, b) => b.score - a.score || a.r.date.localeCompare(b.r.date));
+  const chosen = result?.row_id ? candidates.find((r) => r.id === result!.row_id) ?? null : (ranked[0]?.score ? ranked[0].r : null);
+  const confident = Boolean(result && result.confidence >= 0.7 && chosen);
+
+  if (confident && chosen) {
+    await assignRow(ctx, chosen, result);
+    await ctx.messenger.sendText(fmt.photoReceived(chosen, result?.dish_canonical ?? cap.subject ?? asset.kind));
+    return { kind: 'advance', stage: 'prep', state: { match: result! }, rowId: chosen.id };
+  }
+
+  const top = ranked.slice(0, 3).map((x) => x.r);
+  const q = await sendQuestion(ctx, {
+    rowId: null, field: 'match',
+    question: `Which day is this ${asset.kind === 'video' ? 'clip' : 'photo'} for?${cap.subject ? ` ("${cap.subject}")` : ''}`,
+    options: [...top.map((r) => ({ key: `r${r.id}`, label: `Day ${r.day_no} · ${(r.dish ?? r.theme ?? r.type).split(',')[0]!.slice(0, 22)}`, value: String(r.id) })), { key: 'unscheduled', label: 'Unscheduled', value: 'unscheduled' }],
+  });
+  return { kind: 'wait', questionId: q.id, state: result ? { match: result } : {} };
+}
+
+// ─── 3. prep ───────────────────────────────────────────────────────────────────────────────────────────────
+
+export async function prep(ctx: StageContext): Promise<Outcome> {
+  const asset = ctx.asset;
+  if (!asset) throw new Error('prep needs an asset');
+  if (asset.kind === 'video' || asset.kind === 'text') return { kind: 'advance', stage: 'resolve' };
+  const jpeg = await loadJpeg(ctx);
+  const prepped: Record<string, string> = {};
+  for (const key of ['4x5', '9x16', '1x1'] as const) {
+    prepped[key] = await putFile(ctx.pool, await crop(jpeg, key), 'image/jpeg');
+  }
+  await ctx.pool.query('update assets set prepped = $2 where id = $1', [asset.id, JSON.stringify(prepped)]);
+  asset.prepped = prepped;
+  if (ctx.job.state.unscheduled) return { kind: 'advance', stage: 'notify' };
+  return { kind: 'advance', stage: 'resolve' };
+}
+
+// ─── 4. resolve ────────────────────────────────────────────────────────────────────────────────────────────
+
+export async function resolve(ctx: StageContext): Promise<Outcome> {
+  const rowId = ctx.job.calendar_row_id ?? ctx.asset?.calendar_row_id;
+  if (!rowId) throw new Error('resolve needs a calendar row');
+  const row = await rowById(ctx.pool, rowId);
+  if (!row) throw new Error(`Row ${rowId} is gone.`);
+
+  // A later photo in the same set reuses the copy already resolved for the row.
+  if (ctx.job.state.isSetFollower) {
+    const existing = (await ctx.pool.query<{ id: number }>('select id from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
+    if (existing) return { kind: 'advance', stage: 'notify' };
+  }
+
+  const stillOpen = (await openQuestions(ctx.pool, row.id)).filter((q) => q.field !== 'quality' && q.field !== 'match');
+  if (stillOpen.length) return { kind: 'wait', questionId: stillOpen[0]!.id };
+
+  const menu = await ctx.menu.get();
+  const answers = (await answeredQuestions(ctx.pool, row.id)).filter((q) => !['quality', 'match', 'skip'].includes(q.field ?? '')).map((q) => ({ question: q.question, answer: q.answer ?? '' }));
+  const cap = caption(ctx.asset);
+  const entry = templateEntry(row.template);
+  const prompt = resolvePrompt({
+    row, menu, answers, note: ctx.job.state.note ?? cap.note, dishCanonical: ctx.job.state.match?.dish_canonical ?? null,
+    label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'),
+  });
+  const copy = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
+
+  // Everything the menu can't settle goes to the owner, one message per question (so each has its buttons).
+  const unresolved = copy.unresolved.filter((u) => !answers.some((a) => a.question === u.question));
+  if (unresolved.length) {
+    await setStatus(ctx.pool, row, 'photo-needed');
+    await ctx.messenger.sendText(fmt.questionsMessage(`Day ${row.day_no} — ${row.dish ?? row.theme ?? row.type}`, unresolved.map((u, i) => ({ n: i + 1, question: u.question }))));
+    let first: number | null = null;
+    for (const u of unresolved) {
+      const q = await sendQuestion(ctx, { rowId: row.id, field: fieldFor(u), question: u.question, options: u.suggestions.slice(0, 4).map((s, i) => ({ key: `s${i}`, label: s.slice(0, 40), value: s })) });
+      first ??= q.id;
+    }
+    return { kind: 'wait', questionId: first!, state: { copy } };
+  }
+  return { kind: 'advance', stage: 'render', state: { copy } };
+}
+
+function fieldFor(u: Unresolved): string {
+  return u.field === 'other' ? 'confirm' : u.field;
+}
+
+// ─── 5. render (Cut 2) ─────────────────────────────────────────────────────────────────────────────────────
+
+export async function render(_ctx: StageContext): Promise<Outcome> {
+  return { kind: 'advance', stage: 'pack' };
+}
+
+// ─── 6. pack ───────────────────────────────────────────────────────────────────────────────────────────────
+
+export async function pack(ctx: StageContext): Promise<Outcome> {
+  const rowId = ctx.job.calendar_row_id ?? ctx.asset?.calendar_row_id;
+  if (!rowId) throw new Error('pack needs a calendar row');
+  const row = await rowById(ctx.pool, rowId);
+  if (!row) throw new Error(`Row ${rowId} is gone.`);
+  const copy = ctx.job.state.copy;
+  if (!copy) throw new Error('pack needs resolved copy');
+
+  const s = await allSettings(ctx.pool);
+  const settings = { storeAddress: s.store_address ?? '', openHours: s.open_hours ?? '', websiteUrl: s.website_url ?? '', instagramHandle: s.instagram_handle ?? '@fuadijan' };
+  const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
+  const clips = Number((await ctx.pool.query<{ n: string }>("select count(*) n from assets where calendar_row_id = $1 and kind = 'video'", [row.id])).rows[0]!.n);
+  const layout: 'A' | 'B' = ctx.job.state.match?.composition === 'single-plate' ? 'A' : 'B';
+
+  const folderName = `${row.date} ${daySlug(row)}`;
+  const folder = join(PACKS_DIR, folderName);
+  mkdirSync(folder, { recursive: true });
+  const captionText = captionTxt(row, copy, settings, postTime);
+  const brief = canvaBriefTxt(row, copy, settings, layout, { feed: 'crop-4x5.jpg', story: 'crop-9x16.jpg' });
+  const reelText = row.slot === 'reel' ? reelPackTxt(row, copy, clips) : null;
+  writeFileSync(join(folder, 'caption.txt'), captionText);
+  writeFileSync(join(folder, 'canva-brief.txt'), brief);
+  if (reelText) writeFileSync(join(folder, 'reel-pack.txt'), reelText);
+
+  const sources: Record<string, unknown> = { assetIds: [] as number[], crops: {} as Record<string, string> };
+  const assets = (await ctx.pool.query<Asset>('select * from assets where calendar_row_id = $1 order by created_at', [row.id])).rows;
+  (sources.assetIds as number[]).push(...assets.map((a) => a.id));
+  const hero = ctx.asset?.prepped ? ctx.asset : assets.find((a) => a.prepped);
+  if (hero?.prepped) {
+    sources.crops = hero.prepped;
+    for (const [key, fileId] of Object.entries(hero.prepped)) {
+      const f = await getFile(ctx.pool, fileId);
+      if (f) writeFileSync(join(folder, `crop-${key}.jpg`), f.bytes);
+    }
+  }
+
+  const inserted = await ctx.pool.query<{ id: number }>(
+    `insert into packs (calendar_row_id, caption, cta, hashtags, alt_text, story_text, facebook_caption, reel_hook, reel_on_screen_text, reel_shot_list, canva_brief, caption_txt, reel_pack_txt, folder, sources)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) returning id`,
+    [row.id, copy.caption, copy.cta, copy.hashtags, copy.alt_text, copy.story_text, copy.facebook_caption,
+      row.slot === 'reel' ? (copy.on_screen_text[0] ?? copy.headline.split('\n')[0] ?? null) : null,
+      row.slot === 'reel' ? copy.on_screen_text : null, row.slot === 'reel' ? reelText?.split('\n').filter((l) => /^\s+\d+\)/.test(l)).map((l) => l.replace(/^\s+\d+\)\s*/, '')) ?? null : null,
+      brief, captionText, reelText, folderName, JSON.stringify(sources)]);
+  await setStatus(ctx.pool, row, 'ready');
+  return { kind: 'advance', stage: 'notify', state: { packId: inserted.rows[0]!.id, packFolder: folderName } };
+}
+
+// ─── 7. notify ─────────────────────────────────────────────────────────────────────────────────────────────
+
+export async function notify(ctx: StageContext): Promise<Outcome> {
+  const asset = ctx.asset;
+  if (ctx.job.state.unscheduled) {
+    if (asset?.prepped) {
+      for (const [key, id] of Object.entries(asset.prepped)) {
+        const f = await getFile(ctx.pool, id);
+        if (f) await ctx.messenger.sendDocument(f.bytes, `crop-${key}.jpg`);
+      }
+    }
+    await ctx.messenger.sendText('Unscheduled photo: here are the plain crops. Nothing was matched to the calendar.');
+    return { kind: 'done' };
+  }
+  const rowId = ctx.job.calendar_row_id ?? asset?.calendar_row_id;
+  if (!rowId) throw new Error('notify needs a calendar row');
+  const row = await rowById(ctx.pool, rowId);
+  if (!row) throw new Error(`Row ${rowId} is gone.`);
+
+  if (ctx.job.state.isSetFollower && asset?.prepped) {
+    const f = await getFile(ctx.pool, asset.prepped['9x16'] ?? asset.prepped['4x5']!);
+    if (f) await ctx.messenger.sendDocument(f.bytes, `day${row.day_no}-extra-${asset.id}.jpg`, `Added to Day ${row.day_no}'s set (story crop).`);
+    return { kind: 'done' };
+  }
+
+  const p = (await ctx.pool.query<{ caption_txt: string; reel_pack_txt: string | null; hashtags: string[]; folder: string; sources: { crops?: Record<string, string> } }>(
+    'select caption_txt, reel_pack_txt, hashtags, folder, sources from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
+  if (!p) throw new Error('No pack to send.');
+  const s = await allSettings(ctx.pool);
+  const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
+
+  for (const key of ['4x5', '9x16'] as const) {
+    const id = p.sources.crops?.[key];
+    if (!id) continue;
+    const f = await getFile(ctx.pool, id);
+    if (f) await ctx.messenger.sendDocument(f.bytes, `day${row.day_no}-crop-${key}.jpg`);
+  }
+  await ctx.messenger.sendText(`${fmt.packHeader(row, postTime)}\n\n${p.reel_pack_txt ? `${p.reel_pack_txt}\n` : ''}${p.caption_txt.replace(/\n=== HASHTAGS[\s\S]*?\n\n/, '\n')}`);
+  await ctx.messenger.sendText(p.hashtags.join(' '));
+  await ctx.messenger.sendText(fmt.packFooter(row));
+  await ctx.pool.query("insert into messages_log (direction, channel, kind, text) values ('out', $1, $2, $3)", [ctx.messenger.name, `pack:${row.id}`, p.folder]);
+  return { kind: 'done' };
+}
+
+export const STAGES: Record<Exclude<Stage, 'done'>, (ctx: StageContext) => Promise<Outcome>> = { intake, match, prep, resolve, render, pack, notify };
+
+/** Resend the latest pack for a row (post-time reminder, /pack N). */
+export async function resendPack(ctx: AppContext, row: CalendarRow): Promise<boolean> {
+  const p = (await ctx.pool.query<{ caption_txt: string; reel_pack_txt: string | null; hashtags: string[]; sources: { crops?: Record<string, string> } }>(
+    'select caption_txt, reel_pack_txt, hashtags, sources from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
+  if (!p) return false;
+  const s = await allSettings(ctx.pool);
+  const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
+  for (const key of ['4x5', '9x16'] as const) {
+    const id = p.sources.crops?.[key];
+    if (!id) continue;
+    const f = await getFile(ctx.pool, id);
+    if (f) await ctx.messenger.sendDocument(f.bytes, `day${row.day_no}-crop-${key}.jpg`);
+  }
+  await ctx.messenger.sendText(`${fmt.packHeader(row, postTime)}\n\n${p.reel_pack_txt ? `${p.reel_pack_txt}\n` : ''}${p.caption_txt.replace(/\n=== HASHTAGS[\s\S]*?\n\n/, '\n')}`);
+  await ctx.messenger.sendText(p.hashtags.join(' '));
+  await ctx.messenger.sendText(fmt.packFooter(row));
+  return true;
+}
+
+/** Whether a menu item exists for a dish name (used by the Sunday review and the week screen). */
+export function dishOnMenu(menuItems: Parameters<typeof findItem>[0], dish: string | null): boolean | null {
+  if (!dish || dish.startsWith('[')) return null;
+  return dish.split(/[,+]/).some((d) => findItem(menuItems, d.trim()) !== null);
+}
+
+export function nowLabel(ctx: AppContext): string {
+  return sydneyTime(ctx.now());
+}

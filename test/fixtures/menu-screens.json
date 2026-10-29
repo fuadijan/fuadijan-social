@@ -1,0 +1,38 @@
+{
+  "menu": [
+    {
+      "name": "BBQ",
+      "items": [
+        { "id": "m1", "name": "Chapli Kebab", "description": "Hand-formed beef kebab grilled over charcoal", "category": "BBQ", "price": 16, "outOfStock": false, "availabilityNote": null },
+        { "id": "m2", "name": "Chicken Seek Kebab", "description": "Minced chicken skewer, charcoal grilled", "category": "BBQ", "price": 14, "outOfStock": false, "availabilityNote": null },
+        { "id": "m3", "name": "Beef Seek Kebab", "description": "Minced beef skewer, charcoal grilled", "category": "BBQ", "price": 15, "outOfStock": false, "availabilityNote": null },
+        { "id": "m4", "name": "Chicken Tikka", "description": "Charcoal grilled chicken thigh pieces", "category": "BBQ", "price": 15, "outOfStock": false, "availabilityNote": null }
+      ]
+    },
+    {
+      "name": "Karahi",
+      "items": [
+        { "id": "m5", "name": "Chicken Karahi", "description": "Chicken cooked in tomato, ginger and garlic", "category": "Karahi", "price": 28, "outOfStock": false, "availabilityNote": null },
+        { "id": "m6", "name": "Lamb Karahi", "description": "Lamb on the bone", "category": "Karahi", "price": 34, "outOfStock": true, "availabilityNote": "Back Friday" }
+      ]
+    },
+    {
+      "name": "Modern",
+      "items": [
+        { "id": "m7", "name": "Shami Burger", "description": "Shami kebab patty in a toasted bun", "category": "Modern", "price": 13, "outOfStock": false, "availabilityNote": null },
+        { "id": "m8", "name": "Chicken Tikka Snack Pack", "description": "Chicken tikka over chips with ketchup and peri peri", "category": "Modern", "price": 18, "outOfStock": false, "availabilityNote": null },
+        { "id": "m9", "name": "Chicken Tikka Roll", "description": "Tikka in a paratha wrap", "category": "Modern", "price": 12, "outOfStock": false, "availabilityNote": null }
+      ]
+    },
+    {
+      "name": "Breads & Sides",
+      "items": [
+        { "id": "m10", "name": "Naan", "description": "", "category": "Breads & Sides", "price": 3, "outOfStock": false, "availabilityNote": null },
+        { "id": "m11", "name": "Roti", "description": "", "category": "Breads & Sides", "price": 2.5, "outOfStock": false, "availabilityNote": null },
+        { "id": "m12", "name": "Hot Chips", "description": "", "category": "Breads & Sides", "price": 6, "outOfStock": false, "availabilityNote": null }
+      ]
+    }
+  ],
+  "tvScreens": {},
+  "bestSellers": []
+}
