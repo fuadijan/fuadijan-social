@@ -65,7 +65,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       ...viewJson(v!),
       row: { ...row, post_time: row.post_time },
       questions: qs.map(qJson),
-      assets: assets.map((a) => ({ id: a.id, kind: a.kind, caption: a.caption_raw, thumb: a.prepped?.['1x1'] ?? a.original_file_id, crops: a.prepped, createdAt: a.created_at, quality: a.quality })),
+      assets: assets.map((a) => ({ id: a.id, kind: a.kind, caption: a.caption_raw, thumb: a.prepped?.thumb ?? a.prepped?.['1x1'] ?? a.original_file_id, crops: a.prepped, createdAt: a.created_at, quality: a.quality })),
       pack: pack && { ...pack, crops: pack.sources.crops ?? {} },
       renders,
       edits,

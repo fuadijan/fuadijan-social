@@ -242,6 +242,8 @@ export async function prep(ctx: StageContext): Promise<Outcome> {
   for (const key of ['4x5', '9x16', '1x1'] as const) {
     prepped[key] = await putFile(ctx.pool, await crop(jpeg, key), 'image/jpeg');
   }
+  // A small square thumb for the web app's lists (the 1x1 crop is 2160 px).
+  prepped.thumb = await putFile(ctx.pool, await thumbnail(await crop(jpeg, '1x1'), 480), 'image/jpeg');
   await ctx.pool.query('update assets set prepped = $2 where id = $1', [asset.id, JSON.stringify(prepped)]);
   asset.prepped = prepped;
   if (ctx.job.state.unscheduled) return { kind: 'advance', stage: 'notify' };

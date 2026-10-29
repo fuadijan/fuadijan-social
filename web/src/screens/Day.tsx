@@ -3,12 +3,14 @@ import { Link, useParams } from 'react-router';
 import { fileUrl, getDay, markPosted, packTextUrl, pushDay, skipDay } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { CopyButton } from '../components/CopyButton';
+import { EditableText, FIELD_LABEL } from '../components/EditableText';
 import { QuestionButtons } from '../components/QuestionButtons';
 import { ShareButton } from '../components/ShareButton';
 import { Empty, ErrorCard, Loading } from '../components/States';
 import { StatusPill } from '../components/StatusPill';
+import { UploadPhotos } from '../components/UploadPhotos';
 import { fmtDate, fmtDateTime, fmtTime, paragraphs, SLOT_LABEL, splitArrows } from '../format';
-import type { DayResponse, Pack, Row } from '../types';
+import type { Asset, DayResponse, EditSource, Pack, Row } from '../types';
 import { useApi } from '../useApi';
 
 const FIRST_DAY = 1;
@@ -19,6 +21,9 @@ const BackLink = ({ href, children, className }: { href: string; children?: Reac
   <Link to={href} className={className}>{children}</Link>
 );
 
+type Reload = () => Promise<void>;
+
+/** A read-only field (the pack's derived text, which has no row column to edit). */
 function Field({ label, value, copy, mono = false, className }: { label: string; value: string | null | undefined; copy?: boolean; mono?: boolean; className?: string }) {
   const text = value?.trim() ?? '';
   return (
@@ -34,6 +39,11 @@ function Field({ label, value, copy, mono = false, className }: { label: string;
   );
 }
 
+const Body = ({ text, className }: { text: string | null | undefined; className?: string }) => {
+  const t = text?.trim() ?? '';
+  return <div className={`sa-field-body${t ? '' : ' sa-field-body--muted'}${className ? ` ${className}` : ''}`}>{t || '—'}</div>;
+};
+
 /** The copy the owner posts: the pack's resolved text when a pack exists, else the sheet's draft. */
 function resolvedCopy(row: Row, pack: Pack | null) {
   if (pack) {
@@ -45,53 +55,82 @@ function resolvedCopy(row: Row, pack: Pack | null) {
   return { caption: row.caption, cta: row.cta, hashtags: row.hashtags, alt: null, facebook: null, story: null, draft: true };
 }
 
-function ShootSection({ d }: { d: DayResponse }) {
+function HeadSection({ d, reload }: { d: DayResponse; reload: Reload }) {
+  const row = d.row;
+  return (
+    <Card>
+      <EditableText dayNo={d.dayNo} field="objective" label="Objective" value={row.objective} onSaved={reload}>
+        {row.objective?.trim() ? <p className="sa-objective">{row.objective}</p> : <Body text={null} />}
+      </EditableText>
+      <EditableText dayNo={d.dayNo} field="dish" label="Dish" value={row.dish} kind="input" hint="Several dishes: separate them with commas. The first one names the photos." onSaved={reload}>
+        <div className="sa-field-body">
+          {d.dish ?? <span className="sa-muted">to choose{d.suggestion ? ` — suggestion: ${d.suggestion}` : ''}</span>}
+        </div>
+      </EditableText>
+      <EditableText dayNo={d.dayNo} field="theme" label="Theme" value={row.theme} kind="input" onSaved={reload} />
+      <EditableText dayNo={d.dayNo} field="post_time" label="Post at" value={row.post_time} kind="time" hint="Sydney time. Empty means the default." onSaved={reload}>
+        <div className="sa-field-body fj-numeric">
+          {fmtTime(row.post_time, d.settings.postTimeDefault ?? '18:00')}
+          {!row.post_time ? <span className="sa-muted"> (default)</span> : null}
+        </div>
+      </EditableText>
+      <div className="sa-field">
+        <dl className="sa-kv">
+          <dt>Type</dt><dd>{d.type}</dd>
+          <dt>Template</dt><dd>{d.template}</dd>
+        </dl>
+      </div>
+    </Card>
+  );
+}
+
+function ShootSection({ d, reload }: { d: DayResponse; reload: Reload }) {
   const row = d.row;
   const screen = splitArrows(row.on_screen_text);
   const stories = paragraphs(row.story_ideas);
-  const hasAnything = row.creative_instructions || d.shotList.length || screen.length || stories.length;
   return (
     <Card title="Shoot">
-      {!hasAnything ? <div className="sa-muted">No shoot notes for this day.</div> : null}
-      {row.creative_instructions ? (
-        <div className="sa-field">
-          <div className="sa-eyebrow">Creative instructions</div>
-          <div className="sa-field-body">{row.creative_instructions}</div>
-        </div>
-      ) : null}
+      <EditableText dayNo={d.dayNo} field="creative_instructions" label="Creative instructions" value={row.creative_instructions} onSaved={reload} />
       {d.shotList.length > 0 ? (
         <div className="sa-field">
           <div className="sa-eyebrow">Shot list</div>
           <ol className="sa-steps">{d.shotList.map((s, i) => <li key={i}><span>{s}</span></li>)}</ol>
         </div>
       ) : null}
-      {screen.length > 0 ? (
-        <div className="sa-field">
-          <div className="sa-field-head">
-            <span className="sa-eyebrow">On-screen text, in order</span>
-            <CopyButton text={screen.join('\n')} />
-          </div>
-          <ol className="sa-steps">{screen.map((s, i) => <li key={i}><span className="sa-screen-text">{s}</span></li>)}</ol>
-        </div>
-      ) : null}
-      {stories.length > 0 ? (
-        <div className="sa-field">
-          <div className="sa-eyebrow">Story ideas</div>
-          <ul className="sa-bullets">{stories.map((s, i) => <li key={i}>{s}</li>)}</ul>
-        </div>
-      ) : null}
+      <EditableText
+        dayNo={d.dayNo}
+        field="on_screen_text"
+        label="On-screen text, in order"
+        value={row.on_screen_text}
+        copyText={screen.length ? screen.join('\n') : null}
+        hint="Separate the lines with → (as in the sheet)."
+        onSaved={reload}
+      >
+        {screen.length > 0 ? <ol className="sa-steps">{screen.map((s, i) => <li key={i}><span className="sa-screen-text">{s}</span></li>)}</ol> : <Body text={null} />}
+      </EditableText>
+      <EditableText dayNo={d.dayNo} field="story_ideas" label="Story ideas" value={row.story_ideas} hint="One idea per line." onSaved={reload}>
+        {stories.length > 0 ? <ul className="sa-bullets">{stories.map((s, i) => <li key={i}>{s}</li>)}</ul> : <Body text={null} />}
+      </EditableText>
     </Card>
   );
 }
 
-function CopySection({ d }: { d: DayResponse }) {
+function CopySection({ d, reload }: { d: DayResponse; reload: Reload }) {
   const c = resolvedCopy(d.row, d.pack);
+  // With a pack, what shows is the pack's resolved text; the edit changes the sheet's draft the pack is made from.
+  const fromSheet = c.draft ? undefined : 'This edits the sheet’s text; the pack is rebuilt from it.';
   return (
     <Card title="Copy">
       {c.draft ? <span className="sa-draft">Draft — the pack isn't made yet</span> : null}
-      <Field label="Caption" value={c.caption} copy />
-      <Field label="CTA" value={c.cta} copy />
-      <Field label="Hashtags" value={c.hashtags} copy className="sa-hashtags" />
+      <EditableText dayNo={d.dayNo} field="caption" label="Caption" value={d.row.caption} copyText={c.caption} hint={fromSheet} onSaved={reload}>
+        <Body text={c.caption} />
+      </EditableText>
+      <EditableText dayNo={d.dayNo} field="cta" label="CTA" value={d.row.cta} copyText={c.cta} hint={fromSheet} onSaved={reload}>
+        <Body text={c.cta} />
+      </EditableText>
+      <EditableText dayNo={d.dayNo} field="hashtags" label="Hashtags" value={d.row.hashtags} copyText={c.hashtags} hint={fromSheet ?? 'Space separated, each with its #.'} onSaved={reload}>
+        <Body text={c.hashtags} className="sa-hashtags" />
+      </EditableText>
       {!c.draft ? (
         <>
           <Field label="Alt text" value={c.alt} copy />
@@ -105,18 +144,12 @@ function CopySection({ d }: { d: DayResponse }) {
   );
 }
 
-function ConfirmSection({ d, onChanged }: { d: DayResponse; onChanged: () => Promise<void> }) {
-  const notes = d.row.confirmation_notes?.trim();
-  const nothing = !notes && d.placeholders.length === 0 && d.questions.length === 0;
+function ConfirmSection({ d, reload }: { d: DayResponse; reload: Reload }) {
   return (
-    <Card title="Confirm">
-      {nothing ? <div className="sa-muted">Nothing to confirm.</div> : null}
-      {notes ? (
-        <div className="sa-field">
-          <div className="sa-eyebrow">Confirmation notes</div>
-          <div className="sa-field-body">{notes}</div>
-        </div>
-      ) : null}
+    <Card title="Confirm" id="confirm">
+      <EditableText dayNo={d.dayNo} field="confirmation_notes" label="Confirmation notes" value={d.row.confirmation_notes} onSaved={reload}>
+        <Body text={d.row.confirmation_notes?.trim() ? d.row.confirmation_notes : 'Nothing to confirm.'} className={d.row.confirmation_notes?.trim() ? undefined : 'sa-field-body--muted'} />
+      </EditableText>
       {d.placeholders.length > 0 ? (
         <div className="sa-field">
           <div className="sa-eyebrow">Still in brackets</div>
@@ -126,8 +159,8 @@ function ConfirmSection({ d, onChanged }: { d: DayResponse; onChanged: () => Pro
       ) : null}
       {d.questions.length > 0 ? (
         <div className="sa-field">
-          <div className="sa-eyebrow">Open questions</div>
-          <QuestionButtons questions={d.questions} onAnswered={onChanged} />
+          <div className="sa-eyebrow">Open questions ({d.questions.length})</div>
+          <QuestionButtons questions={d.questions} onAnswered={reload} />
         </div>
       ) : null}
     </Card>
@@ -136,8 +169,31 @@ function ConfirmSection({ d, onChanged }: { d: DayResponse; onChanged: () => Pro
 
 const FORMAT_LABEL: Record<string, string> = { feed: 'Feed 4:5', story: 'Story 9:16', carousel: 'Carousel', 'reel-cover': 'Reel cover' };
 const CROP_LABEL: Record<string, string> = { '4x5': 'Crop 4:5 (feed)', '9x16': 'Crop 9:16 (story / reel)', '1x1': 'Crop 1:1' };
+const QUALITY_NOTE: Record<string, string> = { small: 'small — asked to resend', dark: 'dark — asked to resend', blurry: 'blurry — asked to resend' };
 
-function ImagesSection({ d }: { d: DayResponse }) {
+function Thumb({ a }: { a: Asset }) {
+  const verdict = a.quality?.verdict;
+  const flagged = Boolean(verdict && verdict !== 'ok');
+  const note = verdict ? QUALITY_NOTE[verdict] : undefined;
+  const isVideo = a.kind === 'video';
+  const cls = `sa-thumb${isVideo ? ' sa-thumb--video' : ''}${flagged ? ' sa-thumb--flagged' : ''}`;
+  const title = [a.caption ?? a.kind, note].filter(Boolean).join(' · ');
+  return (
+    <figure className={cls} title={title}>
+      {isVideo ? (
+        <span className="sa-thumb-kind" aria-label="video clip">▶</span>
+      ) : a.thumb ? (
+        <a href={fileUrl(a.thumb)} target="_blank" rel="noreferrer"><img src={fileUrl(a.thumb)} alt={a.caption ?? `${a.kind} ${a.id}`} loading="lazy" /></a>
+      ) : (
+        <span className="sa-thumb-kind">{a.kind}</span>
+      )}
+      {flagged && note ? <span className="sa-thumb-note">{note}</span> : null}
+      {a.caption ? <figcaption className="sa-thumb-cap">{a.caption}</figcaption> : null}
+    </figure>
+  );
+}
+
+function ImagesSection({ d, reload }: { d: DayResponse; reload: Reload }) {
   const caption = resolvedCopy(d.row, d.pack).caption ?? '';
   const slug = `day${d.dayNo}`;
   // Cut 1 has no renders yet, so the pack's plain crops stand in for them.
@@ -147,21 +203,17 @@ function ImagesSection({ d }: { d: DayResponse }) {
   const empty = d.assets.length === 0 && outputs.length === 0 && !d.pack;
   return (
     <Card title="Images">
-      {empty ? <div className="sa-muted">No photos yet. Send them to the bot as a File with the dish in the caption.</div> : null}
+      <div className="sa-field">
+        <div className="sa-eyebrow">Add photos</div>
+        {empty ? <div className="sa-muted" style={{ margin: '4px 0 10px' }}>No photos yet. Add them here, or send them to the bot as a File with the dish in the caption.</div> : <div style={{ height: 6 }} />}
+        {/* Keyed by day so the caption and file list reset when the owner moves to another day. */}
+        <UploadPhotos key={d.dayNo} d={d} onChanged={reload} />
+      </div>
       {d.assets.length > 0 ? (
         <div className="sa-field">
           <div className="sa-eyebrow">Received ({d.assets.length})</div>
           <div className="sa-thumbs">
-            {d.assets.map((a) => (
-              <figure key={a.id} className="sa-thumb" title={a.caption ?? a.kind}>
-                {a.thumb ? (
-                  <a href={fileUrl(a.thumb)} target="_blank" rel="noreferrer"><img src={fileUrl(a.thumb)} alt={a.caption ?? `${a.kind} ${a.id}`} loading="lazy" /></a>
-                ) : (
-                  <span className="sa-thumb-kind">{a.kind === 'video' ? '▶ clip' : a.kind}</span>
-                )}
-                {a.caption ? <figcaption className="sa-thumb-cap">{a.caption}</figcaption> : null}
-              </figure>
-            ))}
+            {d.assets.map((a) => <Thumb key={a.id} a={a} />)}
           </div>
         </div>
       ) : null}
@@ -255,14 +307,25 @@ function StatusSection({ d, onChanged }: { d: DayResponse; onChanged: () => Prom
   );
 }
 
+/** Who made an edit, in plain words. */
+function sourceLabel(source: EditSource): string {
+  switch (source) {
+    case 'owner-web': return 'you, web';
+    case 'owner-telegram': return 'you, Telegram';
+    case 'agent': return 'agent';
+    case 'seed': return 'seed';
+    default: return source;
+  }
+}
+
 function HistorySection({ d }: { d: DayResponse }) {
   if (d.edits.length === 0) return null;
   return (
     <Card title="History">
       <ul className="sa-history">
         {d.edits.map((e, i) => (
-          <li key={i}>
-            <span className="sa-history-meta">{fmtDateTime(e.created_at)} · {e.field} · {e.source}</span>
+          <li key={`${e.created_at}-${e.field}-${i}`}>
+            <span className="sa-history-meta">{fmtDateTime(e.created_at)} · {FIELD_LABEL[e.field] ?? e.field} · {sourceLabel(e.source)}</span>
             {e.old_value ? <span className="sa-history-old">{e.old_value}</span> : null}
             <span className="sa-history-new">{e.new_value ?? '—'}</span>
           </li>
@@ -308,22 +371,13 @@ export function Day() {
       {data ? (
         <div className="sa-stack">
           {error ? <ErrorCard message={error} onRetry={() => void reload()} /> : null}
-          <Card>
-            {data.row.objective ? <p className="sa-objective">{data.row.objective}</p> : null}
-            <dl className="sa-kv">
-              <dt>Dish</dt><dd>{data.dish ?? <span className="sa-muted">to choose{data.suggestion ? ` — suggestion: ${data.suggestion}` : ''}</span>}</dd>
-              {data.theme ? <><dt>Theme</dt><dd>{data.theme}</dd></> : null}
-              <dt>Type</dt><dd>{data.type}</dd>
-              <dt>Template</dt><dd>{data.template}</dd>
-              <dt>Post at</dt><dd className="fj-numeric">{fmtTime(data.postTime, data.settings.postTimeDefault ?? '18:00')}</dd>
-            </dl>
-          </Card>
+          <HeadSection d={data} reload={reload} />
           <div className="sa-two">
-            <ShootSection d={data} />
-            <CopySection d={data} />
+            <ShootSection d={data} reload={reload} />
+            <CopySection d={data} reload={reload} />
           </div>
-          <ConfirmSection d={data} onChanged={reload} />
-          <ImagesSection d={data} />
+          <ConfirmSection d={data} reload={reload} />
+          <ImagesSection d={data} reload={reload} />
           <StatusSection d={data} onChanged={reload} />
           <HistorySection d={data} />
         </div>

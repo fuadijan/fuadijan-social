@@ -2,7 +2,7 @@
  * Same-origin JSON client. A 401 means no hub session: the page goes to the hub's login and comes back here.
  * A 403 carrying `hub` means signed in but not granted Social: the page goes to the hub.
  */
-import type { DayResponse, Me, MonthResponse, StatusResponse, WeekResponse } from './types';
+import type { DayResponse, EditableField, Me, MonthResponse, StatusResponse, UploadResponse, WeekResponse } from './types';
 
 export const DEFAULT_HUB = 'https://apps.nutrimeals.au';
 
@@ -35,7 +35,9 @@ function leaving<T>(): Promise<T> {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set('accept', 'application/json');
-  if (init?.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
+  // A FormData body sets its own multipart content-type (with the boundary); never override it.
+  const isForm = typeof FormData !== 'undefined' && init?.body instanceof FormData;
+  if (init?.body && !isForm && !headers.has('content-type')) headers.set('content-type', 'application/json');
   let res: Response;
   try {
     res = await fetch(path, { credentials: 'same-origin', ...init, headers });
@@ -76,6 +78,21 @@ export const answerQuestion = (id: number, answer: string) => post<{ ok: true; m
 export const markPosted = (dayNo: number) => post<{ ok: true }>(`/api/rows/${dayNo}/status`, { status: 'posted' });
 export const skipDay = (dayNo: number, mode: 'push-all' | 'just-this') => post<{ ok: true; date: string }>(`/api/rows/${dayNo}/skip`, { mode });
 export const pushDay = (dayNo: number, days: number) => post<{ ok: true; date: string }>(`/api/rows/${dayNo}/push`, { days });
+
+/** Cut 2: edit one text field of a row. An empty value clears it; `redo` also queues a rebuild of the copy and pack. */
+export const patchRow = (dayNo: number, field: EditableField, value: string, redo = false) =>
+  apiFetch<{ ok: true }>(`/api/rows/${dayNo}`, { method: 'PATCH', body: JSON.stringify({ field, value, redo }) });
+
+/**
+ * Cut 2: photos or clips from the phone, through the same intake pipeline as Telegram. The caption follows the
+ * Telegram convention ("dish -- note #tags"); empty means the server uses the day's dish and adds #dayN.
+ */
+export function uploadToDay(dayNo: number, files: File[], caption: string): Promise<UploadResponse> {
+  const form = new FormData();
+  for (const f of files) form.append('file', f, f.name);
+  form.append('caption', caption);
+  return apiFetch<UploadResponse>(`/api/rows/${dayNo}/upload`, { method: 'POST', body: form });
+}
 
 /** Image bytes for a stored file id. */
 export const fileUrl = (fileId: string) => `/api/files/${fileId}`;

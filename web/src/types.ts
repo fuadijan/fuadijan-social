@@ -80,6 +80,16 @@ export type CropName = '4x5' | '9x16' | '1x1';
 /** Crop name → file id. */
 export type Crops = Record<string, string | undefined>;
 
+/** What src/images/prep.ts measured on an incoming photo. Anything but `ok` made the pipeline ask for a resend. */
+export interface Quality {
+  width: number;
+  height: number;
+  longEdge: number;
+  luminance: number;
+  laplacian: number;
+  verdict: 'ok' | 'small' | 'dark' | 'blurry';
+}
+
 export interface Asset {
   id: number;
   kind: 'photo' | 'document' | 'video' | 'text';
@@ -87,7 +97,7 @@ export interface Asset {
   thumb: string | null; // file id
   crops: Crops | null;
   createdAt: string;
-  quality: unknown;
+  quality: Quality | null;
 }
 
 export interface Pack {
@@ -113,12 +123,27 @@ export interface Render {
   file_id: string;
 }
 
+/** The row columns PATCH /api/rows/:dayNo accepts (EDITABLE_FIELDS in src/calendar/rows.ts). */
+export type EditableField =
+  | 'dish' | 'caption' | 'cta' | 'hashtags' | 'story_ideas' | 'post_time'
+  | 'on_screen_text' | 'creative_instructions' | 'theme' | 'objective' | 'confirmation_notes';
+
+/** Who made an edit: the owner from the web app or Telegram, the agent, or the seed import. */
+export type EditSource = 'owner-web' | 'owner-telegram' | 'agent' | 'seed' | string;
+
 export interface Edit {
   field: string;
   old_value: string | null;
   new_value: string | null;
-  source: string;
+  source: EditSource;
   created_at: string;
+}
+
+export interface UploadResponse {
+  ok: true;
+  assetIds: number[];
+  /** The caption the server filed the photos under (the dish, or yours, always with #dayN). */
+  caption: string;
 }
 
 export interface ShootItem {

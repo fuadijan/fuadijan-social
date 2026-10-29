@@ -119,7 +119,8 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(renders).toEqual(['feed', 'story']);
     const assets = (await pool.query<{ quality: { verdict: string }; prepped: Record<string, string> }>('select quality, prepped from assets')).rows[0]!;
     expect(assets.quality.verdict).toBe('ok');
-    expect(Object.keys(assets.prepped).sort()).toEqual(['1x1', '4x5', '9x16']);
+    // The cutout keys appear only when the mask was usable; this photo's plate covers under 25% of the frame.
+    expect(Object.keys(assets.prepped).filter((k) => k !== 'cutout' && k !== 'shadow').sort()).toEqual(['1x1', '4x5', '9x16', 'thumb']);
     expect(Number(((await pool.query('select count(*) n from claude_calls')).rows[0] as { n: string }).n)).toBeGreaterThanOrEqual(1);
   });
 
