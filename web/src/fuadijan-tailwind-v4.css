@@ -1,0 +1,115 @@
+/* Fuadijan Design System - Tailwind v4 bridge (Payroll uses this one).
+   In src/index.css:
+       @import "tailwindcss";
+       @import "./fuadijan-tokens.css";
+       @import "./fuadijan-tailwind-v4.css";
+   Gives you bg-ember-700, text-sand-700, border-border, etc. */
+
+@theme {
+  --color-ember-50: #FEF3F1;
+  --color-ember-100: #FDE5E0;
+  --color-ember-200: #FDCAC1;
+  --color-ember-300: #FAA89B;
+  --color-ember-400: #F67F71;
+  --color-ember-500: #EC5149;
+  --color-ember-600: #CB3D32;
+  --color-ember-700: #A43225;
+  --color-ember-800: #82291C;
+  --color-ember-900: #672014;
+  --color-ember-950: #4D170D;
+  --color-saffron-50: #FBF8EB;
+  --color-saffron-100: #F8F1D3;
+  --color-saffron-200: #F3E2A4;
+  --color-saffron-300: #F0D56A;
+  --color-saffron-400: #F2CC1A;
+  --color-saffron-500: #DEB10A;
+  --color-saffron-600: #C49200;
+  --color-saffron-700: #A87503;
+  --color-saffron-800: #8A5C07;
+  --color-saffron-900: #70480D;
+  --color-saffron-950: #57370C;
+  --color-sand-50: #FDFBF9;
+  --color-sand-100: #F9F5F1;
+  --color-sand-200: #EEE8E1;
+  --color-sand-300: #DDD6CD;
+  --color-sand-400: #C2BAB0;
+  --color-sand-500: #A59D93;
+  --color-sand-600: #898279;
+  --color-sand-700: #6E675F;
+  --color-sand-800: #544E47;
+  --color-sand-900: #39342F;
+  --color-sand-950: #24201C;
+  --color-danger-50: #FFF2F4;
+  --color-danger-100: #FFE3E8;
+  --color-danger-200: #FFC8D2;
+  --color-danger-300: #FFA3B7;
+  --color-danger-400: #FF769A;
+  --color-danger-500: #FF3C7E;
+  --color-danger-600: #E82A6B;
+  --color-danger-700: #C22A5B;
+  --color-danger-800: #971E45;
+  --color-danger-900: #731433;
+  --color-danger-950: #530A22;
+  --color-success-50: #F1F8F2;
+  --color-success-100: #E1F1E4;
+  --color-success-200: #C2E4CA;
+  --color-success-300: #9AD4A9;
+  --color-success-400: #68C384;
+  --color-success-500: #25B05F;
+  --color-success-600: #0A974D;
+  --color-success-700: #137D41;
+  --color-success-800: #0F6132;
+  --color-success-900: #0A4A25;
+  --color-success-950: #053619;
+  --color-info-50: #F0F7FD;
+  --color-info-100: #E0EEFE;
+  --color-info-200: #C0DFFF;
+  --color-info-300: #98CBFF;
+  --color-info-400: #67B4FF;
+  --color-info-500: #299CFF;
+  --color-info-600: #1686E2;
+  --color-info-700: #1B71BC;
+  --color-info-800: #135792;
+  --color-info-900: #0B416F;
+  --color-info-950: #042D51;
+
+  --color-bg: var(--fj-bg);
+  --color-surface: var(--fj-surface);
+  --color-border: var(--fj-border);
+  --color-ink: var(--fj-text);
+  --color-ink-muted: var(--fj-text-muted);
+  --color-primary: var(--fj-primary);
+  --color-accent: var(--fj-accent);
+  --color-success: var(--fj-success);
+  --color-warning: var(--fj-warning);
+  --color-danger: var(--fj-danger);
+  --color-info: var(--fj-info);
+
+  --color-chart-1: var(--fj-chart-1);
+  --color-chart-2: var(--fj-chart-2);
+  --color-chart-3: var(--fj-chart-3);
+  --color-chart-4: var(--fj-chart-4);
+  --color-chart-5: var(--fj-chart-5);
+  --color-chart-6: var(--fj-chart-6);
+  --color-chart-7: var(--fj-chart-7);
+  --color-chart-8: var(--fj-chart-8);
+  --color-chart-9: var(--fj-chart-9);
+  --color-chart-10: var(--fj-chart-10);
+  --color-chart-prior: var(--fj-chart-prior);
+  --color-chart-grid: var(--fj-chart-grid);
+  --color-chart-axis: var(--fj-chart-axis);
+
+  --font-display: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --shadow-sm: 0 1px 2px rgba(36,32,28,0.06);
+  --shadow-md: 0 2px 8px rgba(36,32,28,0.08), 0 1px 2px rgba(36,32,28,0.04);
+  --shadow-lg: 0 8px 24px rgba(36,32,28,0.10), 0 2px 6px rgba(36,32,28,0.05);
+
+  --spacing-touch: 44px;
+}

@@ -1,0 +1,488 @@
+/* ============================================================
+   Fuadijan Design System - canonical design tokens
+   v1.0.0 - generated; regenerate rather than hand-editing.
+   ------------------------------------------------------------
+   Derived from the Fuadijan logo: red #EF1724, gold #F2CC1C,
+   cream #FFDAAD. Every colour pairing below was validated for
+   WCAG contrast and CIEDE2000 separation before shipping.
+   ============================================================ */
+
+:root {
+  /* --- Raw brand marks: LOGO + MARKETING ONLY, never UI chrome --- */
+  --fj-brand-red:   #EF1724;
+  --fj-brand-gold:  #F2CC1C;
+  --fj-brand-cream: #FFDAAD;
+  --fj-brand-black: #000000;
+
+  /* --- Ember ramp (the logo red, made UI-safe) --- */
+  --fj-ember-50: #FEF3F1;
+  --fj-ember-100: #FDE5E0;
+  --fj-ember-200: #FDCAC1;
+  --fj-ember-300: #FAA89B;
+  --fj-ember-400: #F67F71;
+  --fj-ember-500: #EC5149;
+  --fj-ember-600: #CB3D32;
+  --fj-ember-700: #A43225;
+  --fj-ember-800: #82291C;
+  --fj-ember-900: #672014;
+  --fj-ember-950: #4D170D;
+
+  /* --- Saffron ramp (the logo gold, made UI-safe) --- */
+  --fj-saffron-50: #FBF8EB;
+  --fj-saffron-100: #F8F1D3;
+  --fj-saffron-200: #F3E2A4;
+  --fj-saffron-300: #F0D56A;
+  --fj-saffron-400: #F2CC1A;
+  --fj-saffron-500: #DEB10A;
+  --fj-saffron-600: #C49200;
+  --fj-saffron-700: #A87503;
+  --fj-saffron-800: #8A5C07;
+  --fj-saffron-900: #70480D;
+  --fj-saffron-950: #57370C;
+
+  /* --- Sand ramp (warm neutrals, hue borrowed from the cream) --- */
+  --fj-sand-50: #FDFBF9;
+  --fj-sand-100: #F9F5F1;
+  --fj-sand-200: #EEE8E1;
+  --fj-sand-300: #DDD6CD;
+  --fj-sand-400: #C2BAB0;
+  --fj-sand-500: #A59D93;
+  --fj-sand-600: #898279;
+  --fj-sand-700: #6E675F;
+  --fj-sand-800: #544E47;
+  --fj-sand-900: #39342F;
+  --fj-sand-950: #24201C;
+
+  /* --- Semantic ramps. Stop 700 is the canonical value for each. --- */
+  --fj-danger-50: #FFF2F4;
+  --fj-danger-100: #FFE3E8;
+  --fj-danger-200: #FFC8D2;
+  --fj-danger-300: #FFA3B7;
+  --fj-danger-400: #FF769A;
+  --fj-danger-500: #FF3C7E;
+  --fj-danger-600: #E82A6B;
+  --fj-danger-700: #C22A5B;
+  --fj-danger-800: #971E45;
+  --fj-danger-900: #731433;
+  --fj-danger-950: #530A22;
+
+  --fj-success-50: #F1F8F2;
+  --fj-success-100: #E1F1E4;
+  --fj-success-200: #C2E4CA;
+  --fj-success-300: #9AD4A9;
+  --fj-success-400: #68C384;
+  --fj-success-500: #25B05F;
+  --fj-success-600: #0A974D;
+  --fj-success-700: #137D41;
+  --fj-success-800: #0F6132;
+  --fj-success-900: #0A4A25;
+  --fj-success-950: #053619;
+
+  --fj-info-50: #F0F7FD;
+  --fj-info-100: #E0EEFE;
+  --fj-info-200: #C0DFFF;
+  --fj-info-300: #98CBFF;
+  --fj-info-400: #67B4FF;
+  --fj-info-500: #299CFF;
+  --fj-info-600: #1686E2;
+  --fj-info-700: #1B71BC;
+  --fj-info-800: #135792;
+  --fj-info-900: #0B416F;
+  --fj-info-950: #042D51;
+
+  /* ---------- Light theme roles ---------- */
+  --fj-bg:              var(--fj-sand-100);
+  --fj-surface:         #FFFFFF;
+  --fj-surface-sunken:  var(--fj-sand-50);
+  --fj-surface-raised:  #FFFFFF;
+  --fj-border:          var(--fj-sand-200);
+  --fj-border-strong:   var(--fj-sand-300);
+
+  --fj-text:            var(--fj-sand-950);  /* 16.2:1 on white */
+  --fj-text-secondary:  var(--fj-sand-800);  /*  8.2:1 */
+  --fj-text-muted:      var(--fj-sand-700);  /*  5.6:1 - smallest AA-safe */
+  --fj-text-disabled:   var(--fj-sand-600);  /*  3.8:1 - NOT for body copy */
+  --fj-text-on-primary: #FFFFFF;
+  --fj-text-on-accent:  var(--fj-sand-950);  /* gold always takes dark text */
+
+  --fj-primary:         var(--fj-ember-700); /* 6.9:1 - buttons, links, active nav */
+  --fj-primary-hover:   var(--fj-ember-800);
+  --fj-primary-active:  var(--fj-ember-900);
+  --fj-primary-bg:      var(--fj-ember-50);
+  --fj-primary-border:  var(--fj-ember-200);
+  --fj-focus-ring:      var(--fj-ember-500);
+
+  --fj-accent:          var(--fj-saffron-400); /* gold fill, dark text only */
+  --fj-accent-text:     var(--fj-saffron-800); /* 5.8:1 - gold as ink */
+  --fj-accent-bg:       var(--fj-saffron-100);
+  --fj-accent-border:   var(--fj-saffron-300);
+
+  /* Solid fills that always carry WHITE text, so they must stay dark in both
+     themes. --fj-primary lightens to ember-400 in dark, which is correct for
+     ink on a dark ground but would fail as a filled button. */
+  --fj-primary-solid:       var(--fj-ember-700);  /* white 6.9:1 */
+  --fj-primary-solid-hover: var(--fj-ember-800);
+  --fj-ink-solid:           var(--fj-sand-950);   /* white 16.2:1 */
+  --fj-neutral-solid:       var(--fj-sand-700);   /* white 5.6:1  */
+  --fj-warning-ink-safe:    var(--fj-saffron-800);/* white 5.8:1  */
+  --fj-success-solid-fill:  var(--fj-success-700);/* white 5.2:1  */
+
+  /* Channel triplets so Tailwind's <alpha-value> works on role tokens.
+     Without these, `border-primary/30` generates nothing at all in v3. */
+  --fj-primary-rgb: 164 50 37;
+  --fj-accent-rgb: 242 204 26;
+  --fj-bg-rgb: 249 245 241;
+  --fj-surface-rgb: 255 255 255;
+  --fj-text-rgb: 36 32 28;
+  --fj-text-muted-rgb: 110 103 95;
+  --fj-border-rgb: 238 232 225;
+  --fj-success-rgb: 19 125 65;
+  --fj-warning-rgb: 138 92 7;
+  --fj-danger-rgb: 194 42 91;
+  --fj-info-rgb: 27 113 188;
+  --fj-chart-1-rgb: 202 55 50;
+  --fj-chart-2-rgb: 198 141 0;
+  --fj-chart-3-rgb: 0 138 112;
+  --fj-chart-4-rgb: 61 99 190;
+  --fj-chart-5-rgb: 201 105 12;
+  --fj-chart-6-rgb: 120 71 132;
+  --fj-chart-7-rgb: 101 105 2;
+  --fj-chart-8-rgb: 228 101 163;
+  --fj-chart-9-rgb: 0 156 198;
+  --fj-chart-10-rgb: 161 132 228;
+
+  --fj-success:         #137D41;
+  --fj-success-solid:   #137D41;
+  --fj-success-bg:      #E5FAEA;
+  --fj-success-border:  #B6E5C1;
+
+  --fj-warning:         #8A5C07;
+  --fj-warning-solid:   #F2CC1A;
+  --fj-warning-bg:      #F8F1D3;
+  --fj-warning-border:  #F0D56A;
+
+  --fj-danger:         #C22A5B;
+  --fj-danger-solid:   #C22A5B;
+  --fj-danger-bg:      #FFECEE;
+  --fj-danger-border:  #FFC2C8;
+
+  --fj-info:         #1B71BC;
+  --fj-info-solid:   #1B71BC;
+  --fj-info-bg:      #E6F5FF;
+  --fj-info-border:  #BADBFE;
+
+  /* ---------- Chart series (light) ---------- */
+  --fj-chart-1: #CA3732;
+  --fj-chart-2: #C68D00;
+  --fj-chart-3: #008A70;
+  --fj-chart-4: #3D63BE;
+  --fj-chart-5: #C9690C;
+  --fj-chart-6: #784784;
+  --fj-chart-7: #656902;
+  --fj-chart-8: #E465A3;
+  --fj-chart-9: #009CC6;
+  --fj-chart-10: #A184E4;
+  --fj-chart-grid:  var(--fj-sand-200);
+  --fj-chart-axis:  var(--fj-sand-600);
+  --fj-chart-prior: var(--fj-sand-600);   /* neutral "previous period" ink */
+
+  /* ---------- Typography ---------- */
+  --fj-font-display: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --fj-font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --fj-font-mono:    ui-monospace, 'Cascadia Code', Consolas, monospace;
+
+  --fj-text-display-2xl: 3rem;     --fj-lh-display-2xl: 1.05;
+  --fj-text-display-xl:  2.25rem;  --fj-lh-display-xl:  1.10;
+  --fj-text-display-lg:  1.875rem; --fj-lh-display-lg:  1.15;
+  --fj-text-h1:   1.5rem;    --fj-lh-h1:   1.25;
+  --fj-text-h2:   1.25rem;   --fj-lh-h2:   1.30;
+  --fj-text-h3:   1rem;      --fj-lh-h3:   1.40;
+  --fj-text-body: 0.875rem;  --fj-lh-body: 1.55;
+  --fj-text-sm:   0.8125rem; --fj-lh-sm:   1.50;
+  --fj-text-xs:   0.75rem;   --fj-lh-xs:   1.40;
+  --fj-text-overline: 0.6875rem; --fj-tracking-overline: 0.06em;
+
+  /* ---------- Space (4px base) ---------- */
+  --fj-space-1: 0.25rem;  --fj-space-2: 0.5rem;   --fj-space-3: 0.75rem;
+  --fj-space-4: 1rem;     --fj-space-5: 1.25rem;  --fj-space-6: 1.5rem;
+  --fj-space-8: 2rem;     --fj-space-10: 2.5rem;  --fj-space-12: 3rem;
+  --fj-space-16: 4rem;
+
+  /* ---------- Radius (generous, echoing the rounded wordmark) ---------- */
+  --fj-radius-sm: 6px;  --fj-radius-md: 10px; --fj-radius-lg: 14px;
+  --fj-radius-xl: 20px; --fj-radius-full: 9999px;
+
+  /* ---------- Elevation (warm-tinted, never pure black) ---------- */
+  --fj-shadow-sm: 0 1px 2px rgba(36,32,28,0.06);
+  --fj-shadow-md: 0 2px 8px rgba(36,32,28,0.08), 0 1px 2px rgba(36,32,28,0.04);
+  --fj-shadow-lg: 0 8px 24px rgba(36,32,28,0.10), 0 2px 6px rgba(36,32,28,0.05);
+  --fj-shadow-xl: 0 16px 48px rgba(36,32,28,0.14);
+
+  /* ---------- Motion ---------- */
+  --fj-ease: cubic-bezier(0.2, 0, 0, 1);
+  --fj-dur-fast: 150ms; --fj-dur-base: 200ms; --fj-dur-slow: 250ms;
+
+  /* ---------- Layout ---------- */
+  --fj-tap-target: 44px;
+  --fj-container:  80rem;
+}
+
+/* ============================================================
+   Dark theme - opt in with [data-theme="dark"].
+   ============================================================ */
+:root[data-theme="dark"] {
+  --fj-bg:             #1C1714;
+  --fj-surface:        #24201C;
+  --fj-surface-sunken: #1C1714;
+  --fj-surface-raised: #2E2823;
+  --fj-border:         #3D3630;
+  --fj-border-strong:  #4E463E;
+
+  --fj-text:           var(--fj-sand-100);
+  --fj-text-secondary: var(--fj-sand-300);
+  --fj-text-muted:     var(--fj-sand-400);
+  --fj-text-disabled:  var(--fj-sand-600);
+
+  --fj-primary:        var(--fj-ember-400);  /* 6.9:1 on the dark ground */
+  --fj-primary-hover:  var(--fj-ember-300);
+  --fj-primary-active: var(--fj-ember-200);
+  --fj-primary-bg:     rgba(236, 81, 73, 0.12);
+  --fj-primary-border: rgba(236, 81, 73, 0.32);
+  --fj-focus-ring:     var(--fj-ember-400);
+
+  --fj-accent:         var(--fj-saffron-400);
+  --fj-accent-text:    var(--fj-saffron-300);
+  --fj-accent-bg:      rgba(242, 204, 26, 0.12);
+  --fj-accent-border:  rgba(242, 204, 26, 0.30);
+
+  /* Lifted a stop so a filled button reads on the dark ground, while still
+     holding white text: ember-600 is 4.9:1, sand-800 is 8.2:1. */
+  --fj-primary-solid:       var(--fj-ember-600);
+  --fj-primary-solid-hover: var(--fj-ember-700);
+  --fj-ink-solid:           var(--fj-sand-800);
+  /* Deliberately NOT lifted: sand-600 only holds white at 3.8:1, and
+     sand-700 still reads clearly against the dark ground. */
+  --fj-neutral-solid:       var(--fj-sand-700);
+  --fj-warning-ink-safe:    var(--fj-saffron-800);
+  --fj-success-solid-fill:  var(--fj-success-700);
+
+  --fj-primary-rgb: 246 127 113;
+  --fj-accent-rgb: 242 204 26;
+  --fj-bg-rgb: 28 23 20;
+  --fj-surface-rgb: 36 32 28;
+  --fj-text-rgb: 249 245 241;
+  --fj-text-muted-rgb: 194 186 176;
+  --fj-border-rgb: 61 54 48;
+  --fj-success-rgb: 94 188 123;
+  --fj-warning-rgb: 229 182 74;
+  --fj-danger-rgb: 243 121 139;
+  --fj-info-rgb: 109 169 231;
+  --fj-chart-1-rgb: 237 117 106;
+  --fj-chart-2-rgb: 236 189 58;
+  --fj-chart-3-rgb: 74 187 161;
+  --fj-chart-4-rgb: 113 149 232;
+  --fj-chart-5-rgb: 240 154 83;
+  --fj-chart-6-rgb: 182 129 194;
+  --fj-chart-7-rgb: 147 152 91;
+  --fj-chart-8-rgb: 255 167 211;
+  --fj-chart-9-rgb: 108 218 255;
+  --fj-chart-10-rgb: 209 189 255;
+
+  --fj-success:        #5EBC7B;
+  --fj-success-solid:  #137D41;
+  --fj-success-bg:     rgba(255,255,255,0.06);
+  --fj-success-border: rgba(255,255,255,0.16);
+
+  --fj-warning:        #E5B64A;
+  --fj-warning-solid:  #F2CC1A;
+  --fj-warning-bg:     rgba(255,255,255,0.06);
+  --fj-warning-border: rgba(255,255,255,0.16);
+
+  --fj-danger:        #F3798B;
+  --fj-danger-solid:  #C22A5B;
+  --fj-danger-bg:     rgba(255,255,255,0.06);
+  --fj-danger-border: rgba(255,255,255,0.16);
+
+  --fj-info:        #6DA9E7;
+  --fj-info-solid:  #1B71BC;
+  --fj-info-bg:     rgba(255,255,255,0.06);
+  --fj-info-border: rgba(255,255,255,0.16);
+
+  --fj-chart-1: #ED756A;
+  --fj-chart-2: #ECBD3A;
+  --fj-chart-3: #4ABBA1;
+  --fj-chart-4: #7195E8;
+  --fj-chart-5: #F09A53;
+  --fj-chart-6: #B681C2;
+  --fj-chart-7: #93985B;
+  --fj-chart-8: #FFA7D3;
+  --fj-chart-9: #6CDAFF;
+  --fj-chart-10: #D1BDFF;
+  --fj-chart-grid:  #3D3630;
+  --fj-chart-axis:  var(--fj-sand-500);
+  --fj-chart-prior: var(--fj-sand-500);
+
+  --fj-shadow-sm: 0 1px 2px rgba(0,0,0,0.40);
+  --fj-shadow-md: 0 2px 8px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.30);
+  --fj-shadow-lg: 0 8px 24px rgba(0,0,0,0.50), 0 2px 6px rgba(0,0,0,0.35);
+  --fj-shadow-xl: 0 16px 48px rgba(0,0,0,0.60);
+
+  /* Native controls (date pickers, selects, scrollbars) follow the theme. */
+  color-scheme: dark;
+}
+
+/* ============================================================
+   Follow-the-OS mode.
+
+   Dark is opt-in per app, because an app whose components still use fixed
+   ramp stops (bg-sand-100, bg-white) would only half-flip and end up with
+   light panels on a dark ground. So there is deliberately NO bare
+   `@media (prefers-color-scheme: dark)` rule: an app gets OS-following dark
+   only by explicitly stamping data-theme="system" on <html>.
+
+   Three states, all driven by that one attribute:
+     data-theme="light"   -> always light
+     data-theme="dark"    -> always dark
+     data-theme="system"  -> dark only when the OS asks for it
+     (no attribute)       -> light, which is what a non-dark-ready app gets
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --fj-bg:             #1C1714;
+    --fj-surface:        #24201C;
+    --fj-surface-sunken: #1C1714;
+    --fj-surface-raised: #2E2823;
+    --fj-border:         #3D3630;
+    --fj-border-strong:  #4E463E;
+
+    --fj-text:           var(--fj-sand-100);
+    --fj-text-secondary: var(--fj-sand-300);
+    --fj-text-muted:     var(--fj-sand-400);
+    --fj-text-disabled:  var(--fj-sand-600);
+
+    --fj-primary:        var(--fj-ember-400);  /* 6.9:1 on the dark ground */
+    --fj-primary-hover:  var(--fj-ember-300);
+    --fj-primary-active: var(--fj-ember-200);
+    --fj-primary-bg:     rgba(236, 81, 73, 0.12);
+    --fj-primary-border: rgba(236, 81, 73, 0.32);
+    --fj-focus-ring:     var(--fj-ember-400);
+
+    --fj-accent:         var(--fj-saffron-400);
+    --fj-accent-text:    var(--fj-saffron-300);
+    --fj-accent-bg:      rgba(242, 204, 26, 0.12);
+    --fj-accent-border:  rgba(242, 204, 26, 0.30);
+
+    /* Lifted a stop so a filled button reads on the dark ground, while still
+       holding white text: ember-600 is 4.9:1, sand-800 is 8.2:1. */
+    --fj-primary-solid:       var(--fj-ember-600);
+    --fj-primary-solid-hover: var(--fj-ember-700);
+    --fj-ink-solid:           var(--fj-sand-800);
+    /* Deliberately NOT lifted: sand-600 only holds white at 3.8:1, and
+       sand-700 still reads clearly against the dark ground. */
+    --fj-neutral-solid:       var(--fj-sand-700);
+    --fj-warning-ink-safe:    var(--fj-saffron-800);
+    --fj-success-solid-fill:  var(--fj-success-700);
+
+    --fj-primary-rgb: 246 127 113;
+    --fj-accent-rgb: 242 204 26;
+    --fj-bg-rgb: 28 23 20;
+    --fj-surface-rgb: 36 32 28;
+    --fj-text-rgb: 249 245 241;
+    --fj-text-muted-rgb: 194 186 176;
+    --fj-border-rgb: 61 54 48;
+    --fj-success-rgb: 94 188 123;
+    --fj-warning-rgb: 229 182 74;
+    --fj-danger-rgb: 243 121 139;
+    --fj-info-rgb: 109 169 231;
+    --fj-chart-1-rgb: 237 117 106;
+    --fj-chart-2-rgb: 236 189 58;
+    --fj-chart-3-rgb: 74 187 161;
+    --fj-chart-4-rgb: 113 149 232;
+    --fj-chart-5-rgb: 240 154 83;
+    --fj-chart-6-rgb: 182 129 194;
+    --fj-chart-7-rgb: 147 152 91;
+    --fj-chart-8-rgb: 255 167 211;
+    --fj-chart-9-rgb: 108 218 255;
+    --fj-chart-10-rgb: 209 189 255;
+
+    --fj-success:        #5EBC7B;
+    --fj-success-solid:  #137D41;
+    --fj-success-bg:     rgba(255,255,255,0.06);
+    --fj-success-border: rgba(255,255,255,0.16);
+
+    --fj-warning:        #E5B64A;
+    --fj-warning-solid:  #F2CC1A;
+    --fj-warning-bg:     rgba(255,255,255,0.06);
+    --fj-warning-border: rgba(255,255,255,0.16);
+
+    --fj-danger:        #F3798B;
+    --fj-danger-solid:  #C22A5B;
+    --fj-danger-bg:     rgba(255,255,255,0.06);
+    --fj-danger-border: rgba(255,255,255,0.16);
+
+    --fj-info:        #6DA9E7;
+    --fj-info-solid:  #1B71BC;
+    --fj-info-bg:     rgba(255,255,255,0.06);
+    --fj-info-border: rgba(255,255,255,0.16);
+
+    --fj-chart-1: #ED756A;
+    --fj-chart-2: #ECBD3A;
+    --fj-chart-3: #4ABBA1;
+    --fj-chart-4: #7195E8;
+    --fj-chart-5: #F09A53;
+    --fj-chart-6: #B681C2;
+    --fj-chart-7: #93985B;
+    --fj-chart-8: #FFA7D3;
+    --fj-chart-9: #6CDAFF;
+    --fj-chart-10: #D1BDFF;
+    --fj-chart-grid:  #3D3630;
+    --fj-chart-axis:  var(--fj-sand-500);
+    --fj-chart-prior: var(--fj-sand-500);
+
+    --fj-shadow-sm: 0 1px 2px rgba(0,0,0,0.40);
+    --fj-shadow-md: 0 2px 8px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.30);
+    --fj-shadow-lg: 0 8px 24px rgba(0,0,0,0.50), 0 2px 6px rgba(0,0,0,0.35);
+    --fj-shadow-xl: 0 16px 48px rgba(0,0,0,0.60);
+
+    /* Native controls (date pickers, selects, scrollbars) follow the theme. */
+    color-scheme: dark;
+  }
+}
+
+/* ---------- Base element defaults ---------- */
+/* Chrome on Android rescales small text per block ("font boosting"), which
+   silently flattens a deliberate type scale - a 7px label and a 10px value can
+   both land on 13px, then overflow their box. Pinning it keeps the sizes we
+   set while still allowing pinch-zoom; `none` would block zoom and is an
+   accessibility problem. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--fj-bg);
+  color: var(--fj-text);
+  font-family: var(--fj-font-sans);
+  font-size: var(--fj-text-body);
+  line-height: var(--fj-lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Money, hours, counts - always align on the decimal */
+.fj-numeric { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* One focus treatment everywhere */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--fj-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--fj-radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

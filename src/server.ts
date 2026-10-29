@@ -2,6 +2,7 @@
  * Fastify: /health (public), POST /run/:job (bearer RUN_TOKEN), /api/* (hub session, same-origin only), and the
  * built web app from web/dist at / with an SPA fallback. Security headers as the POS store sets them.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -23,8 +24,21 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
   'permissions-policy': 'camera=(), microphone=(), geolocation=()',
-  'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
 };
+
+/**
+ * The CSP. The web app's index.html carries one inline script (the theme switch that runs before first paint), so
+ * its hash is allowed; everything else loads from this origin. Fonts come from Google Fonts as in every other app.
+ */
+export function contentSecurityPolicy(inlineScriptHashes: string[]): string {
+  const scripts = ["'self'", ...inlineScriptHashes.map((h) => `'sha256-${h}'`)].join(' ');
+  return `default-src 'self'; script-src ${scripts}; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`;
+}
+
+/** sha256 (base64) of every inline <script> body in an HTML file, for the CSP. */
+export function inlineScriptHashes(html: string): string[] {
+  return [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => createHash('sha256').update(m[1]!).digest('base64'));
+}
 
 export interface ServerOptions {
   webDist?: string;
@@ -41,9 +55,11 @@ export function buildServer(ctx: AppContext, opts: ServerOptions = {}): FastifyI
   const app = Fastify({ logger: false, bodyLimit: 25 * 1024 * 1024 });
   const webDist = resolve(opts.webDist ?? join(process.cwd(), 'web', 'dist'));
   const hasWeb = existsSync(join(webDist, 'index.html'));
+  const csp = contentSecurityPolicy(hasWeb ? inlineScriptHashes(readFileSync(join(webDist, 'index.html'), 'utf8')) : []);
 
   app.addHook('onSend', async (_req, reply, payload) => {
     for (const [k, v] of Object.entries(SECURITY_HEADERS)) reply.header(k, v);
+    reply.header('content-security-policy', csp);
     return payload;
   });
 

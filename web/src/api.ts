@@ -1,0 +1,83 @@
+/**
+ * Same-origin JSON client. A 401 means no hub session: the page goes to the hub's login and comes back here.
+ * A 403 carrying `hub` means signed in but not granted Social: the page goes to the hub.
+ */
+import type { DayResponse, Me, MonthResponse, StatusResponse, WeekResponse } from './types';
+
+export const DEFAULT_HUB = 'https://apps.nutrimeals.au';
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+interface ErrorBody {
+  ok?: boolean;
+  error?: string;
+  login?: string;
+  hub?: string;
+}
+
+function withCallback(login: string): string {
+  const back = encodeURIComponent(window.location.href);
+  return `${login}${login.includes('?') ? '&' : '?'}callbackUrl=${back}`;
+}
+
+/** Never resolves: the browser is leaving the page, so the screen stays on its loading state. */
+function leaving<T>(): Promise<T> {
+  return new Promise<T>(() => undefined);
+}
+
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set('accept', 'application/json');
+  if (init?.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
+  let res: Response;
+  try {
+    res = await fetch(path, { credentials: 'same-origin', ...init, headers });
+  } catch {
+    throw new ApiError('No connection. Check the network and try again.', 0);
+  }
+  const text = await res.text();
+  let json: unknown = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  const body = (json ?? {}) as ErrorBody;
+  if (res.status === 401) {
+    window.location.assign(withCallback(body.login ?? `${DEFAULT_HUB}/login`));
+    return leaving<T>();
+  }
+  if (res.status === 403 && body.hub) {
+    window.location.assign(body.hub);
+    return leaving<T>();
+  }
+  if (!res.ok) throw new ApiError(body.error ?? `${res.status} ${res.statusText || 'Request failed'}`, res.status);
+  return json as T;
+}
+
+function post<T>(path: string, payload: unknown): Promise<T> {
+  return apiFetch<T>(path, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export const getMe = () => apiFetch<Me>('/api/me');
+export const getWeek = () => apiFetch<WeekResponse>('/api/week');
+export const getMonth = () => apiFetch<MonthResponse>('/api/month');
+export const getDay = (dayNo: number) => apiFetch<DayResponse>(`/api/day/${dayNo}`);
+export const getStatus = () => apiFetch<StatusResponse>('/api/status');
+
+export const answerQuestion = (id: number, answer: string) => post<{ ok: true; message: string }>(`/api/questions/${id}/answer`, { answer });
+export const markPosted = (dayNo: number) => post<{ ok: true }>(`/api/rows/${dayNo}/status`, { status: 'posted' });
+export const skipDay = (dayNo: number, mode: 'push-all' | 'just-this') => post<{ ok: true; date: string }>(`/api/rows/${dayNo}/skip`, { mode });
+export const pushDay = (dayNo: number, days: number) => post<{ ok: true; date: string }>(`/api/rows/${dayNo}/push`, { days });
+
+/** Image bytes for a stored file id. */
+export const fileUrl = (fileId: string) => `/api/files/${fileId}`;
+/** The pack's text files. */
+export const packTextUrl = (dayNo: number, name: 'caption.txt' | 'canva-brief.txt' | 'reel-pack.txt') => `/api/packs/${dayNo}/${name}`;

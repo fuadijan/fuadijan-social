@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    // The vendored frame kit (components/fj, copied by fuadijan-brand/sync.py and never edited here) indexes arrays
+    // without the guard this repo's server code requires. The kit is checked as the brand repo checks it.
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src", "vite.config.ts"]
+}
