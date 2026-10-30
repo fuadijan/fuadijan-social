@@ -15,7 +15,8 @@ Two faces, one database: a Telegram bot (reminders, photo intake, questions) and
   render stage in the pipeline, Day screen Edit + Upload, the Sunday review written by Claude from computed facts,
   the smtp2go email fallback, `npm run render-samples`.
 
-`PROMPT.md` is the brief, `PLAN.md` the approved plan.
+`PROMPT.md` is the brief, `PLAN.md` the approved plan, `DEPLOY.md` the step-by-step deployment (Railway,
+GoDaddy, hub tile, Telegram).
 
 ## Setup, in order
 

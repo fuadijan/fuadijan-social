@@ -40,6 +40,7 @@
     "react-router": "^7.14.0",
     "satori": "^0.63.2",
     "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -51,7 +52,6 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "next-auth": "^4.24.15",
-    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^7.3.6",
     "vitest": "^5.0.1"
