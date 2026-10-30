@@ -7,6 +7,8 @@
 import type { CalendarRow } from '../calendar/rows.js';
 import { getFile, putFile } from '../files.js';
 import { cutoutFrom, cutoutUsable, removerFromConfig, type BackgroundRemover } from '../images/cutout.js';
+import { regionAround } from '../images/prep.js';
+import type { MatchResult } from '../brain/schemas.js';
 import { loadBrand } from '../render/brand.js';
 import type { Cutout } from '../render/compose.js';
 import { renderPost, type RenderOutput } from '../render/index.js';
@@ -26,15 +28,17 @@ function getRemover(log: StageContext['log']): BackgroundRemover | null {
   return remover;
 }
 
-export async function cutoutForAsset(ctx: StageContext, asset: Asset, jpegFileId: string | null): Promise<Cutout | null> {
+export async function cutoutForAsset(ctx: StageContext, asset: Asset, jpegFileId: string | null, read: MatchResult | null): Promise<Cutout | null> {
   const r = getRemover(ctx.log);
   if (!r || r.name === 'none') return null;
   const brand = loadBrand();
   const original = await getFile(ctx.pool, jpegFileId ?? asset.original_file_id ?? '');
   if (!original) return null;
   try {
-    const mask = await r.remove(original.bytes);
-    const cut = await cutoutFrom(original.bytes, mask.mask, { feather: brand.cutout.feather, shadowBlur: brand.cutout.shadow.blur, shadowOpacity: brand.cutout.shadow.opacity });
+    // Segment the region around the dish, not the whole scene, so the plate (not the bread basket) is the subject.
+    const source = await regionAround(original.bytes, read?.subject_box ?? null);
+    const mask = await r.remove(source);
+    const cut = await cutoutFrom(source, mask.mask, { feather: brand.cutout.feather, shadowBlur: brand.cutout.shadow.blur, shadowOpacity: brand.cutout.shadow.opacity });
     if (!cutoutUsable(cut.coverage, brand.cutout.minCoverage, brand.cutout.maxCoverage)) {
       ctx.log.info(`cutout skipped: coverage ${(cut.coverage * 100).toFixed(0)}%`);
       return null;
@@ -67,9 +71,12 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
     if (f) slidePhotos.push(f.bytes);
   }
 
-  const composition = ctx.job.state.match?.composition;
-  const wantCutout = entry.key === 'hero-photo' && hero && heroPhoto && composition !== 'scene' && composition !== 'people';
-  const cutout = wantCutout ? await cutoutForAsset(ctx, hero, ctx.job.state.jpegFileId ?? null) : null;
+  // The photo read lives on the asset too, so a /redo (a fresh job with no state) still knows the composition.
+  const read: MatchResult | null = ctx.job.state.match ?? hero?.match ?? null;
+  const composition = read?.composition;
+  // A scene with a located dish still gets the cutout try: the remover works on the region around the dish.
+  const wantCutout = entry.key === 'hero-photo' && hero && heroPhoto && composition !== 'people' && (composition !== 'scene' || Boolean(read?.subject_box));
+  const cutout = wantCutout ? await cutoutForAsset(ctx, hero, ctx.job.state.jpegFileId ?? null, read) : null;
 
   // Reviews: the quote is what the owner sent (an asset of kind text, "review -- AB …"), never generated.
   let quote: string | null = null;
@@ -88,7 +95,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   return renderPost({
     sheetTemplate: row.template, slot: row.slot, label: copy.label || entry.label, headline: copy.headline, line: copy.line,
     quote, reviewer, slides, hook: copy.on_screen_text[0] ?? null,
-    photo: heroPhoto, slidePhotos, cutout, busyPhoto: ctx.job.state.match?.background_clutter === 'high', settings,
+    photo: heroPhoto, slidePhotos, cutout, busyPhoto: read?.background_clutter === 'high', settings,
   }, brand);
 }
 

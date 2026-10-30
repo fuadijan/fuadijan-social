@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { loadBrand } from '../src/render/brand.js';
 import { renderPost, SAMPLE_INPUTS, SAMPLE_SETTINGS, checkTemplates } from '../src/render/index.js';
 import { cutoutFrom, cutoutUsable } from '../src/images/cutout.js';
-import { crop, decode } from '../src/images/prep.js';
+import { crop, cropAround, decode, regionAround } from '../src/images/prep.js';
 import { fitHeadline, fontOf, measure, twoLines, wrap } from '../src/render/text.js';
 import { inlineScriptHashes } from '../src/server.js';
 
@@ -131,5 +131,20 @@ describe('render templates', () => {
 
   it('keeps the inline-script hash helper honest', () => {
     expect(inlineScriptHashes('<script>1</script>')).toHaveLength(1);
+  });
+});
+
+describe('dish-centred crops', () => {
+  it('crops around the located dish at the requested ratio and falls back without a box', async () => {
+    const meta = await sharp(karahiFull).metadata();
+    const around = await cropAround(karahiFull, { x: 0.1, y: 0.55, w: 0.8, h: 0.4 }, 4 / 5, { focusY: 0.42 });
+    const m = await sharp(around).metadata();
+    expect([m.width, m.height]).toEqual([2160, 2700]);
+    const fallback = await cropAround(karahiFull, null, 4 / 5);
+    expect((await sharp(fallback).metadata()).height).toBe(2700);
+    const region = await regionAround(karahiFull, { x: 0.25, y: 0.25, w: 0.5, h: 0.5 });
+    const rm = await sharp(region).metadata();
+    expect(rm.width!).toBeLessThan(meta.width!);
+    expect(rm.width!).toBeGreaterThan(meta.width! * 0.5);
   });
 });

@@ -10,8 +10,12 @@ export const MatchResult = z.object({
   composition: z.enum(['single-plate', 'scene', 'people', 'other']),
   background_clutter: z.enum(['low', 'medium', 'high']),
   shoot_tip: z.string().nullable().describe('One plain sentence for the owner when clutter is medium or high; otherwise null.'),
+  subject_box: z.object({
+    x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1),
+  }).nullable().describe('Where the named dish (plate included) sits in the photo, as fractions of width and height from the top-left; null if it cannot be located.'),
 });
 export type MatchResult = z.infer<typeof MatchResult>;
+export type SubjectBox = NonNullable<MatchResult['subject_box']>;
 
 export const Unresolved = z.object({
   field: z.enum(['dish', 'caption', 'cta', 'hashtags', 'on_screen_text', 'story_text', 'headline', 'line', 'other']),

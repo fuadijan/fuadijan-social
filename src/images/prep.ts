@@ -83,3 +83,57 @@ export async function crop(jpeg: Buffer, key: CropKey): Promise<Buffer> {
 export async function thumbnail(jpeg: Buffer, max = 512): Promise<Buffer> {
   return sharp(jpeg).resize({ width: max, height: max, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
 }
+
+export interface Box { x: number; y: number; w: number; h: number }
+
+/**
+ * A crop at `ratio` (width/height) built around the dish Claude located, instead of sharp's generic attention
+ * crop: the box is padded, the window is sized so the dish fills most of it, and the dish's centre is placed at
+ * `focusY` of the window's height (0.42 keeps it above a text band at the bottom). Falls back to the attention
+ * crop when the box is missing or degenerate.
+ */
+export async function cropAround(jpeg: Buffer, box: Box | null | undefined, ratio: number, opts: { focusY?: number; pad?: number; longEdge?: number } = {}): Promise<Buffer> {
+  const meta = await sharp(jpeg).metadata();
+  const W = meta.width ?? 0;
+  const H = meta.height ?? 0;
+  const key: CropKey = Math.abs(ratio - 0.8) < 0.01 ? '4x5' : Math.abs(ratio - 0.5625) < 0.01 ? '9x16' : '1x1';
+  if (!box || !W || !H || box.w <= 0.05 || box.h <= 0.05) return crop(jpeg, key);
+  const pad = opts.pad ?? 1.25;
+  const focusY = opts.focusY ?? 0.42;
+  const bx = box.x * W;
+  const by = box.y * H;
+  const bw = box.w * W;
+  const bh = box.h * H;
+  const cx = bx + bw / 2;
+  const cy = by + bh / 2;
+  // Window large enough for the padded box in both directions, at the requested ratio.
+  let winW = Math.max(bw * pad, (bh * pad) * ratio);
+  let winH = winW / ratio;
+  if (winW > W) { winW = W; winH = winW / ratio; }
+  if (winH > H) { winH = H; winW = winH * ratio; }
+  let left = cx - winW / 2;
+  let top = cy - winH * focusY;
+  left = Math.min(Math.max(0, left), W - winW);
+  top = Math.min(Math.max(0, top), H - winH);
+  const { w, h } = CROPS[key];
+  return sharp(jpeg)
+    .extract({ left: Math.round(left), top: Math.round(top), width: Math.round(winW), height: Math.round(winH) })
+    .resize({ width: w, height: h, fit: 'cover' })
+    .normalise({ lower: 1, upper: 99 })
+    .sharpen({ sigma: 0.8 })
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toBuffer();
+}
+
+/** The padded region around the dish, for the background remover, so the plate dominates the mask. */
+export async function regionAround(jpeg: Buffer, box: Box | null | undefined, pad = 1.35): Promise<Buffer> {
+  const meta = await sharp(jpeg).metadata();
+  const W = meta.width ?? 0;
+  const H = meta.height ?? 0;
+  if (!box || !W || !H || box.w <= 0.05 || box.h <= 0.05) return jpeg;
+  const bw = box.w * W * pad;
+  const bh = box.h * H * pad;
+  const left = Math.min(Math.max(0, (box.x + box.w / 2) * W - bw / 2), Math.max(0, W - bw));
+  const top = Math.min(Math.max(0, (box.y + box.h / 2) * H - bh / 2), Math.max(0, H - bh));
+  return sharp(jpeg).extract({ left: Math.round(left), top: Math.round(top), width: Math.round(Math.min(bw, W)), height: Math.round(Math.min(bh, H)) }).jpeg({ quality: 95 }).toBuffer();
+}

@@ -10,7 +10,7 @@ import { MatchResult, ResolvedCopy, type Unresolved } from '../brain/schemas.js'
 import { matchPrompt, resolvePrompt } from '../brain/prompts.js';
 import { allRows, daySlug, rowById, rowsBetween, seriesLabel, setStatus, type CalendarRow } from '../calendar/rows.js';
 import { getFile, putFile } from '../files.js';
-import { crop, decode, measure, thumbnail, type Quality } from '../images/prep.js';
+import { crop, cropAround, decode, measure, thumbnail, type Quality } from '../images/prep.js';
 import { hasTag, parseCaption, type ParsedCaption } from '../intake/caption.js';
 import { findItem } from '../menu/source.js';
 import * as fmt from '../messaging/formats.js';
@@ -41,6 +41,7 @@ export interface Asset {
   height: number | null;
   quality: Quality | null;
   prepped: Record<string, string> | null;
+  match: MatchResult | null;
 }
 
 export interface JobState {
@@ -191,15 +192,11 @@ export async function match(ctx: StageContext): Promise<Outcome> {
 
   if (hasTag(cap, 'unscheduled')) return { kind: 'advance', stage: asset.kind === 'video' ? 'done' : 'prep', state: { unscheduled: true } };
 
-  if (cap.dayNo) {
-    const row = (await allRows(ctx.pool)).find((r) => r.day_no === cap.dayNo);
-    if (!row) throw new Error(`There is no Day ${cap.dayNo}.`);
-    await assignRow(ctx, row, null);
-    await ctx.messenger.sendText(fmt.photoReceived(row, cap.subject || asset.kind));
-    return { kind: 'advance', stage: asset.kind === 'video' ? 'resolve' : 'prep', rowId: row.id };
-  }
-
-  const candidates = await candidateRows(ctx);
+  // Read the photo first (composition, clutter, where the dish sits), even when the caption already names the
+  // day: the crop, the cutout and the shooting tip all come from this read.
+  const forced = cap.dayNo ? (await allRows(ctx.pool)).find((r) => r.day_no === cap.dayNo) ?? null : null;
+  if (cap.dayNo && !forced) throw new Error(`There is no Day ${cap.dayNo}.`);
+  const candidates = forced ? [forced] : await candidateRows(ctx);
   const menu = await ctx.menu.get();
   let result: MatchResult | null = null;
   if (asset.kind !== 'video' && asset.kind !== 'text' && candidates.length) {
@@ -207,7 +204,15 @@ export async function match(ctx: StageContext): Promise<Outcome> {
     const thumb = await thumbnail(jpeg, 512);
     const prompt = matchPrompt(cap, candidates, menu, sydneyDate(ctx.now()));
     result = await ctx.claude.call({ purpose: 'match-photo-to-row', fixtureKey: `day${cap.dayNo ?? ''}` || undefined, system: prompt.system, user: prompt.user, image: { bytes: thumb, mime: 'image/jpeg' }, schema: MatchResult, jobId: ctx.job.id });
+    await ctx.pool.query('update assets set match = $2 where id = $1', [asset.id, JSON.stringify(result)]);
+    asset.match = result;
     if (result.shoot_tip && result.background_clutter !== 'low') await ctx.messenger.sendText(`Tip: ${result.shoot_tip}`);
+  }
+
+  if (forced) {
+    await assignRow(ctx, forced, result);
+    await ctx.messenger.sendText(fmt.photoReceived(forced, result?.dish_canonical ?? cap.subject ?? asset.kind));
+    return { kind: 'advance', stage: asset.kind === 'video' ? 'resolve' : 'prep', state: result ? { match: result } : {}, rowId: forced.id };
   }
 
   const ranked = candidates
@@ -238,10 +243,13 @@ export async function prep(ctx: StageContext): Promise<Outcome> {
   if (!asset) throw new Error('prep needs an asset');
   if (asset.kind === 'video' || asset.kind === 'text') return { kind: 'advance', stage: 'resolve' };
   const jpeg = await loadJpeg(ctx);
+  const box = (ctx.job.state.match ?? asset.match)?.subject_box ?? null;
   const prepped: Record<string, string> = {};
-  for (const key of ['4x5', '9x16', '1x1'] as const) {
-    prepped[key] = await putFile(ctx.pool, await crop(jpeg, key), 'image/jpeg');
-  }
+  // The feed and story crops are built around the dish Claude located (fallback: sharp's attention crop); the
+  // square stays a plain centred crop.
+  prepped['4x5'] = await putFile(ctx.pool, await cropAround(jpeg, box, 4 / 5, { focusY: 0.42 }), 'image/jpeg');
+  prepped['9x16'] = await putFile(ctx.pool, await cropAround(jpeg, box, 9 / 16, { focusY: 0.40 }), 'image/jpeg');
+  prepped['1x1'] = await putFile(ctx.pool, await cropAround(jpeg, box, 1, { focusY: 0.5 }), 'image/jpeg');
   // A small square thumb for the web app's lists (the 1x1 crop is 2160 px).
   prepped.thumb = await putFile(ctx.pool, await thumbnail(await crop(jpeg, '1x1'), 480), 'image/jpeg');
   await ctx.pool.query('update assets set prepped = $2 where id = $1', [asset.id, JSON.stringify(prepped)]);
