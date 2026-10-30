@@ -44,11 +44,11 @@ function label(ctx: Ctx, text: string, color?: string): El {
   return el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontSize: brand.layout.label.size, letterSpacing: `${brand.layout.label.tracking}em`, color: color ?? brand.colors.saffron, textTransform: 'uppercase' }, uc(text));
 }
 
-function headline(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, italic = false): { el: El; size: number } {
+function headline(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, italic = false, maxSize = ctx.brand.layout.headline.start): { el: El; size: number } {
   const { brand } = ctx;
   const lines = twoLines(text);
   const font = fontOf(italic && brand.fontFiles.headingItalic ? brand.fontFiles.headingItalic : brand.fontFiles.heading);
-  const size = fitHeadline(font, lines, width, brand.layout.headline.start, brand.layout.headline.min, brand.layout.headline.step);
+  const size = fitHeadline(font, lines, width, Math.min(maxSize, brand.layout.headline.start), brand.layout.headline.min, brand.layout.headline.step);
   return {
     size,
     el: el('div', { display: 'flex', flexDirection: 'column', fontFamily: brand.fonts.heading.family, fontStyle: italic ? 'italic' : 'normal', fontSize: size, lineHeight: brand.layout.headline.lineHeight, color: brand.colors.cream },
@@ -64,7 +64,7 @@ function rule(ctx: Ctx): El {
 function line(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, size = ctx.brand.layout.line.size): El {
   const { brand } = ctx;
   const font = fontOf(brand.fontFiles.body);
-  // Shrink in 2 px steps (34 → 28) before ellipsising the last line.
+  // Shrink in 2 px steps (42 → 36) before ellipsising the last line (four lines are allowed).
   let used = size;
   let lines = wrap(font, text, used, width, 99);
   while (lines.length > brand.layout.line.maxLines && used > size - 6) {
@@ -103,7 +103,7 @@ function logo(ctx: Ctx): El {
 
 /** Bottom-to-top gradient from opaque Night to transparent over the lower `fraction` of the canvas (layout B). */
 function gradient(ctx: Ctx, fraction = 0.45): El {
-  return el('div', { position: 'absolute', left: 0, right: 0, bottom: 0, height: Math.round(ctx.h * fraction), backgroundImage: `linear-gradient(to top, ${ctx.brand.colors.night} 0%, ${ctx.brand.colors.night} 30%, ${ctx.brand.colors.night}CC 55%, ${ctx.brand.colors.night}00 100%)` });
+  return el('div', { position: 'absolute', left: 0, right: 0, bottom: 0, height: Math.round(ctx.h * fraction), backgroundImage: `linear-gradient(to top, ${ctx.brand.colors.night} 0%, ${ctx.brand.colors.night} 32%, ${ctx.brand.colors.night}F2 52%, ${ctx.brand.colors.night}B3 74%, ${ctx.brand.colors.night}00 100%)` });
 }
 
 function canvas(ctx: Ctx, children: (El | string)[], background = 'transparent'): El {
@@ -111,9 +111,9 @@ function canvas(ctx: Ctx, children: (El | string)[], background = 'transparent')
 }
 
 /** Text column on the left, between 35% and 70% of the height, 60 px margin. */
-function column(ctx: Ctx, children: El[], top = 0.35, bottom = 0.30): El {
+function column(ctx: Ctx, children: El[], top = 0.35, bottom = 0.30, justify: 'center' | 'flex-end' = 'center'): El {
   const { brand } = ctx;
-  return el('div', { position: 'absolute', left: brand.layout.margin, top: Math.round(ctx.h * top), bottom: Math.round(ctx.h * bottom), width: brand.layout.textColumn, display: 'flex', flexDirection: 'column', justifyContent: 'center' }, children);
+  return el('div', { position: 'absolute', left: brand.layout.margin, top: Math.round(ctx.h * top), bottom: Math.round(ctx.h * bottom), width: brand.layout.textColumn, display: 'flex', flexDirection: 'column', justifyContent: justify }, children);
 }
 
 function footerBox(ctx: Ctx, kind: Footer): El {
@@ -124,18 +124,20 @@ function footerBox(ctx: Ctx, kind: Footer): El {
 
 export function heroLayer(ctx: Ctx, d: z.infer<typeof HeroData>): El {
   const parts: (El | string)[] = [];
-  if (d.layout === 'B') parts.push(gradient(ctx, 0.52));
+  // Layout B: the text block sits in the lower 40% over a gradient that is opaque under it, so the food above
+  // keeps its light; the headline is capped a little smaller than layout A's to leave room for three body lines.
+  if (d.layout === 'B') parts.push(gradient(ctx, 0.66));
   parts.push(logo(ctx));
-  const h = headline(ctx, d.headline);
-  const textTop = d.layout === 'B' ? 0.60 : 0.35;
-  const textBottom = d.layout === 'B' ? 0.13 : 0.30;
+  const h = headline(ctx, d.headline, ctx.brand.layout.textColumn, false, d.layout === 'B' ? 116 : undefined);
+  const textTop = d.layout === 'B' ? 0.46 : 0.30;
+  const textBottom = d.layout === 'B' ? 0.115 : 0.26;
   parts.push(column(ctx, [
     label(ctx, d.label, d.busyPhoto || d.layout === 'B' ? ctx.brand.colors.sand : ctx.brand.colors.saffron),
     el('div', { display: 'flex', height: 18 }),
     h.el,
     rule(ctx),
     line(ctx, d.line),
-  ], textTop, textBottom));
+  ], textTop, textBottom, d.layout === 'B' ? 'flex-end' : 'center'));
   parts.push(footerBox(ctx, d.footer));
   return canvas(ctx, parts);
 }
@@ -143,11 +145,11 @@ export function heroLayer(ctx: Ctx, d: z.infer<typeof HeroData>): El {
 export function reviewLayer(ctx: Ctx, d: z.infer<typeof ReviewData>): El {
   const { brand } = ctx;
   const quoteFont = fontOf(brand.fontFiles.headingItalic ?? brand.fontFiles.heading);
-  let size = 64;
-  let lines = wrap(quoteFont, `“${d.quote}”`, size, 620, 6);
+  let size = 72;
+  let lines = wrap(quoteFont, `“${d.quote}”`, size, 680, 6);
   while (lines.length > 5 && size > 40) {
     size -= 4;
-    lines = wrap(quoteFont, `“${d.quote}”`, size, 620, 6);
+    lines = wrap(quoteFont, `“${d.quote}”`, size, 680, 6);
   }
   const parts: (El | string)[] = [];
   if (d.hasPhoto) parts.push(gradient(ctx, 0.62));
@@ -157,7 +159,7 @@ export function reviewLayer(ctx: Ctx, d: z.infer<typeof ReviewData>): El {
     el('div', { display: 'flex', height: 22 }),
     el('div', { display: 'flex', flexDirection: 'column', fontFamily: brand.fonts.heading.family, fontStyle: 'italic', fontSize: size, lineHeight: 1.1, color: brand.colors.cream }, lines.map((l) => el('div', { display: 'flex' }, l))),
     el('div', { display: 'flex', height: 26 }),
-    el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontSize: 26, letterSpacing: '0.2em', color: brand.colors.sand }, `— ${d.reviewer.toUpperCase()}`),
+    el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontSize: 30, letterSpacing: '0.2em', color: brand.colors.sand }, `— ${d.reviewer.toUpperCase()}`),
   ]));
   parts.push(footerBox(ctx, d.footer));
   return canvas(ctx, parts, d.hasPhoto ? 'transparent' : brand.colors.night);
@@ -177,11 +179,11 @@ export function carouselCoverLayer(ctx: Ctx, d: z.infer<typeof CarouselCoverData
 export function carouselSlideLayer(ctx: Ctx, d: z.infer<typeof CarouselSlideData>): El {
   const { brand } = ctx;
   const titleFont = fontOf(brand.fontFiles.heading);
-  const lines = wrap(titleFont, d.title, 92, 820, 3);
+  const lines = wrap(titleFont, d.title, 100, 820, 3);
   const card = el('div', { position: 'absolute', left: 60, right: 60, top: d.hasPhoto ? Math.round(ctx.h * 0.52) : 160, bottom: 160, display: 'flex', flexDirection: 'column', justifyContent: d.hasPhoto ? 'flex-end' : 'center', padding: 70, borderRadius: 28, backgroundColor: d.hasPhoto ? `${brand.colors.charcoal}E6` : brand.colors.charcoal }, [
     el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontSize: 24, letterSpacing: '0.3em', color: brand.colors.saffron }, d.closing ? 'FUADIJAN' : `${d.index} / ${d.total}`),
     el('div', { display: 'flex', height: 26 }),
-    el('div', { display: 'flex', flexDirection: 'column', fontFamily: brand.fonts.heading.family, fontSize: 92, lineHeight: 1.0, color: brand.colors.cream }, lines.map((l) => el('div', { display: 'flex' }, l))),
+    el('div', { display: 'flex', flexDirection: 'column', fontFamily: brand.fonts.heading.family, fontSize: 100, lineHeight: 1.0, color: brand.colors.cream }, lines.map((l) => el('div', { display: 'flex' }, l))),
     rule(ctx),
   ]);
   return canvas(ctx, [logo(ctx), card, footerBox(ctx, 'brand')], d.hasPhoto ? 'transparent' : brand.colors.night);
@@ -195,7 +197,7 @@ export function storyLayer(ctx: Ctx, d: z.infer<typeof StoryData>): El {
     el('div', { position: 'absolute', top: brand.layout.storySafeTop + 20, left: brand.layout.margin, display: 'flex' }, el('img', { width: brand.layout.logoWidth, height: Math.round(brand.layout.logoWidth * 200 / 272) }, undefined, { src: `data:image/png;base64,${brand.logoPng.toString('base64')}` })),
     el('div', { position: 'absolute', left: brand.layout.margin, right: brand.layout.margin, bottom: brand.layout.storySafeBottom + 40, display: 'flex', flexDirection: 'column' }, [
       label(ctx, d.label, brand.colors.sand), el('div', { display: 'flex', height: 18 }), h.el, rule(ctx),
-      el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontSize: 22, letterSpacing: '0.25em', color: brand.colors.sand }, brand.brandLine),
+      el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontSize: 26, letterSpacing: '0.22em', color: brand.colors.sand }, brand.brandLine),
     ]),
   ]);
 }

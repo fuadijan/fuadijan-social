@@ -39,7 +39,7 @@ export async function composeLayoutA(brand: Brand, w: number, h: number, cut: Cu
   const sh = Math.round(shadowMeta.height! * scale);
   const pad = Math.round((sw - cw) / 2);
   const background = await nightBackground(brand, w, h, { x: (left + cw / 2) / w, y: (top + ch / 2) / h });
-  const cutoutResized = await sharp(cut.cutout).resize(cw, ch).png().toBuffer();
+  const cutoutResized = await sharp(await liftTone(cut.cutout)).resize(cw, ch).png().toBuffer();
   const shadowResized = await sharp(cut.shadow).resize(sw, sh).png().toBuffer();
   return sharp(background)
     .composite([
@@ -51,9 +51,23 @@ export async function composeLayoutA(brand: Brand, w: number, h: number, cut: Cu
     .toBuffer();
 }
 
-/** Layout B: the photo fills the canvas (attention crop), gentle tone, the text layer with its gradient on top. */
+/**
+ * Tone only (no painting): a dim phone photo gets lifted towards a mid luminance of ~118/255, capped at +30%, and a
+ * touch of saturation. Bright photos are left alone.
+ */
+export async function liftTone(jpeg: Buffer): Promise<Buffer> {
+  const stats = await sharp(jpeg).greyscale().stats();
+  const mean = stats.channels[0]?.mean ?? 128;
+  if (mean >= 105) return jpeg;
+  const brightness = Math.min(1.3, 118 / Math.max(mean, 60));
+  return sharp(jpeg).modulate({ brightness, saturation: 1.06 }).normalise({ lower: 1, upper: 99.5 }).toBuffer();
+}
+
+/** Layout B: the photo fills the canvas (attention crop), tone lifted if dim, the text layer with its gradient on top. */
 export async function composeLayoutB(brand: Brand, w: number, h: number, jpeg: Buffer, textLayer: Buffer): Promise<Buffer> {
-  const photo = await sharp(jpeg).resize(w, h, { fit: 'cover', position: sharp.strategy.attention }).modulate({ brightness: 0.96, saturation: 1.04 }).toBuffer();
+  // The crop favours the upper part of the frame so the food sits above the text band, not under the gradient.
+  const lifted = await liftTone(jpeg);
+  const photo = await sharp(lifted).resize(w, h, { fit: 'cover', position: sharp.strategy.attention }).modulate({ saturation: 1.04 }).toBuffer();
   return sharp(photo).composite([{ input: textLayer, left: 0, top: 0 }]).png().toBuffer();
 }
 
