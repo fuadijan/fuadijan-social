@@ -28,8 +28,8 @@ size. Everything else is already paid for (GoDaddy domain, Vercel hub, Anthropic
 ## 2. Railway: the service
 
 1. In the same project → **New → GitHub Repo → fuadijan/fuadijan-social**, branch `main`. Railway reads
-   `railway.json` (NIXPACKS, build `npm ci && npm run build:web`, start `npx tsx src/main.ts`, health check
-   `/health`). `.node-version` pins Node 22.
+   `railway.json` (NIXPACKS installs with `npm ci` itself, build `npm run build:web`, start `npx tsx src/main.ts`,
+   health check `/health`). `.node-version` pins Node 22.
 2. **Variables** (Settings → Variables). Paste the block below and fill the blanks:
 
    ```
