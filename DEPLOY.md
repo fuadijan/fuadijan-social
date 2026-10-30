@@ -67,7 +67,9 @@ size. Everything else is already paid for (GoDaddy domain, Vercel hub, Anthropic
    EMAIL_TO=<optional, your email for the fallback>
    ```
 
-   `DEV_USER` must **not** be set in production. `NEXTAUTH_SECRET` is the one the hub uses on Vercel
+   `DEV_USER` must **not** be set in production. The app refuses to start on Railway until `HUB_COOKIE_DOMAIN`
+   is set (so a half-configured deploy can never sit open on its Railway URL); the **first deploy therefore
+   fails until the variables above are in**, which is expected. `NEXTAUTH_SECRET` is the one the hub uses on Vercel
    (Payroll, Analytics, Costing and Loan all carry the same value).
 3. **Replicas: 1.** The Telegram bot long-polls; two copies would fight over updates.
 4. Deploy. The first boot runs the migration, checks the menu source and renders every template once. The

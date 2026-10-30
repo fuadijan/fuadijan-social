@@ -20,6 +20,11 @@ import { buildServer } from './server.js';
 
 async function main(): Promise<void> {
   const log = consoleLogger;
+  // On Railway (it sets RAILWAY_ENVIRONMENT) the app must sit behind the hub: without HUB_COOKIE_DOMAIN every
+  // request would be trusted as DEV_USER on a public URL. ALLOW_DEV_USER=1 overrides for a deliberate test.
+  if (process.env.RAILWAY_ENVIRONMENT && !hubMode && process.env.ALLOW_DEV_USER !== '1') {
+    throw new Error('Refusing to start: HUB_COOKIE_DOMAIN (and NEXTAUTH_SECRET) must be set on Railway so the web app is behind the hub. Set ALLOW_DEV_USER=1 only for a deliberate, short test.');
+  }
   const pool = createPool(config.databaseUrl);
   await migrate(pool, (m) => log.info(m));
 
