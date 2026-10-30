@@ -13,6 +13,7 @@ export const MatchResult = z.object({
   subject_box: z.object({
     x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1),
   }).nullable().describe('Where the named dish (plate included) sits in the photo, as fractions of width and height from the top-left; null if it cannot be located.'),
+  plate_shape: z.enum(['round', 'square', 'none', 'unknown']).default('unknown').describe('The plate under the dish: round, square/rectangular, none (food straight on a board or bench), or unknown.'),
 });
 export type MatchResult = z.infer<typeof MatchResult>;
 export type SubjectBox = NonNullable<MatchResult['subject_box']>;

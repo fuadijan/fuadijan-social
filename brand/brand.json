@@ -41,28 +41,28 @@
   "layout": {
     "margin": 60,
     "logoWidth": 220,
-    "textColumn": 500,
+    "textColumn": 520,
     "ruleSize": [
       90,
       3
     ],
     "label": {
-      "size": 32,
-      "tracking": 0.28
+      "size": 34,
+      "tracking": 0.26
     },
     "headline": {
-      "start": 150,
-      "min": 104,
+      "start": 168,
+      "min": 112,
       "step": 8,
-      "lineHeight": 0.95
+      "lineHeight": 0.94
     },
     "line": {
-      "size": 42,
+      "size": 44,
       "maxLines": 4
     },
     "footer": {
-      "size": 26,
-      "tracking": 0.22
+      "size": 28,
+      "tracking": 0.2
     },
     "storySafeTop": 250,
     "storySafeBottom": 300

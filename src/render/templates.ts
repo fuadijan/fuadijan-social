@@ -41,7 +41,7 @@ const uc = (s: string) => s.toUpperCase();
 
 function label(ctx: Ctx, text: string, color?: string): El {
   const { brand } = ctx;
-  return el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontSize: brand.layout.label.size, letterSpacing: `${brand.layout.label.tracking}em`, color: color ?? brand.colors.saffron, textTransform: 'uppercase' }, uc(text));
+  return el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: brand.layout.label.size, letterSpacing: `${brand.layout.label.tracking}em`, color: color ?? brand.colors.saffron, textTransform: 'uppercase' }, uc(text));
 }
 
 function headline(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, italic = false, maxSize = ctx.brand.layout.headline.start): { el: El; size: number } {
@@ -72,12 +72,12 @@ function line(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, size 
     lines = wrap(font, text, used, width, 99);
   }
   lines = wrap(font, text, used, width, brand.layout.line.maxLines);
-  return el('div', { display: 'flex', flexDirection: 'column', fontFamily: brand.fonts.body.family, fontSize: used, lineHeight: 1.3, color: brand.colors.cream }, lines.map((l) => el('div', { display: 'flex' }, l)));
+  return el('div', { display: 'flex', flexDirection: 'column', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: used, lineHeight: 1.28, color: brand.colors.cream }, lines.map((l) => el('div', { display: 'flex' }, l)));
 }
 
 function footer(ctx: Ctx, kind: Footer): El {
   const { brand } = ctx;
-  const base = { fontFamily: brand.fonts.body.family, fontSize: brand.layout.footer.size, letterSpacing: `${brand.layout.footer.tracking}em`, color: brand.colors.sand, textTransform: 'uppercase' as const };
+  const base = { fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: brand.layout.footer.size, letterSpacing: `${brand.layout.footer.tracking}em`, color: brand.colors.sand, textTransform: 'uppercase' as const };
   if (kind === 'address') {
     return el('div', { display: 'flex', flexDirection: 'column', gap: 10, ...base }, [
       el('div', { display: 'flex' }, uc(ctx.settings.storeAddress)),
@@ -128,9 +128,9 @@ export function heroLayer(ctx: Ctx, d: z.infer<typeof HeroData>): El {
   // keeps its light; the headline is capped a little smaller than layout A's to leave room for three body lines.
   if (d.layout === 'B') parts.push(gradient(ctx, 0.66));
   parts.push(logo(ctx));
-  const h = headline(ctx, d.headline, ctx.brand.layout.textColumn, false, d.layout === 'B' ? 116 : undefined);
-  const textTop = d.layout === 'B' ? 0.46 : 0.30;
-  const textBottom = d.layout === 'B' ? 0.115 : 0.26;
+  const h = headline(ctx, d.headline, ctx.brand.layout.textColumn, false, d.layout === 'B' ? 128 : undefined);
+  const textTop = d.layout === 'B' ? 0.44 : 0.26;
+  const textBottom = d.layout === 'B' ? 0.115 : 0.24;
   parts.push(column(ctx, [
     label(ctx, d.label, d.busyPhoto || d.layout === 'B' ? ctx.brand.colors.sand : ctx.brand.colors.saffron),
     el('div', { display: 'flex', height: 18 }),
@@ -197,7 +197,7 @@ export function storyLayer(ctx: Ctx, d: z.infer<typeof StoryData>): El {
     el('div', { position: 'absolute', top: brand.layout.storySafeTop + 20, left: brand.layout.margin, display: 'flex' }, el('img', { width: brand.layout.logoWidth, height: Math.round(brand.layout.logoWidth * 200 / 272) }, undefined, { src: `data:image/png;base64,${brand.logoPng.toString('base64')}` })),
     el('div', { position: 'absolute', left: brand.layout.margin, right: brand.layout.margin, bottom: brand.layout.storySafeBottom + 40, display: 'flex', flexDirection: 'column' }, [
       label(ctx, d.label, brand.colors.sand), el('div', { display: 'flex', height: 18 }), h.el, rule(ctx),
-      el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontSize: 26, letterSpacing: '0.22em', color: brand.colors.sand }, brand.brandLine),
+      el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 28, letterSpacing: '0.2em', color: brand.colors.sand }, brand.brandLine),
     ]),
   ]);
 }

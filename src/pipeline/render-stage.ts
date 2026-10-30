@@ -43,6 +43,13 @@ export async function cutoutForAsset(ctx: StageContext, asset: Asset, jpegFileId
       ctx.log.info(`cutout skipped: coverage ${(cut.coverage * 100).toFixed(0)}%`);
       return null;
     }
+    // The plate has to come with the food (the approved samples all keep it). When Claude located the plate, the
+    // region is that box padded 1.35×, so the plate fills about 55% of it; a mask well under that means the model
+    // kept the food and dropped the plate, and layout B (full photo) is the honest fallback.
+    if (read?.subject_box && read.plate_shape !== 'none' && cut.coverage < 0.42) {
+      ctx.log.info(`cutout skipped: mask covers ${(cut.coverage * 100).toFixed(0)}% of the plate region, plate probably lost`);
+      return null;
+    }
     const cutoutId = await putFile(ctx.pool, cut.cutout, 'image/png');
     const shadowId = await putFile(ctx.pool, cut.shadow, 'image/png');
     await ctx.pool.query("update assets set prepped = coalesce(prepped, '{}'::jsonb) || $2::jsonb where id = $1", [asset.id, JSON.stringify({ cutout: cutoutId, shadow: shadowId })]);
@@ -74,8 +81,12 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   // The photo read lives on the asset too, so a /redo (a fresh job with no state) still knows the composition.
   const read: MatchResult | null = ctx.job.state.match ?? hero?.match ?? null;
   const composition = read?.composition;
+  // "/redo N layout B" (or "layout A", "no cutout", "cutout") overrides the automatic choice.
+  const note = (ctx.job.state.note ?? '').toLowerCase();
+  const forceB = /layout\s*b|no cutout|full[- ]bleed/.test(note);
+  const forceA = /layout\s*a|\bcutout\b/.test(note) && !forceB;
   // A scene with a located dish still gets the cutout try: the remover works on the region around the dish.
-  const wantCutout = entry.key === 'hero-photo' && hero && heroPhoto && composition !== 'people' && (composition !== 'scene' || Boolean(read?.subject_box));
+  const wantCutout = entry.key === 'hero-photo' && hero && heroPhoto && !forceB && (forceA || (composition !== 'people' && (composition !== 'scene' || Boolean(read?.subject_box))));
   const cutout = wantCutout ? await cutoutForAsset(ctx, hero, ctx.job.state.jpegFileId ?? null, read) : null;
 
   // Reviews: the quote is what the owner sent (an asset of kind text, "review -- AB …"), never generated.

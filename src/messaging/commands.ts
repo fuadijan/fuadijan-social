@@ -16,7 +16,7 @@ import { weekLines } from '../reminders/brief.js';
 export const HELP = [
   '/today · /week · /status · /ask',
   '/pack N — resend Day N\'s pack · /brief N — resend the Canva brief',
-  '/redo N <note> — re-run the copy with a note ("shorter caption")',
+  '/redo N <note> — re-run the copy and design with a note ("shorter caption", "layout B", "layout A")',
   '/edit N <field> <text> — fields: dish, caption, cta, hashtags, story_ideas, post_time',
   '/push N <days> — move Day N · skip N — move it to the next free date',
   '/set address|hours|website <text> · /pause · /resume',
