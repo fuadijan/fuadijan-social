@@ -9,7 +9,7 @@ import * as fmt from './formats.js';
 import { answerQuestion, askQuestion, latestOpenQuestion, openQuestions, questionById, resolveAnswer, setQuestionMessageId } from '../pipeline/questions.js';
 import { resendPack } from '../pipeline/stages.js';
 import { redoRow } from '../pipeline/worker.js';
-import { SET_ALIASES, getSetting, setSetting } from '../settings.js';
+import { SET_ALIASES, allDishFacts, getSetting, removeDishFact, setDishFact, setSetting } from '../settings.js';
 import { formatDay, sydneyDate, sydneyTime, addDays } from '../time.js';
 import { weekLines } from '../reminders/brief.js';
 
@@ -20,6 +20,7 @@ export const HELP = [
   '/edit N <field> <text> — fields: dish, caption, cta, hashtags, story_ideas, post_time',
   '/push N <days> — move Day N · skip N — move it to the next free date',
   '/set address|hours|website <text> · /pause · /resume',
+  '/fact <dish> -- <what is true about it> — remembered for every post about that dish (/fact alone lists them; /fact <dish> -- remove)',
   'posted N — mark Day N posted',
   'Send a photo with a caption like "chapli kebab", "chicken karahi -- cooked to order #day4", "karahi clip 1".',
 ].join('\n');
@@ -107,6 +108,21 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       if (!value) return void say(`${key} is "${await getSetting(pool, key)}".`);
       await setSetting(pool, key, value);
       return void say(`${key} is now "${value}".`);
+    }
+    case '/fact': {
+      if (!arg) {
+        const facts = await allDishFacts(pool);
+        return void say(facts.length ? `Dish facts:\n${facts.map((f) => `• ${f.dish}: ${f.fact}`).join('\n')}` : 'No dish facts yet. Example: /fact chapli kebab -- served with raita and salad');
+      }
+      const m = arg.match(/^(.+?)\s*(?:--|—)\s*([\s\S]+)$/);
+      if (!m) return void say('Format: /fact <dish> -- <what is true>, e.g. /fact chapli kebab -- served with raita and salad');
+      const dish = m[1]!.trim();
+      const fact = m[2]!.trim();
+      if (/^(remove|delete|forget)$/i.test(fact)) {
+        return void say((await removeDishFact(pool, dish)) ? `Forgot the fact about ${dish}.` : `No fact stored for ${dish}.`);
+      }
+      await setDishFact(pool, dish, fact);
+      return void say(`Noted for ${dish}: ${fact}. It applies to every post about ${dish}; /redo the day to refresh a pack.`);
     }
     case '/pause':
       await setSetting(pool, 'paused', 'true');

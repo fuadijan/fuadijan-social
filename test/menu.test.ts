@@ -38,3 +38,12 @@ describe('menu screens source', () => {
     expect(() => parseMenuScreens({ nope: [] })).toThrow();
   });
 });
+
+describe('dish facts', () => {
+  it('matches facts to the texts that name the dish', async () => {
+    const { dishFactsFor } = await import('../src/settings.js');
+    const fake = { query: async (sql: string) => ({ rows: sql.includes("like 'fact:%'") ? [{ key: 'fact:chapli kebab', value: 'served with raita and salad' }, { key: 'fact:chicken karahi', value: 'cooked to order' }] : [], rowCount: 0 }) } as unknown as import('../src/db/pool.js').Db;
+    expect(await dishFactsFor(fake, ['Chapli Kebab', null])).toEqual(['Chapli Kebab: served with raita and salad']);
+    expect(await dishFactsFor(fake, ['Mixed menu'])).toEqual([]);
+  });
+});

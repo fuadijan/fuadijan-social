@@ -21,8 +21,8 @@ function rowSummary(r: CalendarRow): string {
   ].filter(Boolean).join('\n');
 }
 
-function menuBlock(menu: Menu): string {
-  const lines = menu.items.map((i) => `- ${i.name}${i.category ? ` (${i.category})` : ''}${i.soldOut ? ' [SOLD OUT]' : ''}${i.priceCents != null ? ` $${(i.priceCents / 100).toFixed(2)}` : ''}`);
+function menuBlock(menu: Menu, withDescriptions = false): string {
+  const lines = menu.items.map((i) => `- ${i.name}${i.category ? ` (${i.category})` : ''}${i.soldOut ? ' [SOLD OUT]' : ''}${i.priceCents != null ? ` $${(i.priceCents / 100).toFixed(2)}` : ''}${withDescriptions && i.description ? ` — ${i.description.replace(/\s+/g, ' ').slice(0, 140)}` : ''}`);
   return lines.length ? lines.join('\n') : '(the menu source returned nothing)';
 }
 
@@ -42,12 +42,14 @@ export interface ResolveContext {
   label: string;
   footer: 'brand' | 'address';
   priceAllowed: boolean;
+  /** What the owner has told us about dishes (/fact), e.g. "Chapli Kebab: served with raita and salad". */
+  facts: string[];
 }
 
 export function resolvePrompt(ctx: ResolveContext): { system: string; user: string } {
   const r = ctx.row;
   return {
-    system: `${GUARDRAILS}\n\nYou turn one calendar row's draft copy into publishable copy. Keep caption and CTA as written unless a note from the owner says otherwise. Find every [bracketed] placeholder and every "confirm"/"only if confirmed" note in caption, on_screen_text, cta, hashtags and creative_instructions. Resolve what the menu settles (dish names, sides, categories, availability); everything else goes in unresolved — do not guess, do not drop a sentence silently. Hashtags: the row's, 3 to 5, a bracketed hashtag is resolved or dropped. headline: two short lines (newline-separated) suitable for a 1080x1350 design, the dish name or the hook. line: one supporting sentence, no unverified claims. Prices appear only when told they are allowed, and only from the menu. The address line is added later; leave it out. alt_text: one plain sentence for screen readers about the dish on its plate and nothing else: name only the dish itself (as the menu spells it) and use generic words for anything else on the plate ("salad", "slices of cucumber", "a dip") — never name a bread, sauce, chutney, raita or side as if you knew it, never mention the background, the table, the design or the brand colours (the layout is decided after you, so you cannot know them), and never describe things outside the plate (a bread basket, drinks). People in the photo: remind about consent in alt_text only if the row is about team or customers.`,
+    system: `${GUARDRAILS}\n\nYou turn one calendar row's draft copy into publishable copy. Keep caption and CTA as written unless a note from the owner says otherwise. Find every [bracketed] placeholder and every "confirm"/"only if confirmed" note in caption, on_screen_text, cta, hashtags and creative_instructions. Resolve what the menu settles (dish names, sides, categories, availability); everything else goes in unresolved — do not guess, do not drop a sentence silently. Hashtags: the row's, 3 to 5, a bracketed hashtag is resolved or dropped. headline: two short lines (newline-separated) suitable for a 1080x1350 design, the dish name or the hook. line: one supporting sentence, no unverified claims. Prices appear only when told they are allowed, and only from the menu. The address line is added later; leave it out. alt_text: one plain sentence for screen readers about the dish on its plate and nothing else: name only the dish itself (as the menu spells it) and use generic words for anything else on the plate ("salad", "slices of cucumber", "a dip") — never name a bread, sauce, chutney, raita or side unless the menu description or an owner fact confirms it, never mention the background, the table, the design or the brand colours (the layout is decided after you, so you cannot know them), and never describe things outside the plate (a bread basket, drinks). People in the photo: remind about consent in alt_text only if the row is about team or customers.`,
     user: [
       `Calendar row (day ${r.day_no}, ${r.date}, ${r.slot}, template ${r.template}, series label ${ctx.label}, footer ${ctx.footer}):`,
       `dish: ${r.dish ?? '(flexible)'}${ctx.dishCanonical ? ` — photo shows: ${ctx.dishCanonical}` : ''}`,
@@ -63,9 +65,10 @@ export function resolvePrompt(ctx: ResolveContext): { system: string; user: stri
       '',
       `Prices allowed: ${ctx.priceAllowed ? 'yes (menu prices only)' : 'no'}`,
       ctx.note ? `Owner's note for this run: "${ctx.note}"` : '',
+      ctx.facts.length ? `Facts the owner has confirmed about dishes (treat as true):\n${ctx.facts.map((f) => `- ${f}`).join('\n')}` : '',
       ctx.answers.length ? `Owner's answers so far:\n${ctx.answers.map((a) => `- Q: ${a.question}\n  A: ${a.answer}`).join('\n')}` : 'No answers from the owner yet.',
       '',
-      `Menu:\n${menuBlock(ctx.menu)}`,
+      `Menu (with the kitchen's descriptions):\n${menuBlock(ctx.menu, true)}`,
     ].filter((l) => l !== '').join('\n'),
   };
 }

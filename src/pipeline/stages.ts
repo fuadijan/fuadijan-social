@@ -15,7 +15,7 @@ import { hasTag, parseCaption, type ParsedCaption } from '../intake/caption.js';
 import { findItem } from '../menu/source.js';
 import * as fmt from '../messaging/formats.js';
 import { templateEntry } from '../render/registry.js';
-import { allSettings } from '../settings.js';
+import { allSettings, dishFactsFor } from '../settings.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
 import { answeredQuestions, askQuestion, openQuestions, setQuestionMessageId } from './questions.js';
@@ -279,9 +279,11 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   const answers = (await answeredQuestions(ctx.pool, row.id)).filter((q) => !['quality', 'match', 'skip'].includes(q.field ?? '')).map((q) => ({ question: q.question, answer: q.answer ?? '' }));
   const cap = caption(ctx.asset);
   const entry = templateEntry(row.template);
+  const read = ctx.job.state.match ?? ctx.asset?.match ?? null;
+  const facts = await dishFactsFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical]);
   const prompt = resolvePrompt({
-    row, menu, answers, note: ctx.job.state.note ?? cap.note, dishCanonical: ctx.job.state.match?.dish_canonical ?? null,
-    label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'),
+    row, menu, answers, note: ctx.job.state.note ?? cap.note, dishCanonical: read?.dish_canonical ?? null,
+    label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'), facts,
   });
   const copy = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
 
