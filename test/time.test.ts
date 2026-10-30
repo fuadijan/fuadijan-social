@@ -21,3 +21,13 @@ describe('Sydney time', () => {
     expect(dayOfWeek('2026-11-08')).toBe(0);
   });
 });
+
+describe('config placeholders', () => {
+  it('treats template placeholders as unset', async () => {
+    process.env.TELEGRAM_BOT_TOKEN = '<from BotFather>';
+    process.env.RUN_TOKEN = '  <random>  ';
+    const { config } = await import('../src/config.js');
+    expect(config.telegram.token).toBe('');
+    expect(config.runToken).toBe('');
+  });
+});

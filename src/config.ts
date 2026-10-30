@@ -14,7 +14,12 @@ if (existsSync(resolve(process.cwd(), '.env'))) {
 }
 
 const env = process.env;
-const str = (k: string, d = ''): string => (env[k] ?? d).trim();
+/** A value still wearing the template's angle brackets ("<from BotFather>") counts as unset, not as a token. */
+const isPlaceholder = (v: string) => /^<[^>]*>$/.test(v.trim());
+const str = (k: string, d = ''): string => {
+  const v = (env[k] ?? '').trim();
+  return v === '' || isPlaceholder(v) ? d : v;
+};
 const num = (k: string, d: number): number => {
   const v = Number(env[k]);
   return Number.isFinite(v) && env[k] !== undefined && env[k] !== '' ? v : d;
