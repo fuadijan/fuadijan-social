@@ -122,9 +122,10 @@ export function buildServer(ctx: AppContext, opts: ServerOptions = {}): FastifyI
       const target = resolve(webDist, rel || 'index.html');
       if (target !== webDist && !target.startsWith(webDist + sep)) return reply.code(404).send();
       let file = target;
-      const isPage = !existsSync(file) || statSync(file).isDirectory();
+      // The root, index.html itself, and any path that isn't a built file are pages: they need the hub session.
+      const isPage = rel === '' || rel === 'index.html' || !existsSync(file) || statSync(file).isDirectory();
       if (isPage) {
-        if (extname(rel)) return reply.code(404).send();
+        if (extname(rel) && rel !== 'index.html') return reply.code(404).send();
         file = join(webDist, 'index.html');
         const auth = await authenticate(req.headers.cookie);
         if (auth.kind !== 'ok') {
