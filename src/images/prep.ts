@@ -116,8 +116,11 @@ export async function cropAround(jpeg: Buffer, box: Box | null | undefined, rati
   left = Math.min(Math.max(0, left), W - winW);
   top = Math.min(Math.max(0, top), H - winH);
   const { w, h } = CROPS[key];
+  const area = { left: Math.max(0, Math.round(left)), top: Math.max(0, Math.round(top)), width: 0, height: 0 };
+  area.width = Math.min(Math.round(winW), W - area.left);
+  area.height = Math.min(Math.round(winH), H - area.top);
   return sharp(jpeg)
-    .extract({ left: Math.round(left), top: Math.round(top), width: Math.round(winW), height: Math.round(winH) })
+    .extract(area)
     .resize({ width: w, height: h, fit: 'cover' })
     .normalise({ lower: 1, upper: 99 })
     .sharpen({ sigma: 0.8 })
@@ -133,7 +136,9 @@ export async function regionAround(jpeg: Buffer, box: Box | null | undefined, pa
   if (!box || !W || !H || box.w <= 0.05 || box.h <= 0.05) return jpeg;
   const bw = box.w * W * pad;
   const bh = box.h * H * pad;
-  const left = Math.min(Math.max(0, (box.x + box.w / 2) * W - bw / 2), Math.max(0, W - bw));
-  const top = Math.min(Math.max(0, (box.y + box.h / 2) * H - bh / 2), Math.max(0, H - bh));
-  return sharp(jpeg).extract({ left: Math.round(left), top: Math.round(top), width: Math.round(Math.min(bw, W)), height: Math.round(Math.min(bh, H)) }).jpeg({ quality: 95 }).toBuffer();
+  const left = Math.max(0, Math.round(Math.min(Math.max(0, (box.x + box.w / 2) * W - bw / 2), Math.max(0, W - bw))));
+  const top = Math.max(0, Math.round(Math.min(Math.max(0, (box.y + box.h / 2) * H - bh / 2), Math.max(0, H - bh))));
+  const width = Math.min(Math.round(bw), W - left);
+  const height = Math.min(Math.round(bh), H - top);
+  return sharp(jpeg).extract({ left, top, width, height }).jpeg({ quality: 95 }).toBuffer();
 }

@@ -44,7 +44,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
