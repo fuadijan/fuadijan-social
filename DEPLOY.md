@@ -67,7 +67,8 @@ size. Everything else is already paid for (GoDaddy domain, Vercel hub, Anthropic
    EMAIL_TO=<optional, your email for the fallback>
    ```
 
-   `DEV_USER` must **not** be set in production. The app refuses to start on Railway until `HUB_COOKIE_DOMAIN`
+   Paste real values, not the `<placeholders>`: a value left in angle brackets is read as unset (the bot stays
+   off and messages go to the log) rather than as a token. `DEV_USER` must **not** be set in production. The app refuses to start on Railway until `HUB_COOKIE_DOMAIN`
    is set (so a half-configured deploy can never sit open on its Railway URL); the **first deploy therefore
    fails until the variables above are in**, which is expected. `NEXTAUTH_SECRET` is the one the hub uses on Vercel
    (Payroll, Analytics, Costing and Loan all carry the same value).
@@ -87,11 +88,17 @@ size. Everything else is already paid for (GoDaddy domain, Vercel hub, Anthropic
 
 ## 4. Seed the calendar
 
-From this PC, against the Railway database (the public URL), once:
+From this PC, against the Railway database, once. Postgres is private by default: on its card → Settings →
+**Add Public Access**, then **Deploy** the staged change (the bar at the bottom). The address to use is the live
+TCP proxy, `RAILWAY_TCP_PROXY_DOMAIN:RAILWAY_TCP_PROXY_PORT` in the Postgres variables; `DATABASE_PUBLIC_URL` can
+lag behind after the proxy is removed and re-added. Then, in PowerShell:
 
-```bash
-DATABASE_URL="<DATABASE_PUBLIC_URL>" npm run seed-calendar
+```powershell
+$env:DATABASE_URL = "postgresql://postgres:<password>@<proxy host>:<proxy port>/railway"; npm run seed-calendar
 ```
+
+(bash: `DATABASE_URL="…" npm run seed-calendar`). Remove public access again afterwards; the service uses the
+internal address.
 
 It prints the 30 rows and every `[bracketed]` placeholder. Re-running later never overwrites a field edited from
 Telegram or the web app.
