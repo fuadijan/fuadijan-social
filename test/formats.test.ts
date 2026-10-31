@@ -5,7 +5,7 @@ import { briefLine, describeNeeds, morningBrief, shootReminder } from '../src/me
 import { templateKeyFor, assertAllMapped, knownTemplates } from '../src/render/registry.js';
 
 const row = (over: Partial<CalendarRow> = {}): CalendarRow => ({
-  id: 4, day_no: 4, date: '2026-11-06', slot: 'reel', type: 'hero-dish', dish: 'Chicken Karahi', theme: 'From the Karahi', caption_hint: null, post_time: null,
+  id: 4, plan: '2026-11', day_no: 4, date: '2026-11-06', slot: 'reel', type: 'hero-dish', dish: 'Chicken Karahi', theme: 'From the Karahi', caption_hint: null, post_time: null,
   template: 'from-the-karahi', status: 'planned', asset: null, objective: null,
   creative_instructions: 'Reel shot list: 1) Fresh ingredients ready; 2) karahi warming; 3) ingredients added; 4) finished karahi.',
   on_screen_text: null, caption: 'Pair it with [confirm available bread/rice options].', cta: null, hashtags: null, story_ideas: null, confirmation_notes: null, posted_at: null, updated_at: new Date(), ...over,

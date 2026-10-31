@@ -1,4 +1,5 @@
-import { Link } from 'react-router';
+import { useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { getMonth } from '../api';
 import { Card, PageHeader } from '../components/fj';
 import { Empty, ErrorCard, Loading } from '../components/States';
@@ -45,12 +46,31 @@ function groupShoots(days: DayView[]): { monday: string; groups: ShootGroup[] }[
   return [...weeks.entries()].map(([monday, groups]) => ({ monday, groups: [...groups.values()] }));
 }
 
+/** "2026-12" → "December 2026". */
+function planLabel(plan: string): string {
+  const [y, m] = plan.split('-').map(Number);
+  return new Date(Date.UTC(y!, (m ?? 1) - 1, 1)).toLocaleDateString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
 export function Month() {
-  const { data, error, loading, reload } = useApi(getMonth, 'month');
+  const [params, setParams] = useSearchParams();
+  const plan = params.get('plan');
+  const load = useCallback(() => getMonth(plan), [plan]);
+  const { data, error, loading, reload } = useApi(load, `month:${plan ?? ''}`);
+  const subtitle = data?.days.length ? `${fmtDayMonth(data.days[0]!.date)} – ${fmtDayMonth(data.days[data.days.length - 1]!.date)} · ${data.days.length} days` : 'the whole calendar';
 
   return (
     <>
-      <PageHeader title="Month" subtitle={data?.days.length ? `${fmtDayMonth(data.days[0]!.date)} – ${fmtDayMonth(data.days[data.days.length - 1]!.date)} · ${data.days.length} days` : 'the whole calendar'} />
+      <PageHeader title={data?.plan ? planLabel(data.plan) : 'Month'} subtitle={subtitle} />
+      {data && data.plans.length > 1 ? (
+        <div className="sa-plan-switch" role="group" aria-label="Which month">
+          {data.plans.map((p) => (
+            <button key={p.plan} type="button" className={`sa-plan-chip${p.plan === data.plan ? ' sa-plan-chip--on' : ''}`} onClick={() => setParams(p.plan === data.plan ? {} : { plan: p.plan })}>
+              {planLabel(p.plan)}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {error ? <ErrorCard message={error} onRetry={() => void reload()} /> : null}
       {loading && !data ? <Loading what="Loading the month" /> : null}
       {data && data.days.length === 0 ? <Empty>The calendar is empty. Run the seed to load the 30 days.</Empty> : null}

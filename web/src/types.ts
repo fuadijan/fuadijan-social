@@ -160,8 +160,13 @@ export interface WeekResponse {
   shootList: ShootItem[];
 }
 
+export interface PlanInfo { plan: string; first: string; last: string; rows: number }
+
 export interface MonthResponse {
   today: string;
+  /** The plan shown (YYYY-MM) and every plan loaded, oldest first. */
+  plan: string | null;
+  plans: PlanInfo[];
   days: DayView[];
   settings: { storeAddress: string | null; openHours: string | null };
 }

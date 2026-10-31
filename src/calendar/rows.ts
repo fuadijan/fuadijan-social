@@ -3,7 +3,7 @@
  * `posted_at` and whatever an /edit asks for; nothing else, and never `dish` on its own.
  */
 import type { Db } from '../db/pool.js';
-import { addDays, type IsoDate } from '../time.js';
+import { addDays, sydneyDate, type IsoDate } from '../time.js';
 
 export type Slot = 'feed' | 'carousel' | 'reel';
 export type Status = 'planned' | 'photo-needed' | 'ready' | 'posted';
@@ -11,6 +11,8 @@ export type EditSource = 'owner-telegram' | 'owner-web' | 'agent' | 'seed';
 
 export interface CalendarRow {
   id: number;
+  /** The month the row's workbook was for, YYYY-MM; day numbers restart each plan. */
+  plan: string;
   day_no: number;
   date: IsoDate;
   slot: Slot;
@@ -38,14 +40,37 @@ export interface CalendarRow {
 export const EDITABLE_FIELDS = ['dish', 'caption', 'cta', 'hashtags', 'story_ideas', 'post_time', 'on_screen_text', 'creative_instructions', 'theme', 'objective', 'confirmation_notes'] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
-const COLS = 'id, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, posted_at, updated_at';
+const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, posted_at, updated_at';
 
-export async function allRows(db: Db): Promise<CalendarRow[]> {
-  return (await db.query<CalendarRow>(`select ${COLS} from calendar_rows order by day_no`)).rows;
+/** Every plan with its first and last date, oldest first. */
+export async function plans(db: Db): Promise<{ plan: string; first: IsoDate; last: IsoDate; rows: number }[]> {
+  const { rows } = await db.query<{ plan: string; first: IsoDate; last: IsoDate; rows: string }>(
+    "select plan, to_char(min(date), 'YYYY-MM-DD') first, to_char(max(date), 'YYYY-MM-DD') last, count(*) rows from calendar_rows group by plan order by min(date)");
+  return rows.map((r) => ({ ...r, rows: Number(r.rows) }));
 }
 
-export async function rowByDay(db: Db, dayNo: number): Promise<CalendarRow | null> {
-  return (await db.query<CalendarRow>(`select ${COLS} from calendar_rows where day_no = $1`, [dayNo])).rows[0] ?? null;
+/**
+ * The plan "Day N" refers to: the latest plan that has started by `today`, else the next one to start. A new
+ * month's workbook sits beside the running one until its first date comes round.
+ */
+export async function currentPlan(db: Db, today: IsoDate = sydneyDate(new Date())): Promise<string | null> {
+  const all = await plans(db);
+  if (!all.length) return null;
+  const started = all.filter((p) => p.first <= today);
+  return (started.at(-1) ?? all[0]!).plan;
+}
+
+/** The current plan's rows (or a named plan's), by day number. */
+export async function allRows(db: Db, plan?: string | null): Promise<CalendarRow[]> {
+  const p = plan ?? await currentPlan(db);
+  if (!p) return [];
+  return (await db.query<CalendarRow>(`select ${COLS} from calendar_rows where plan = $1 order by day_no`, [p])).rows;
+}
+
+export async function rowByDay(db: Db, dayNo: number, plan?: string | null): Promise<CalendarRow | null> {
+  const p = plan ?? await currentPlan(db);
+  if (!p) return null;
+  return (await db.query<CalendarRow>(`select ${COLS} from calendar_rows where plan = $1 and day_no = $2`, [p, dayNo])).rows[0] ?? null;
 }
 
 export async function rowById(db: Db, id: number): Promise<CalendarRow | null> {
@@ -98,7 +123,8 @@ export async function pushRow(db: Db, row: CalendarRow, days: number, source: Ed
  */
 export async function skipRow(db: Db, row: CalendarRow, mode: 'push-all' | 'just-this', source: EditSource): Promise<IsoDate> {
   if (mode === 'push-all') {
-    const later = (await db.query<{ id: number; date: string }>("select id, to_char(date, 'YYYY-MM-DD') as date from calendar_rows where date > $1 order by date desc", [row.date])).rows;
+    // Only this plan moves; next month's rows stay where they are.
+    const later = (await db.query<{ id: number; date: string }>("select id, to_char(date, 'YYYY-MM-DD') as date from calendar_rows where plan = $2 and date > $1 order by date desc", [row.date, row.plan])).rows;
     for (const r of later) {
       const next = addDays(r.date, 1);
       await db.query('update calendar_rows set date = $2, updated_at = now() where id = $1', [r.id, next]);

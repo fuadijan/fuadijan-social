@@ -47,6 +47,8 @@ export interface ResolveContext {
   priceAllowed: boolean;
   /** What the owner has told us about dishes (/fact), e.g. "Chapli Kebab: served with raita and salad". */
   facts: string[];
+  /** The owner's slogans for this item, e.g. "Chapli Kebab: Hand-formed. Fire-finished." */
+  slogans: string[];
 }
 
 export function resolvePrompt(ctx: ResolveContext): { system: string; user: string } {
@@ -69,6 +71,7 @@ export function resolvePrompt(ctx: ResolveContext): { system: string; user: stri
       `Prices allowed: ${ctx.priceAllowed ? 'yes (menu prices only)' : 'no'}`,
       ctx.note ? `Owner's note for this run: "${ctx.note}"` : '',
       ctx.facts.length ? `Facts the owner has confirmed about dishes (treat as true):\n${ctx.facts.map((f) => `- ${f}`).join('\n')}` : '',
+      ctx.slogans.length ? `The owner's own slogans for this item (they are offered as wording options separately; one variant may build on one, in the owner's voice):\n${ctx.slogans.map((s) => `- ${s}`).join('\n')}` : '',
       ctx.answers.length ? `Owner's answers so far:\n${ctx.answers.map((a) => `- Q: ${a.question}\n  A: ${a.answer}`).join('\n')}` : 'No answers from the owner yet.',
       '',
       `Menu (with the kitchen's descriptions):\n${menuBlock(ctx.menu, true)}`,

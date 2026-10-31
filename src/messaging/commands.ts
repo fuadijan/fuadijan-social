@@ -10,6 +10,7 @@ import { answerQuestion, askQuestion, latestOpenQuestion, openQuestions, questio
 import { resendPack } from '../pipeline/stages.js';
 import { redoRow } from '../pipeline/worker.js';
 import { allCopyOptions, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
+import { addSlogan, listSlogans, removeSlogan, slogansByItem } from '../slogans.js';
 import { SET_ALIASES, allDishFacts, getSetting, removeDishFact, setDishFact, setSetting } from '../settings.js';
 import { formatDay, sydneyDate, sydneyTime, addDays } from '../time.js';
 import { weekLines } from '../reminders/brief.js';
@@ -23,6 +24,7 @@ export const HELP = [
   '/push N <days> — move Day N · skip N — move it to the next free date',
   '/set address|hours|website <text> · /set design <standing notes for the art director> · /set wording ask|off · /pause · /resume',
   '/fact <dish> -- <what is true about it> — remembered for every post about that dish (/fact alone lists them; /fact <dish> -- remove)',
+  '/slogan <item> -- <headline> | <line> | <caption> — add a slogan offered as a wording for posts about that item ("all" = every post) · /slogan <item> lists · /slogan <item> -- remove <n>',
   'posted N — mark Day N posted',
   'Send a photo with a caption like "chapli kebab", "chicken karahi -- cooked to order #day4", "karahi clip 1".',
 ].join('\n');
@@ -125,11 +127,34 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       if (!Number.isInteger(k) || !latest.options[k - 1]) return void say(`Pick 1–${latest.options.length}: /wording ${row.day_no} <number>`);
       const open = (await openQuestions(pool, row.id)).find((q) => q.field === 'wording');
       if (open) {
-        await applyAnswer(app, open.id, String(k - 1), 'telegram');
+        await applyAnswer(app, open.id, String(k), 'telegram');
         return;
       }
       const job = await rerenderWithWording(pool, row.id, latest, k - 1);
       return void say(job ? `Wording ${k} for Day ${row.day_no} — rebuilding the designs and the pack.` : `Day ${row.day_no} has nothing rendered yet; the choice is noted for when it is.`);
+    }
+    case '/slogan': {
+      if (!arg) {
+        const items = await slogansByItem(pool);
+        return void say(items.length ? `Slogans: ${items.map((i) => `${i.item} (${i.n})`).join(' · ')}\n/slogan <item> shows them.` : 'No slogans yet. Add one: /slogan chapli kebab -- Hand-formed. Fire-finished. | Grilled over charcoal every evening.\nOr fill the Slogans sheet next to the plan and run the seed.');
+      }
+      const m = arg.match(/^(.+?)\s*(?:--|—)\s*([\s\S]+)$/);
+      if (!m) {
+        const list = await listSlogans(pool, arg);
+        return void say(list.length ? `${arg}:\n${list.map((s, i) => `${i + 1}. ${s.headline.replace(/\n/g, ' / ')}${s.line ? `\n   ${s.line}` : ''}${s.caption ? `\n   ${s.caption.slice(0, 120)}` : ''}`).join('\n')}\n/slogan ${arg} -- remove <n> forgets one.` : `No slogans for ${arg}. Add one: /slogan ${arg} -- <headline> | <line> | <caption>`);
+      }
+      const item = m[1]!.trim();
+      const body = m[2]!.trim();
+      const rm = body.match(/^(?:remove|delete|forget)\s+(\d+)$/i);
+      if (rm) {
+        const list = await listSlogans(pool, item);
+        const target = list[Number(rm[1]) - 1];
+        return void say(target && (await removeSlogan(pool, target.id)) ? `Forgot slogan ${rm[1]} for ${item}.` : `No slogan ${rm[1]} for ${item}.`);
+      }
+      const [headline = '', line, caption] = body.split('|').map((p) => p.trim());
+      if (!headline) return void say('Format: /slogan <item> -- <headline> | <line> | <caption>');
+      const s = await addSlogan(pool, { item, headline: headline.replace(/\s*\/\s*/g, '\n'), line, caption, source: 'owner' });
+      return void say(`Slogan for ${s.item}: ${s.headline.replace(/\n/g, ' / ')}. It is offered as a wording for every post about ${s.item}${s.item_key === 'all' ? '' : ' (and sent to Claude as inspiration)'}.`);
     }
     case '/fact': {
       if (!arg) {
@@ -228,8 +253,7 @@ export async function applyAnswer(app: AppContext, questionId: number, keyOrText
 
   let reply = `Got it: ${value}`;
   if (q.field === 'wording') {
-    const n = Number(value);
-    reply = Number.isInteger(n) ? `Wording ${n + 1} — designing now.` : `Using your headline "${value}" — designing now.`;
+    reply = /^\d{1,2}$/.test(value.trim()) ? `Wording ${value.trim()} — designing now.` : `Using your headline "${value}" — designing now.`;
   } else if (q.field === 'skip' && q.row_id) {
     const row = (await allRows(pool)).find((r) => r.id === q.row_id);
     if (row && value !== 'cancel') {

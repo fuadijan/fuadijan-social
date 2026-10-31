@@ -70,7 +70,7 @@ function post<T>(path: string, payload: unknown): Promise<T> {
 
 export const getMe = () => apiFetch<Me>('/api/me');
 export const getWeek = () => apiFetch<WeekResponse>('/api/week');
-export const getMonth = () => apiFetch<MonthResponse>('/api/month');
+export const getMonth = (plan?: string | null) => apiFetch<MonthResponse>(plan ? `/api/month?plan=${encodeURIComponent(plan)}` : '/api/month');
 export const getDay = (dayNo: number) => apiFetch<DayResponse>(`/api/day/${dayNo}`);
 export const getStatus = () => apiFetch<StatusResponse>('/api/status');
 

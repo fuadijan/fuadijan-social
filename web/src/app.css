@@ -245,3 +245,8 @@ a { color: var(--fj-primary); }
 .sa-wording-line { color: var(--fj-text-secondary); }
 .sa-wording-caption { font-size: var(--fj-text-sm); white-space: pre-wrap; }
 .sa-wording-actions { margin-top: 4px; }
+
+/* Month: which plan */
+.sa-plan-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 14px; }
+.sa-plan-chip { border: 1px solid var(--fj-border); background: transparent; color: var(--fj-text-secondary); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: var(--fj-text-sm); cursor: pointer; min-height: var(--fj-tap-target); }
+.sa-plan-chip--on { border-color: var(--fj-accent-border); background: var(--fj-accent-bg); color: var(--fj-text); }

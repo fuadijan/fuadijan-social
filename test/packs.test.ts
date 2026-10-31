@@ -5,7 +5,7 @@ import { ResolvedCopy } from '../src/brain/schemas.js';
 import { canvaBriefTxt, captionTxt, reelPackTxt, shotList } from '../src/pipeline/packs.js';
 
 const row = (over: Partial<CalendarRow> = {}): CalendarRow => ({
-  id: 2, day_no: 2, date: '2026-11-04', slot: 'feed', type: 'hero-dish', dish: 'Chapli Kebab', theme: 'Make Chapli famous', caption_hint: null, post_time: null,
+  id: 2, plan: '2026-11', day_no: 2, date: '2026-11-04', slot: 'feed', type: 'hero-dish', dish: 'Chapli Kebab', theme: 'Make Chapli famous', caption_hint: null, post_time: null,
   template: 'from-the-fire', status: 'planned', asset: null, objective: null,
   creative_instructions: 'Reel shot list: 1) Charcoal catching; 2) flame and smoke; 3) Chapli Kebab on the grill; 4) finished spread. Use quick cuts.',
   on_screen_text: '“THIS IS FUADIJAN” → “FROM THE FIRE” → “SMOKED. GRILLED. ROOTED IN TRADITION.”',

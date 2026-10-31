@@ -108,7 +108,7 @@ export function wordingOptions(row: CalendarRow, options: { name: string; headli
   return [
     `✍️ ${rowTitle(row)} — pick the wording before I design it:`,
     ...options.map((o, i) => `${i + 1}. ${o.name}\n   ${o.headline.replace(/\n/g, ' / ')}\n   ${o.line}\n   ${o.caption.length > 160 ? `${o.caption.slice(0, 157)}…` : o.caption}`),
-    'Tap a button below, or type your own headline. /set wording off skips this step.',
+    'Tap a button below, reply with a number, or type your own headline. /set wording off skips this step.',
   ].join('\n\n');
 }
 

@@ -106,6 +106,21 @@ or type your own headline. Every set is kept in `copy_options` and listed on the
 any earlier wording can be chosen again (`/wording N k` does the same); after the pack is made a pick rebuilds the
 designs and the pack. `/set wording off` skips the question and uses the calendar wording.
 
+**Loading a month.** Fill `calendar/Fuadijan-Monthly-Template.xlsx` (sheets: Calendar, Columns, Templates, Slogans,
+Read Me), save it as the month's workbook and run `npm run seed-calendar -- --file "calendar/December.xlsx"`. The
+month of the first date names the plan (`2026-12`); it is added beside the running month, never over it, and
+becomes the plan "Day N" refers to on its first date. Loading the same month again updates what changed and leaves
+owner edits alone. The month view takes `?plan=2026-12` to look ahead.
+
+**The slogan bank.** Keep several slogans per menu item and they are offered among the wordings whenever a post is
+about that item. Load them with the monthly plan: a sheet named `Slogans` in the plan workbook, or the separate
+`calendar/Fuadijan-Slogans.xlsx` (a template with a Read Me is in the repo), columns `Item | Slogan | Line | Caption`
+(Line and Caption optional; a slogan without them borrows the calendar's). `npm run seed-calendar` loads both; the
+same item + slogan is updated, never duplicated. Item `all` applies to every post. From Telegram:
+`/slogan chapli kebab -- Hand-formed. Fire-finished. | Grilled over charcoal every evening.` adds one (`/` in the
+headline breaks the line), `/slogan chapli kebab` lists them, `/slogan chapli kebab -- remove 2` forgets one. The
+slogans for the item also reach Claude, so one of its alternatives may build on them.
+
 ## What arrives at post time
 
 For a feed day: the rendered `feed.png` and `story.png` as files (carousels one PNG per page, reels a

@@ -103,6 +103,15 @@ internal address.
 It prints the 30 rows and every `[bracketed]` placeholder. Re-running later never overwrites a field edited from
 Telegram or the web app.
 
+**Each new month**: fill the monthly template (`calendar/Fuadijan-Monthly-Template.xlsx`), then run the same command
+with `-- --file "calendar/<month>.xlsx"`. The new month is added beside the current one and takes over on its first
+date; day numbers restart at 1.
+
+The same run loads the **slogan bank**: a sheet named `Slogans` in the plan workbook and/or
+`calendar/Fuadijan-Slogans.xlsx` (`Item | Slogan | Line | Caption`). Re-run it whenever the slogans change; the same
+item + slogan is updated, not duplicated. Without opening public access, slogans can also be added one at a time
+from Telegram with `/slogan <item> -- <headline> | <line> | <caption>`.
+
 ## 5. Telegram
 
 1. BotFather → `/newbot` → name "Fuadijan Social", a username ending in `bot`. Copy the token into

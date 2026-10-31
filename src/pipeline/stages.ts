@@ -18,6 +18,7 @@ import { templateEntry } from '../render/registry.js';
 import { allSettings, dishFactsFor, getSetting } from '../settings.js';
 import { summarise, type DesignRun, type DesignSummary } from './design.js';
 import { addCustomOption, applyOption, latestCopyOptions, markChosen, storeCopyOptions } from './wording.js';
+import { slogansFor } from '../slogans.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
 import { answeredQuestions, askQuestion, openQuestions, setQuestionMessageId } from './questions.js';
@@ -287,9 +288,11 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   const entry = templateEntry(row.template);
   const read = ctx.job.state.match ?? ctx.asset?.match ?? null;
   const facts = await dishFactsFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical]);
+  const slogans = await slogansFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical, seriesLabel(row), row.theme]);
   const prompt = resolvePrompt({
     row, menu, answers, note: ctx.job.state.note ?? cap.note, dishCanonical: read?.dish_canonical ?? null,
     label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'), facts,
+    slogans: slogans.map((s) => `${s.item}: ${s.headline.replace(/\n/g, ' / ')}${s.line ? ` — ${s.line}` : ''}`),
   });
   const copy = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
 
@@ -306,7 +309,7 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
     return { kind: 'wait', questionId: first!, state: { copy } };
   }
   // The main copy and Claude's alternative wordings are kept; the render stage asks which to use.
-  await storeCopyOptions(ctx.pool, row.id, ctx.job.id, copy);
+  await storeCopyOptions(ctx.pool, row.id, ctx.job.id, copy, slogans);
   return { kind: 'advance', stage: 'render', state: { copy } };
 }
 
@@ -330,7 +333,9 @@ async function chooseWording(ctx: StageContext, row: CalendarRow): Promise<Outco
   };
   const answered = (await answeredQuestions(ctx.pool, row.id)).filter((q) => q.field === 'wording' && q.job_id === ctx.job.id).at(-1);
   if (answered?.answer != null) {
-    const n = Number(answered.answer);
+    // Buttons carry the option number (1-based), and a typed "2" means option 2; anything else is a headline.
+    const raw = answered.answer.trim();
+    const n = /^\d{1,2}$/.test(raw) ? Number(raw) - 1 : NaN;
     if (Number.isInteger(n) && set.options[n]) {
       await markChosen(ctx.pool, set.id, n);
       use(n, set.options);
@@ -344,10 +349,11 @@ async function chooseWording(ctx: StageContext, row: CalendarRow): Promise<Outco
     use(set.chosen, set.options);
     return null;
   }
+  // Buttons for the first eight; a longer bank is picked by number (the message lists them all).
   const q = await sendQuestion(ctx, {
     rowId: row.id, field: 'wording',
-    question: `Which wording for Day ${row.day_no}? Tap one, or type your own headline.`,
-    options: set.options.map((o, i) => ({ key: `v${i}`, label: `${i + 1} · ${o.name}`.slice(0, 40), value: String(i) })),
+    question: `Which wording for Day ${row.day_no}? Tap one${set.options.length > 8 ? `, reply with a number up to ${set.options.length}` : ''}, or type your own headline.`,
+    options: set.options.slice(0, 8).map((o, i) => ({ key: `v${i}`, label: `${i + 1} · ${o.name}`.slice(0, 40), value: String(i + 1) })),
   }, fmt.wordingOptions(row, set.options));
   return { kind: 'wait', questionId: q.id };
 }

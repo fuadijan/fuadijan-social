@@ -5,7 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import type { AppContext } from '../context.js';
-import { EDITABLE_FIELDS, allRows, editField, markPosted, pushRow, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow, type EditableField } from '../calendar/rows.js';
+import { EDITABLE_FIELDS, allRows, currentPlan, editField, markPosted, plans, pushRow, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow, type EditableField } from '../calendar/rows.js';
 import { receiveAsset } from '../pipeline/worker.js';
 import { redoRow } from '../pipeline/worker.js';
 import { getFile } from '../files.js';
@@ -44,10 +44,13 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     return { today, days: views.map((v) => viewJson(v, { questions: qs.filter((q) => q.row_id === v.row.id).map(qJson) })), shootList: shoot };
   });
 
-  app.get('/api/month', async () => {
-    const views = await rowViews(ctx, await allRows(ctx.pool));
+  app.get<{ Querystring: { plan?: string } }>('/api/month', async (req) => {
+    const today = sydneyDate(ctx.now());
+    const all = await plans(ctx.pool);
+    const plan = all.some((p) => p.plan === req.query.plan) ? req.query.plan! : await currentPlan(ctx.pool, today);
+    const views = await rowViews(ctx, await allRows(ctx.pool, plan));
     const settings = await allSettings(ctx.pool);
-    return { today: sydneyDate(ctx.now()), days: views.map((v) => viewJson(v)), settings: { storeAddress: settings.store_address, openHours: settings.open_hours } };
+    return { today, plan, plans: all, days: views.map((v) => viewJson(v)), settings: { storeAddress: settings.store_address, openHours: settings.open_hours } };
   });
 
   app.get<{ Params: { dayNo: string } }>('/api/day/:dayNo', async (req, reply) => {
@@ -96,7 +99,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const open = (await openQuestions(ctx.pool, row.id)).find((q) => q.field === 'wording');
     if (open) {
       await markChosen(ctx.pool, set.id, index);
-      const message = await applyAnswer(ctx, open.id, String(index), 'web');
+      const message = await applyAnswer(ctx, open.id, String(index + 1), 'web');
       return { ok: true, message };
     }
     const job = await rerenderWithWording(ctx.pool, row.id, set, index);

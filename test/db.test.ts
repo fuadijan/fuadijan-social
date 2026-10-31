@@ -14,7 +14,7 @@ import { FixtureClaude } from '../src/brain/client.js';
 import type { AppContext } from '../src/context.js';
 import { FileMenuSource } from '../src/menu/index.js';
 import { CachedMenu } from '../src/menu/source.js';
-import { applyAnswer, handleFreeText } from '../src/messaging/commands.js';
+import { applyAnswer, handleCommand, handleFreeText } from '../src/messaging/commands.js';
 import { ConsoleMessenger } from '../src/messaging/messenger.js';
 import { openQuestions } from '../src/pipeline/questions.js';
 import { receiveAsset, Worker } from '../src/pipeline/worker.js';
@@ -44,7 +44,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -52,7 +52,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const wb = await readWorkbook();
     expect(wb.rows).toHaveLength(30);
     const res = await seedRows(pool, wb.rows);
-    expect(res).toMatchObject({ inserted: 30, updated: 0 });
+    expect(res).toMatchObject({ plan: '2026-11', inserted: 30, updated: 0 });
     const rows = await allRows(pool);
     expect(rows[0]).toMatchObject({ day_no: 1, date: '2026-11-03', slot: 'reel', template: 'brand-intro', status: 'planned' });
     expect(rows[29]!.date).toBe('2026-12-02');
@@ -177,6 +177,45 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(messenger.sent.filter((m) => m.text?.startsWith('⏰'))).toHaveLength(1);
     await eveningNudge(atSix);
     expect(messenger.sent.filter((m) => m.text?.startsWith('🌙'))).toHaveLength(1);
+  });
+
+  it('loads the slogan bank from a sheet and offers the item\'s slogans as wordings', async () => {
+    const { readSlogans, seedSlogans } = await import('../calendar/slogans.js');
+    const { slogansFor, listSlogans } = await import('../src/slogans.js');
+    const { optionsFrom } = await import('../src/pipeline/wording.js');
+    const rows = await readSlogans(['test/fixtures/slogans.xlsx', 'calendar/does-not-exist.xlsx']);
+    expect(rows.map((r) => r.item)).toEqual(['Chapli Kebab', 'Chapli Kebab', 'Chicken Karahi', 'all']);
+    expect(await seedSlogans(pool, rows)).toEqual({ loaded: 4, items: 3 });
+    expect(await seedSlogans(pool, rows)).toEqual({ loaded: 4, items: 3 }); // idempotent
+    expect(await listSlogans(pool)).toHaveLength(4);
+    const forChapli = await slogansFor(pool, ['Chapli Kebab', null]);
+    expect(forChapli.map((s) => s.headline)).toEqual(['Hand-formed.\nFire-finished.', 'The kebab\nAuburn talks about', 'Smoked. Grilled.\nRooted in Tradition.']);
+    expect((await slogansFor(pool, ['Lamb Karahi'])).map((s) => s.item)).toEqual(['all']);
+    const copy = { label: 'L', headline: 'Chapli\nKebab', line: 'l', caption: 'c', cta: 'x', hashtags: ['#a', '#b', '#c'], alt_text: 'a', story_text: 's', facebook_caption: 'c x', on_screen_text: [], unresolved: [], variants: [] };
+    const options = optionsFrom(copy, forChapli);
+    expect(options.map((o) => o.name)).toEqual(['Calendar wording', 'Slogan · Chapli Kebab', 'Slogan · Chapli Kebab', 'Slogan · house']);
+    expect(options[1]).toMatchObject({ headline: 'Hand-formed.\nFire-finished.', line: 'Grilled over charcoal every evening.', caption: 'c' });
+    await handleCommand(ctx, '/slogan chapli kebab -- Big flavour. / Small plate. | Comes with roti, raita and salad.');
+    expect((await listSlogans(pool, 'chapli kebab')).at(-1)).toMatchObject({ headline: 'Big flavour.\nSmall plate.', line: 'Comes with roti, raita and salad.', source: 'owner' });
+    await handleCommand(ctx, '/slogan chapli kebab -- remove 3');
+    expect(await listSlogans(pool, 'chapli kebab')).toHaveLength(2);
+  });
+
+  it('loads next month beside the current one; Day N stays this month until the new plan starts', async () => {
+    const { allRows: rowsOf, currentPlan, plans, rowsBetween: between } = await import('../src/calendar/rows.js');
+    const wb = await readWorkbook();
+    const december = wb.rows.map((r) => ({ ...r, date: r.date.replace(/^2026-11-/, '2026-12-').replace(/^2026-12-0([12])$/, '2027-01-0$1'), status: 'planned' as const }));
+    const res = await seedRows(pool, december);
+    expect(res).toMatchObject({ plan: '2026-12', inserted: 30, updated: 0 });
+    expect((await plans(pool)).map((p) => p.plan)).toEqual(['2026-11', '2026-12']);
+    expect(await currentPlan(pool, '2026-11-20')).toBe('2026-11');
+    expect(await currentPlan(pool, '2026-12-03')).toBe('2026-12');
+    expect(await currentPlan(pool, '2026-10-01')).toBe('2026-11');
+    expect((await rowsOf(pool, '2026-11')).map((r) => r.plan)).toEqual(Array(30).fill('2026-11'));
+    expect((await rowByDay(pool, 2, '2026-12'))!.date).toBe('2026-12-04');
+    expect((await between(pool, '2026-12-01', '2026-12-05')).map((r) => `${r.plan}:${r.day_no}`)).toContain('2026-12:1');
+    // Re-loading December changes nothing.
+    expect(await seedRows(pool, december)).toMatchObject({ plan: '2026-12', inserted: 0, updated: 0 });
   });
 
   it('understands "posted 2" and "skip 3"', async () => {
