@@ -10,3 +10,4 @@ samples/out/
 .local/
 data/
 *.log
+.vercel/
