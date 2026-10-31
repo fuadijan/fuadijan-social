@@ -12,7 +12,8 @@ import type { PhotoStats } from '../images/analyze.js';
 import { Critique, DesignSpec, type MatchResult } from '../brain/schemas.js';
 import { critiquePrompt, directPrompt } from '../brain/prompts.js';
 import type { Brand } from '../render/brand.js';
-import { legibilityFor, type Legibility } from '../render/legibility.js';
+import { legibilityFor, predictedContrast, relativeLuminance, contrastRatio, type Legibility } from '../render/legibility.js';
+import { STYLES, feasibleStyle, styleFromNote, type Style } from '../render/styles.js';
 
 export type DesignSource = 'heuristic' | 'claude' | 'owner';
 
@@ -30,6 +31,8 @@ export interface DesignRun {
 
 /** What the pack and the Telegram message keep of a run. */
 export interface DesignSummary {
+  style: Style;
+  accent_word: boolean;
   layout: 'A' | 'B';
   text_position: 'top' | 'bottom';
   text_side: 'left' | 'right';
@@ -47,7 +50,7 @@ export interface DesignSummary {
 
 export function summarise(run: DesignRun): DesignSummary {
   return {
-    layout: run.spec.layout, text_position: run.spec.text_position, text_side: run.spec.text_side,
+    style: run.spec.style, accent_word: run.spec.accent_word, layout: run.spec.layout, text_position: run.spec.text_position, text_side: run.spec.text_side,
     band_strength: run.spec.band_strength, type_scale: run.spec.type_scale, source: run.source, rationale: run.spec.rationale,
     contrast: run.legibility?.contrast ?? null, score: run.critique?.score ?? null, first_score: run.firstScore,
     verdict: run.critique?.verdict ?? null, issues: run.critique?.issues ?? [], attempts: run.attempts,
@@ -63,6 +66,28 @@ export interface DesignInput {
   line: string;
   note: string | null;
   designNotes: string;
+  /** The style the calendar template prefers (registry), if any. */
+  templateStyle?: Style | null;
+}
+
+const headlineLines = (headline: string): string[] => headline.split('\n').map((l) => l.trim()).filter(Boolean);
+
+/**
+ * The style the rules would pick. The template's preference wins when the photo can carry it; otherwise split
+ * when the headline is two short words and the dish sits mid-frame with quiet thirds above and below; else band.
+ */
+export function heuristicStyle(d: DesignInput, dishY: number): Style {
+  const have = { cutout: d.cutoutAvailable, photo: true };
+  const lines = headlineLines(d.headline);
+  const twoShort = lines.length === 2 && lines.every((l) => l.length <= 10);
+  const midFrame = dishY > 0.32 && dishY < 0.68;
+  const quietEnds = d.stats.zones.top.detail < 0.35 && d.stats.zones.bottom.detail < 0.35;
+  if (d.templateStyle && d.templateStyle !== 'band') {
+    const t = feasibleStyle(d.templateStyle, have);
+    if (t === d.templateStyle && (t !== 'split' || twoShort)) return t;
+  }
+  if (twoShort && midFrame && quietEnds) return 'split';
+  return 'band';
 }
 
 /** The rule-based default: where the dish is, where the photo is quiet, how dim it is, how long the words are. */
@@ -80,7 +105,13 @@ export function heuristicSpec(d: DesignInput): DesignSpec {
   const headlineChars = d.headline.replace(/\n/g, ' ').trim().length;
   const busy = read?.background_clutter === 'high' || stats.zones[text_position].detail > 0.45;
   const type_scale = Math.min(1.2, Math.max(1, (headlineChars <= 14 ? 1.1 : 1) + (busy ? 0.05 : 0)));
+  const style = heuristicStyle(d, dishY);
+  const first = headlineLines(d.headline)[0] ?? '';
+  // A short lead-in line ("Time to", "Fresh from") reads as an accent; a dish name does not.
+  const accent_word = style === 'invite' || (style === 'band' && headlineLines(d.headline).length === 2 && first.length <= 9 && /^(?:time|fresh|straight|hot|made|from|our|the|new|try|taste|meet|say|hello|this|your)\b/i.test(first));
   return {
+    style,
+    accent_word,
     layout,
     text_position,
     text_side,
@@ -88,7 +119,7 @@ export function heuristicSpec(d: DesignInput): DesignSpec {
     type_scale,
     crop_focus_y: text_position === 'top' ? 0.58 : 0.42,
     lift_tone: stats.mean < 0.09,
-    rationale: `Rule-based: ${layout === 'A' ? 'single plate with a clean cutout' : 'full photo'}, text ${text_position}-${text_side} where the photo is ${stats.zones[text_position].detail < 0.3 ? 'quiet' : 'calmest'}${type_scale > 1 ? ', type enlarged for a short headline' : ''}.`,
+    rationale: `Rule-based: ${style !== 'band' ? `${STYLES[style].name} style, ` : ''}${layout === 'A' ? 'single plate with a clean cutout' : 'full photo'}, text ${text_position}-${text_side} where the photo is ${stats.zones[text_position].detail < 0.3 ? 'quiet' : 'calmest'}${type_scale > 1 ? ', type enlarged for a short headline' : ''}.`,
   };
 }
 
@@ -102,6 +133,10 @@ export function applyOwnerNote(spec: DesignSpec, note: string | null): { spec: D
   const out = { ...spec };
   const locked: (keyof DesignSpec)[] = [];
   const lock = <K extends keyof DesignSpec>(k: K, v: DesignSpec[K]) => { out[k] = v; if (!locked.includes(k)) locked.push(k); };
+  const style = styleFromNote(n);
+  if (style) lock('style', style);
+  if (/\bno accent\b|\bplain headline\b/.test(n)) lock('accent_word', false);
+  else if (/\baccent\b|\bitalic lead\b|\bscript\b/.test(n)) lock('accent_word', true);
   if (/layout\s*b|no cutout|full[- ]bleed|whole photo/.test(n)) lock('layout', 'B');
   else if (/layout\s*a|\bcutout\b/.test(n)) lock('layout', 'A');
   if (/text (?:on |to |at )?(?:the )?right|right side/.test(n)) lock('text_side', 'right');
@@ -120,7 +155,7 @@ export function applyOwnerNote(spec: DesignSpec, note: string | null): { spec: D
 export async function directDesign(app: AppContext, input: DesignInput, thumb: Buffer, jobId: number | null): Promise<{ spec: DesignSpec; source: DesignSource }> {
   const heuristic = heuristicSpec(input);
   try {
-    const prompt = directPrompt({ ...input, heuristic });
+    const prompt = directPrompt({ ...input, heuristic, templateStyle: input.templateStyle ?? null });
     const spec = await app.claude.call({ purpose: 'direct-design', fixtureKey: 'default', system: prompt.system, user: prompt.user, image: { bytes: thumb, mime: 'image/jpeg' }, schema: DesignSpec, jobId });
     return { spec, source: 'claude' };
   } catch (e) {
@@ -129,10 +164,29 @@ export async function directDesign(app: AppContext, input: DesignInput, thumb: B
   }
 }
 
-/** The band strength the maths demands under this text block, never below what the spec asked for. */
+/**
+ * The band strength the maths demands under this text block, never below what the spec asked for. Split has text
+ * at both ends, so the stronger of the two bands wins; poster, flat and invite put their text on a solid ground,
+ * whose contrast is known without a band.
+ */
 export function withLegibility(spec: DesignSpec, stats: PhotoStats, brand: Brand): { spec: DesignSpec; legibility: Legibility } {
-  const legibility = legibilityFor(stats, spec.text_position, spec.text_side, brand);
-  return { spec: { ...spec, band_strength: Math.max(spec.band_strength, legibility.bandStrength) }, legibility };
+  const solid = (text: string, ground: string, zone: Legibility['zone']): Legibility => ({ zone, zoneLum: relativeLuminance(ground), bandStrength: 1, contrast: Math.round(contrastRatio(relativeLuminance(text), relativeLuminance(ground)) * 10) / 10 });
+  switch (spec.style) {
+    case 'split': {
+      const top = legibilityFor(stats, 'top', spec.text_side, brand);
+      const bottom = legibilityFor(stats, 'bottom', spec.text_side, brand);
+      const worst = top.bandStrength >= bottom.bandStrength ? top : bottom;
+      const band_strength = Math.max(spec.band_strength, worst.bandStrength);
+      return { spec: { ...spec, band_strength }, legibility: { ...worst, bandStrength: band_strength, contrast: predictedContrast(worst.zoneLum, band_strength, brand.colors.night, brand.colors.cream) } };
+    }
+    case 'poster': return { spec, legibility: solid(brand.colors.night, brand.colors.cream, 'top') };
+    case 'flat': return { spec, legibility: solid(brand.colors.cream, brand.colors.ember, 'top') };
+    case 'invite': return { spec: { ...spec, band_strength: 1 }, legibility: solid(brand.colors.cream, brand.colors.night, spec.text_side) };
+    default: {
+      const legibility = legibilityFor(stats, spec.text_position, spec.text_side, brand);
+      return { spec: { ...spec, band_strength: Math.max(spec.band_strength, legibility.bandStrength) }, legibility };
+    }
+  }
 }
 
 /** The critic's fixes merged into the spec, skipping the fields the owner locked. */

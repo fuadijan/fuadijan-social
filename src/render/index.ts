@@ -6,7 +6,10 @@ import type { z } from 'zod';
 import type { DesignSpec } from '../brain/schemas.js';
 import { loadBrand, type Brand } from './brand.js';
 import { composeLayoutA, composeLayoutB, composeTextOnly, type Cutout } from './compose.js';
+import { composeFlat, composeInvite, composePoster } from './compose-styles.js';
 import { templateEntry, templateKeyFor, type TemplateKey } from './registry.js';
+import { FlatData, INVITE_PHOTO_SHARE, InviteData, PosterData, SplitData, flatLayer, flatPlate, inviteLayer, posterLayer, posterPlate, splitLayer } from './styled.js';
+import { STYLES, feasibleStyle, type Style } from './styles.js';
 import {
   CarouselCoverData, CarouselSlideData, HeroData, ReelCoverData, ReviewData, StoryData, TextOnlyData,
   carouselCoverLayer, carouselSlideLayer, heroLayer, layerToPng, makeCtx, reelCoverLayer, reviewLayer, storyLayer, textOnlyLayer,
@@ -39,11 +42,28 @@ export interface RenderInput {
   design?: Partial<DesignSpec> | null;
   /** A 9:16 crop for the story; the feed photo is re-cropped when it is missing. */
   storyPhoto?: Buffer | null;
+  /** The post's date (YYYY-MM-DD), shown by the invite style. */
+  date?: string | null;
 }
 
 /** HeroData/StoryData fields from a design spec (undefined fields take the zod defaults). */
 function designFields(d: Partial<DesignSpec> | null | undefined) {
-  return { textPosition: d?.text_position, textSide: d?.text_side, bandStrength: d?.band_strength, typeScale: d?.type_scale };
+  return { textPosition: d?.text_position, textSide: d?.text_side, bandStrength: d?.band_strength, typeScale: d?.type_scale, accentWord: d?.accent_word };
+}
+
+/** "FRIDAY" and "08 NOV" for the invite's first column, from a YYYY-MM-DD date. */
+export function inviteDate(iso: string | null | undefined): { day: string; date: string } {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return { day: '', date: '' };
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return { day: '', date: '' };
+  const day = d.toLocaleDateString('en-AU', { weekday: 'long' }).toUpperCase();
+  const date = d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }).replace('.', '').toUpperCase();
+  return { day, date };
+}
+
+/** The style that will actually be rendered for this input. */
+export function styleFor(input: Pick<RenderInput, 'photo' | 'cutout' | 'design'>): Style {
+  return feasibleStyle(input.design?.style ?? 'band', { cutout: Boolean(input.cutout), photo: Boolean(input.photo) });
 }
 
 export interface RenderOutput { format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; png: Buffer }
@@ -58,12 +78,46 @@ export async function renderPost(input: RenderInput, brand: Brand = loadBrand())
 
   const design = input.design ?? null;
   const lift = design?.lift_tone ?? 'auto';
+  const style = styleFor(input);
+
+  /** The split, poster, flat and invite compositions at any canvas size; null when the style is band. */
+  const styledRender = async (w: number, h: number, photo: Buffer): Promise<Buffer | null> => {
+    const ctx = makeCtx(brand, w, h, input.settings);
+    const typeScale = design?.type_scale;
+    const common = { label: input.label, headline: input.headline, line: input.line };
+    switch (style) {
+      case 'split': {
+        const layer = await layerToPng(brand, splitLayer(ctx, SplitData.parse({ ...common, footer, bandStrength: design?.band_strength, typeScale })), w, h);
+        return composeLayoutB(brand, w, h, photo, layer, { lift });
+      }
+      case 'poster': {
+        if (!input.cutout) return null;
+        const layer = await layerToPng(brand, posterLayer(ctx, PosterData.parse({ label: input.label, headline: input.headline, footer, typeScale })), w, h);
+        return composePoster(brand, w, h, input.cutout, layer, posterPlate(ctx));
+      }
+      case 'flat': {
+        if (!input.cutout) return null;
+        const layer = await layerToPng(brand, flatLayer(ctx, FlatData.parse({ ...common, hours: input.settings.openHours.slice(0, 24), handle: (input.settings.handle ?? '').slice(0, 40), typeScale })), w, h);
+        return composeFlat(brand, w, h, input.cutout, layer, flatPlate(ctx));
+      }
+      case 'invite': {
+        const side = design?.text_side ?? 'left';
+        const layer = await layerToPng(brand, inviteLayer(ctx, InviteData.parse({ ...common, ...inviteDate(input.date), hours: input.settings.openHours.slice(0, 24), address: input.settings.storeAddress.slice(0, 80), website: (input.settings.website ?? '').slice(0, 60), textSide: side, typeScale })), w, h);
+        return composeInvite(brand, w, h, photo, layer, side === 'right' ? 'left' : 'right', INVITE_PHOTO_SHARE, { lift });
+      }
+      default:
+        return null;
+    }
+  };
+
   const feed = async (): Promise<Buffer | null> => {
     switch (key) {
       case 'hero-photo': {
+        if (!input.photo) return textOnly();
+        const styled = style === 'band' ? null : await styledRender(fw, fh, input.photo);
+        if (styled) return styled;
         // The spec's layout wins when it can be honoured; A needs a cutout.
         const layout: 'A' | 'B' = design?.layout === 'B' ? 'B' : input.cutout ? 'A' : 'B';
-        if (!input.photo) return textOnly();
         const ctx = makeCtx(brand, fw, fh, input.settings);
         const data = HeroData.parse({ layout, label: input.label, headline: input.headline, line: input.line, footer, busyPhoto: input.busyPhoto ?? false, ...designFields(design) });
         const layer = await layerToPng(brand, heroLayer(ctx, data), fw, fh);
@@ -112,9 +166,14 @@ export async function renderPost(input: RenderInput, brand: Brand = loadBrand())
   }
 
   if (input.photo) {
-    const ctx = makeCtx(brand, sw, sh, input.settings);
-    const layer = await layerToPng(brand, storyLayer(ctx, StoryData.parse({ label: input.label, headline: input.headline, ...designFields(design) })), sw, sh);
-    out.push({ format: 'story', page: null, png: await composeLayoutB(brand, sw, sh, input.storyPhoto ?? input.photo, layer, { lift }) });
+    // Split, poster and flat have a story of their own; invite's story is the band story.
+    const styled = key === 'hero-photo' && style !== 'band' && STYLES[style].story ? await styledRender(sw, sh, input.storyPhoto ?? input.photo) : null;
+    if (styled) out.push({ format: 'story', page: null, png: styled });
+    else {
+      const ctx = makeCtx(brand, sw, sh, input.settings);
+      const layer = await layerToPng(brand, storyLayer(ctx, StoryData.parse({ label: input.label, headline: input.headline, ...designFields(design) })), sw, sh);
+      out.push({ format: 'story', page: null, png: await composeLayoutB(brand, sw, sh, input.storyPhoto ?? input.photo, layer, { lift }) });
+    }
   }
   return out;
 }

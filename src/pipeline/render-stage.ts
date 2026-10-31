@@ -17,6 +17,7 @@ import { loadBrand } from '../render/brand.js';
 import type { Cutout } from '../render/compose.js';
 import { renderPost, type RenderInput, type RenderOutput } from '../render/index.js';
 import { templateEntry } from '../render/registry.js';
+import { STYLES, feasibleStyle } from '../render/styles.js';
 import { allSettings } from '../settings.js';
 import { CRITIQUE_FIX_BELOW, applyOwnerNote, critiqueDesign, directDesign, mergeFixes, withLegibility, type DesignRun } from './design.js';
 import type { Asset, StageContext } from './stages.js';
@@ -74,7 +75,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   if (!copy) throw new Error('render needs resolved copy');
   const brand = loadBrand();
   const s = await allSettings(ctx.pool);
-  const settings = { storeAddress: s.store_address ?? '', openHours: s.open_hours ?? '' };
+  const settings = { storeAddress: s.store_address ?? '', openHours: s.open_hours ?? '', handle: s.instagram_handle ?? '@fuadijan', website: s.website_url ?? '' };
   const entry = templateEntry(row.template);
 
   const assets = (await ctx.pool.query<Asset>("select * from assets where calendar_row_id = $1 and kind in ('photo','document') and prepped is not null order by created_at", [row.id])).rows;
@@ -95,8 +96,11 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   const { spec: noteSpec, locked } = applyOwnerNote(blankSpec(), note);
   const forceB = locked.includes('layout') && noteSpec.layout === 'B';
   const forceA = locked.includes('layout') && noteSpec.layout === 'A';
+  // A style that needs the cutout (poster, flat), asked for in the note or preferred by the template, gets the try too.
+  const askedStyle = locked.includes('style') ? noteSpec.style : entry.style ?? 'band';
+  const styleNeedsCutout = STYLES[askedStyle].needsCutout;
   // A scene with a located dish still gets the cutout try: the remover works on the region around the dish.
-  const wantCutout = entry.key === 'hero-photo' && hero && heroPhoto && !forceB && (forceA || (composition !== 'people' && (composition !== 'scene' || Boolean(read?.subject_box))));
+  const wantCutout = entry.key === 'hero-photo' && hero && heroPhoto && !forceB && (forceA || styleNeedsCutout || (composition !== 'people' && (composition !== 'scene' || Boolean(read?.subject_box))));
   const cut: CutoutResult = wantCutout ? await cutoutForAsset(ctx, hero, ctx.job.state.jpegFileId ?? null, read) : { cutout: null, coverage: null };
 
   // Reviews: the quote is what the owner sent (an asset of kind text, "review -- AB …"), never generated.
@@ -116,7 +120,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   const base: RenderInput = {
     sheetTemplate: row.template, slot: row.slot, label: copy.label || entry.label, headline: copy.headline, line: copy.line,
     quote, reviewer, slides, hook: copy.on_screen_text[0] ?? null,
-    photo: heroPhoto, storyPhoto, slidePhotos, cutout: cut.cutout, busyPhoto: read?.background_clutter === 'high', settings,
+    photo: heroPhoto, storyPhoto, slidePhotos, cutout: cut.cutout, busyPhoto: read?.background_clutter === 'high', settings, date: row.date,
   };
 
   // Templates without a directed design still get the legibility band: the photo under the text decides it.
@@ -133,18 +137,25 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   const stats = await analyzePhoto(heroPhoto);
   const designInput = {
     stats, read, cutoutAvailable: Boolean(cut.cutout), cutoutCoverage: cut.coverage, headline: copy.headline, line: copy.line,
-    note, designNotes: s.design_notes ?? '',
+    note, designNotes: s.design_notes ?? '', templateStyle: entry.style ?? null,
   };
   const directed = await directDesign(ctx, designInput, await thumbnail(heroPhoto, 512), ctx.job.id);
   let { spec } = applyOwnerNote(directed.spec, note);
-  if (spec.layout === 'A' && !cut.cutout) spec = { ...spec, layout: 'B' };
+  spec = feasible(spec);
   const source = locked.length ? 'owner' : directed.source;
 
   const original = ctx.job.state.jpegFileId || hero.original_file_id ? (await getFile(ctx.pool, ctx.job.state.jpegFileId ?? hero.original_file_id!))?.bytes ?? null : null;
   const dish = read?.dish_canonical ?? row.dish;
 
+  /** Layout A, poster and flat need the cutout; without one they become B / band. */
+  function feasible(sp: DesignSpec): DesignSpec {
+    const style = feasibleStyle(sp.style, { cutout: Boolean(cut.cutout), photo: true });
+    const layout = sp.layout === 'A' && !cut.cutout ? 'B' : sp.layout;
+    return style === sp.style && layout === sp.layout ? sp : { ...sp, style, layout };
+  }
+
   const renderWith = async (sp: DesignSpec): Promise<{ outputs: RenderOutput[]; spec: DesignSpec; legibility: DesignRun['legibility'] }> => {
-    const lit = withLegibility(sp, stats, brand);
+    const lit = withLegibility(feasible(sp), stats, brand);
     // The crop follows the text: with the block at the top the dish sits lower in the frame, and vice versa.
     let photo = heroPhoto;
     let story = storyPhoto;
@@ -164,7 +175,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
 
   if (critique && critique.verdict === 'fix' && critique.score < CRITIQUE_FIX_BELOW && Object.keys(critique.fixes).length) {
     const fixed = mergeFixes(pass.spec, critique.fixes, locked);
-    const second = await renderWith(fixed.layout === 'A' && !cut.cutout ? { ...fixed, layout: 'B' } : fixed);
+    const second = await renderWith(fixed);
     const secondFeed = second.outputs.find((o) => o.format === 'feed')?.png ?? null;
     const secondCritique = secondFeed ? await critiqueDesign(ctx, secondFeed, second.spec, dish, 2, critique.issues, ctx.job.id) : null;
     attempts = 2;
@@ -182,7 +193,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
 
 /** A neutral spec for note parsing and the no-director paths. */
 function blankSpec(): DesignSpec {
-  return { layout: 'B', text_position: 'bottom', text_side: 'left', band_strength: 0.95, type_scale: 1, crop_focus_y: 0.42, lift_tone: false, rationale: '' };
+  return { style: 'band', accent_word: false, layout: 'B', text_position: 'bottom', text_side: 'left', band_strength: 0.95, type_scale: 1, crop_focus_y: 0.42, lift_tone: false, rationale: '' };
 }
 
 export const RENDER_FILENAMES: Record<RenderOutput['format'], (page: number | null) => string> = {

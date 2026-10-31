@@ -47,6 +47,7 @@ async function main(): Promise<void> {
     console.warn(`No cutout: ${e instanceof Error ? e.message : e}`);
   }
 
+  const styleSettings = { ...SAMPLE_SETTINGS, handle: '@fuadijan', website: 'fuadijan.com.au' };
   const jobs: { name: string; ref: string | null; input: Parameters<typeof renderPost>[0] }[] = [
     { name: 'hero-photo-A-karahi', ref: '01.webp', input: { ...SAMPLE_INPUTS['hero-photo'], photo: karahi, cutout, settings: SAMPLE_SETTINGS } },
     { name: 'hero-photo-B-karahi', ref: '02.webp', input: { ...SAMPLE_INPUTS['hero-photo'], sheetTemplate: 'from-the-karahi', label: 'SIGNATURE KARAHI', headline: 'Chicken\nKarahi', line: 'Fresh chicken simmered in tomatoes, ginger, garlic and aromatic spices, cooked to order.', photo: karahi, cutout: null, settings: SAMPLE_SETTINGS } },
@@ -55,6 +56,12 @@ async function main(): Promise<void> {
     { name: 'carousel', ref: null, input: { ...SAMPLE_INPUTS.carousel, photo: tikka, cutout: null, slidePhotos: [karahi], settings: SAMPLE_SETTINGS } },
     { name: 'reel-cover', ref: null, input: { ...SAMPLE_INPUTS['reel-cover'], photo: tikka, cutout: null, settings: SAMPLE_SETTINGS } },
     { name: 'text-only', ref: null, input: { ...SAMPLE_INPUTS['text-only'], photo: null, cutout: null, settings: SAMPLE_SETTINGS } },
+    // The five styles (styles.ts) with the same photos; poster and flat need the karahi cutout.
+    { name: 'style-band-accent', ref: null, input: { ...SAMPLE_INPUTS['hero-photo'], headline: 'Time to\nSavour the Karahi', photo: karahi, cutout: null, settings: styleSettings, design: { style: 'band', accent_word: true, layout: 'B' } } },
+    { name: 'style-split', ref: null, input: { ...SAMPLE_INPUTS['hero-photo'], headline: 'Karahi\nFirst', line: 'Cooked to order, every evening.', photo: tikka, cutout: null, settings: styleSettings, design: { style: 'split', band_strength: 0.8 } } },
+    { name: 'style-poster', ref: null, input: { ...SAMPLE_INPUTS['hero-photo'], sheetTemplate: 'modern-fuadijan', label: 'MODERN FUADIJAN', headline: 'Karahi\nTime!', photo: karahi, cutout, settings: styleSettings, design: { style: 'poster' } } },
+    { name: 'style-flat', ref: null, input: { ...SAMPLE_INPUTS['hero-photo'], sheetTemplate: 'snack-pack', label: 'FROM THE FIRE', headline: 'Looking for\nKarahi?', line: "Don't worry. We're open tonight.", photo: karahi, cutout, settings: styleSettings, design: { style: 'flat' } } },
+    { name: 'style-invite', ref: null, input: { ...SAMPLE_INPUTS['hero-photo'], sheetTemplate: 'new-product-reveal', label: "YOU'RE INVITED", headline: 'Grand\nOpening', line: 'Charcoal, karahi and chapli kebab, all evening.', photo: karahi, cutout: null, settings: styleSettings, date: '2026-11-08', design: { style: 'invite' } } },
   ];
   for (const j of jobs) {
     const started = Date.now();

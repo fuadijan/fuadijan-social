@@ -157,6 +157,18 @@ size at what a 390 px phone can read; the owner's `/redo` note ("layout B", "tex
 "bigger text") overrides and locks fields, and `/set design …` gives standing notes. Then the critic
 (`critique-design`, `CLAUDE_CRITIQUE_MODEL`, Sonnet by default) looks at the finished feed PNG at phone size and
 scores it; under 7 its fixes are applied and the design is rendered once more, and the better of the two is kept.
+**Five styles**, distilled from the owner's reference designs into the Fuadijan kit (`src/render/styles.ts`,
+`styled.ts`, `compose-styles.ts`): **band** (the house look above, layout A or B, optionally with the first headline
+line as an italic saffron lead-in), **split** (one giant word above the dish and one below), **poster** (Cream paper,
+a huge stacked Night headline, the cut-out plate in front of the words, ember sparkles), **flat** (solid Ember, the
+plate bleeding off the bottom, pill tags and an hours sticker) and **invite** (a Night panel, the photo fading off one
+side, an italic lead-in, date, hours and address in columns). Poster and flat need a cutout, so they fall back to
+band without one. The art director picks the style from the photo and the calendar template's preference
+(`registry.ts`: snack-pack → flat, modern-fuadijan → poster, customer-favourite and bbq-feast → split,
+new-product-reveal and weekend-feast → invite), the owner's note locks it (`/redo 5 poster`, `/redo 5 split, text on
+the right`, "accent" / "no accent", "band style"), and the critic judges each style by its own rules. The style
+also shapes the story (invite's story is the band story).
+
 The pack's `design.json` and the Telegram line "🎨 Layout B · text bottom-left · type ×1.10 · …" say what was
 decided and why. `DESIGN_CRITIQUE=0` turns the critic off.
 

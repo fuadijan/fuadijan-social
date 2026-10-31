@@ -52,6 +52,8 @@ export type ResolvedCopy = z.infer<typeof ResolvedCopy>;
 
 /** The art director's decision for one photo: how the design is laid out, before anything is rendered. */
 export const DesignSpec = z.object({
+  style: z.enum(['band', 'split', 'poster', 'flat', 'invite']).default('band').describe('The composition: band (house look), split (a giant word above and below the dish), poster (light paper, headline behind the cut-out plate), flat (solid Ember ground, plate bleeding off the bottom), invite (Night panel, photo off one side, event details). poster and flat need a cutout.'),
+  accent_word: z.boolean().default(false).describe('Set the first headline line in italic saffron as a lead-in (band and invite styles; invite always does).'),
   layout: z.enum(['A', 'B']).describe('A: the plate cut out on the Night canvas (only when a cutout exists). B: the photo full-bleed under a gradient band.'),
   text_position: z.enum(['bottom', 'top']).describe('Where the text block sits in layout B; layout A ignores it.'),
   text_side: z.enum(['left', 'right']).describe('Which side the text column sits on; in layout A the plate goes on the other side.'),
@@ -68,7 +70,7 @@ export const Critique = z.object({
   score: z.number().min(0).max(10).describe('10 is ready to post; under 7 needs a fix.'),
   legible_on_phone: z.boolean(),
   subject_prominent: z.boolean().describe('The dish is the first thing the eye lands on.'),
-  plate_intact: z.boolean().describe('Layout A only: the plate is whole, not clipped by the cutout. True for layout B.'),
+  plate_intact: z.boolean().describe('Styles with a cutout (layout A, poster, flat): the plate is whole, not clipped. True otherwise.'),
   text_over_food: z.boolean().describe('Any text crosses the dish.'),
   too_dark: z.boolean().describe('The food reads muddy or underexposed.'),
   issues: z.array(z.string()).max(5).describe('What is wrong, one short phrase each; empty when nothing is.'),

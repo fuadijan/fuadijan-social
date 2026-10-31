@@ -3,26 +3,29 @@
  * the seed) fail if a sheet value has no mapping. Cut 1 uses it for the Canva brief and the labels; Cut 2 adds the
  * satori templates behind the same keys.
  */
+import type { Style } from './styles.js';
+
 export type TemplateKey = 'hero-photo' | 'review' | 'carousel' | 'story' | 'reel-cover' | 'text-only';
 export type Footer = 'brand' | 'address';
 
-interface Entry { key: TemplateKey; footer: Footer; label: string }
+/** `style` is the composition the calendar template prefers; the art director may still choose another when the photo cannot carry it. */
+interface Entry { key: TemplateKey; footer: Footer; label: string; style?: Style }
 
 const REGISTRY: Record<string, Entry> = {
   'from-the-fire': { key: 'hero-photo', footer: 'brand', label: 'FROM THE FIRE' },
   'from-the-karahi': { key: 'hero-photo', footer: 'brand', label: 'FROM THE KARAHI' },
   'chapli-from-the-fire': { key: 'hero-photo', footer: 'brand', label: 'FROM THE FIRE' },
-  'customer-favourite': { key: 'hero-photo', footer: 'brand', label: 'FROM THE KARAHI' },
-  'snack-pack': { key: 'hero-photo', footer: 'address', label: 'FROM THE FIRE' },
-  'modern-fuadijan': { key: 'hero-photo', footer: 'brand', label: 'MODERN FUADIJAN' },
+  'customer-favourite': { key: 'hero-photo', footer: 'brand', label: 'FROM THE KARAHI', style: 'split' },
+  'snack-pack': { key: 'hero-photo', footer: 'address', label: 'FROM THE FIRE', style: 'flat' },
+  'modern-fuadijan': { key: 'hero-photo', footer: 'brand', label: 'MODERN FUADIJAN', style: 'poster' },
   'family-feast': { key: 'hero-photo', footer: 'address', label: 'ROOTED IN TRADITION' },
   'family-table': { key: 'hero-photo', footer: 'address', label: 'ROOTED IN TRADITION' },
-  'bbq-feast': { key: 'hero-photo', footer: 'address', label: 'FROM THE FIRE' },
-  'weekend-feast': { key: 'hero-photo', footer: 'address', label: 'ROOTED IN TRADITION' },
+  'bbq-feast': { key: 'hero-photo', footer: 'address', label: 'FROM THE FIRE', style: 'split' },
+  'weekend-feast': { key: 'hero-photo', footer: 'address', label: 'ROOTED IN TRADITION', style: 'invite' },
   'art-of-karahi': { key: 'hero-photo', footer: 'brand', label: 'FROM THE KARAHI' },
   'rooted-in-tradition': { key: 'hero-photo', footer: 'brand', label: 'ROOTED IN TRADITION' },
   'save-room': { key: 'hero-photo', footer: 'address', label: 'SAVE ROOM' },
-  'new-product-reveal': { key: 'hero-photo', footer: 'brand', label: 'FROM THE FIRE' },
+  'new-product-reveal': { key: 'hero-photo', footer: 'brand', label: 'FROM THE FIRE', style: 'invite' },
   'customer-review': { key: 'review', footer: 'address', label: 'CUSTOMER LOVE' },
   'you-said-it': { key: 'review', footer: 'address', label: 'CUSTOMER LOVE' },
   'chapli-education': { key: 'carousel', footer: 'brand', label: 'FROM THE FIRE' },

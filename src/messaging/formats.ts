@@ -112,12 +112,18 @@ export function wordingOptions(row: CalendarRow, options: { name: string; headli
   ].join('\n\n');
 }
 
-export interface DesignLineInput { layout: 'A' | 'B'; text_position: string; text_side: string; type_scale: number; band_strength: number; source: string; rationale: string; score: number | null; first_score: number | null; verdict: string | null; issues: string[]; contrast: number | null }
+export interface DesignLineInput { style?: string; accent_word?: boolean; layout: 'A' | 'B'; text_position: string; text_side: string; type_scale: number; band_strength: number; source: string; rationale: string; score: number | null; first_score: number | null; verdict: string | null; issues: string[]; contrast: number | null }
 
 /** One line on how the design was decided and what the critic thought. */
 export function designLine(d: DesignLineInput): string {
   const who = d.source === 'owner' ? 'your note' : d.source === 'claude' ? 'art director' : 'house rules';
   const critic = d.score == null ? '' : ` · critic ${d.first_score != null && d.first_score !== d.score ? `${d.first_score}→${d.score}` : d.score}/10${d.verdict === 'reshoot' ? ' (suggests a reshoot)' : ''}`;
   const issues = d.issues.length ? `\nStill noted: ${d.issues.join('; ')}.` : '';
-  return `🎨 Layout ${d.layout}${d.layout === 'B' ? ` · text ${d.text_position}-${d.text_side}` : d.text_side === 'right' ? ' · text right' : ''} · type ×${d.type_scale.toFixed(2)} · band ${Math.round(d.band_strength * 100)}%${d.contrast != null ? ` (contrast ${d.contrast}:1)` : ''} · by ${who}${critic}\n${d.rationale}${issues}\nNot right? /redo ${'{N}'} with "text on the right", "text at the top", "bigger text", "layout A" or "layout B".`;
+  const style = d.style ?? 'band';
+  const name = style.charAt(0).toUpperCase() + style.slice(1);
+  const where = style === 'band'
+    ? `Layout ${d.layout}${d.layout === 'B' ? ` · text ${d.text_position}-${d.text_side}` : d.text_side === 'right' ? ' · text right' : ''}${d.accent_word ? ' · italic lead-in' : ''}`
+    : `${name} style${style === 'invite' ? ` · text ${d.text_side}` : ''}`;
+  const band = style === 'band' || style === 'split' ? ` · band ${Math.round(d.band_strength * 100)}%` : '';
+  return `🎨 ${where} · type ×${d.type_scale.toFixed(2)}${band}${d.contrast != null ? ` (contrast ${d.contrast}:1)` : ''} · by ${who}${critic}\n${d.rationale}${issues}\nNot right? /redo ${'{N}'} with "poster", "split", "flat", "invite" or "band style", "text on the right", "text at the top", "bigger text", "layout A" or "layout B".`;
 }

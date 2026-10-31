@@ -102,6 +102,51 @@ describe('render templates', () => {
     await expectSnapshot('hero-photo-B', out[0]!.png, 1080, 1350);
   });
 
+  it('band with an italic lead-in', async () => {
+    const out = await renderPost({ ...SAMPLE_INPUTS['hero-photo'], headline: 'Time to\nSavour the Karahi', photo: karahi, cutout: null, settings: SAMPLE_SETTINGS, design: { style: 'band', accent_word: true, layout: 'B' } }, brand);
+    await expectSnapshot('style-band-accent', out[0]!.png, 1080, 1350);
+  });
+
+  it('split: a word above and below the dish, feed and story', async () => {
+    const out = await renderPost({ ...SAMPLE_INPUTS['hero-photo'], headline: 'Karahi\nFirst', line: 'Cooked to order.', photo: tikka, cutout: null, settings: SAMPLE_SETTINGS, design: { style: 'split', band_strength: 0.8 } }, brand);
+    expect(out.map((o) => o.format)).toEqual(['feed', 'story']);
+    await expectSnapshot('style-split', out[0]!.png, 1080, 1350);
+    await expectSnapshot('style-split-story', out[1]!.png, 1080, 1920);
+  });
+
+  it('poster: light paper, the plate in front of the words; falls back to band without a cutout', async () => {
+    const cut = await syntheticCutout();
+    const out = await renderPost({ ...SAMPLE_INPUTS['hero-photo'], sheetTemplate: 'modern-fuadijan', label: 'MODERN FUADIJAN', headline: 'Karahi\nTime!', photo: karahi, cutout: cut, settings: SAMPLE_SETTINGS, design: { style: 'poster' } }, brand);
+    await expectSnapshot('style-poster', out[0]!.png, 1080, 1350);
+    await expectSnapshot('style-poster-story', out[1]!.png, 1080, 1920);
+    // The paper is light: the top-left corner is far brighter than the Night canvas would be.
+    const corner = await sharp(await sharp(out[0]!.png).extract({ left: 0, top: 0, width: 80, height: 80 }).toBuffer()).greyscale().stats();
+    expect(corner.channels[0]!.mean).toBeGreaterThan(200);
+    const fallback = await renderPost({ ...SAMPLE_INPUTS['hero-photo'], photo: karahi, cutout: null, settings: SAMPLE_SETTINGS, design: { style: 'poster' } }, brand);
+    const fcorner = await sharp(await sharp(fallback[0]!.png).extract({ left: 0, top: 1270, width: 80, height: 80 }).toBuffer()).greyscale().stats();
+    expect(fcorner.channels[0]!.mean).toBeLessThan(80);
+  });
+
+  it('flat: Ember ground, the plate off the bottom edge, the hours badge', async () => {
+    const cut = await syntheticCutout();
+    const out = await renderPost({ ...SAMPLE_INPUTS['hero-photo'], sheetTemplate: 'snack-pack', label: 'FROM THE FIRE', headline: 'Looking for\nKarahi?', line: "Don't worry. We're open tonight.", photo: karahi, cutout: cut, settings: { ...SAMPLE_SETTINGS, handle: '@fuadijan' }, design: { style: 'flat' } }, brand);
+    await expectSnapshot('style-flat', out[0]!.png, 1080, 1350);
+    await expectSnapshot('style-flat-story', out[1]!.png, 1080, 1920);
+    const { data } = await sharp(out[0]!.png).extract({ left: 20, top: 400, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
+    expect([data[0], data[1], data[2]]).toEqual([0xe8, 0x74, 0x2e]);
+  });
+
+  it('invite: Night panel, the photo fading off the right, details with the date', async () => {
+    const out = await renderPost({ ...SAMPLE_INPUTS['hero-photo'], sheetTemplate: 'new-product-reveal', label: "YOU'RE INVITED", headline: 'Grand\nOpening', line: 'Charcoal, karahi and chapli kebab, all evening.', photo: karahi, cutout: null, settings: { ...SAMPLE_SETTINGS, website: 'fuadijan.com.au' }, date: '2026-11-08', design: { style: 'invite' } }, brand);
+    await expectSnapshot('style-invite', out[0]!.png, 1080, 1350);
+    // Solid Night under the text column, the photo on the far right, a fade between.
+    const lum = async (left: number) => (await sharp(await sharp(out[0]!.png).extract({ left, top: 600, width: 20, height: 120 }).toBuffer()).greyscale().stats()).channels[0]!.mean;
+    expect(await lum(20)).toBeLessThan(30);
+    expect(await lum(1040)).toBeGreaterThan(await lum(20) + 20);
+    // The story falls back to the band story.
+    expect(out[1]!.format).toBe('story');
+  });
+
   it('review', async () => {
     const out = await renderPost({ ...SAMPLE_INPUTS.review, photo: tikka, cutout: null, settings: SAMPLE_SETTINGS }, brand);
     expect(out[0]!.format).toBe('feed');

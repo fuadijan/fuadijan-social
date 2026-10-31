@@ -8,6 +8,7 @@ import type { ParsedCaption } from '../intake/caption.js';
 import type { PhotoStats } from '../images/analyze.js';
 import { describeStats } from '../images/analyze.js';
 import type { DesignSpec, MatchResult } from './schemas.js';
+import { STYLES, styleCards, type Style } from '../render/styles.js';
 
 const GUARDRAILS = `You work for Fuadijan, a halal Pakistani charcoal BBQ restaurant at Auburn, Sydney. Brand line: "Smoked. Grilled. Rooted in Tradition." Series labels: FROM THE FIRE, FROM THE KARAHI, ROOTED IN TRADITION, MODERN FUADIJAN, BEHIND FUADIJAN.
 Hard rules:
@@ -81,7 +82,12 @@ export function resolvePrompt(ctx: ResolveContext): { system: string; user: stri
 
 // ─── the art director and the critic ───────────────────────────────────────────────────────────────────────
 
-const DESIGN_SYSTEM = `You are the art director for Fuadijan's Instagram feed. The look: a Night (#0F0D0B) canvas, cream serif headlines, a saffron series label, an ember rule, generous type that reads on a phone. Two layouts exist. Layout A cuts the plate out of the photo and sets it on the Night canvas beside the text column; it needs a clean cutout and suits a single plate on a plain surface. Layout B shows the whole photo full-bleed with a Night gradient band under the text; it suits scenes, busy plates, bread baskets, hands, anything where the surroundings matter or the cutout would lose the plate. The owner has preferred layout B on busy photos and wants the plate kept whole and the type big.`;
+const DESIGN_SYSTEM = `You are the art director for Fuadijan's Instagram feed. The kit: Night (#0F0D0B), Cream (#F3EBDD), Sand, Ember (#E8742E) and Saffron (#F2B544); a serif headline face (Instrument Serif, capitals for the giant words, italic for a lead-in), Inter for labels and lines; generous type that reads on a phone. The owner wants the plate kept whole and the type big.
+
+Five styles exist, distilled from the owner's reference designs:
+${styleCards()}
+
+Within the band style two layouts exist. Layout A cuts the plate out of the photo and sets it on the Night canvas beside the text column; it needs a clean cutout and suits a single plate on a plain surface. Layout B shows the whole photo full-bleed with a Night gradient band under the text; it suits scenes, busy plates, bread baskets, hands, anything where the surroundings matter. The other styles ignore layout.`;
 
 export interface DirectContext {
   stats: PhotoStats;
@@ -93,16 +99,19 @@ export interface DirectContext {
   note: string | null;
   designNotes: string;
   heuristic: DesignSpec;
+  /** The style the calendar template prefers, if any. */
+  templateStyle?: Style | null;
 }
 
 export function directPrompt(ctx: DirectContext): { system: string; user: string } {
   const r = ctx.read;
   return {
-    system: `${DESIGN_SYSTEM}\n\nDecide the design for this photo from the thumbnail and the measurements. Put the text where the photo is quiet (low detail) and keep it off the dish; the band under the text is darkened for you, so choose its strength for the look, not for contrast. text_position top is for a photo whose dish sits in the lower half; then crop_focus_y should be about 0.58 so the dish stays under the text. type_scale above 1 when the headline is short or the photo is busy; never below 1 on a busy photo. Pick layout A only when a cutout is available and the plate is the whole subject. Explain in one sentence the owner would understand.`,
+    system: `${DESIGN_SYSTEM}\n\nDecide the design for this photo from the thumbnail and the measurements. First the style: the calendar template's preferred style when the photo can carry it (poster and flat need the cutout; split needs two short headline lines and a dish in the middle third with quiet thirds above and below; invite needs a story worth inviting people to), otherwise band; vary the feed over a month rather than defaulting to band every time, but never force a style the photo argues against. Then within the style: put the text where the photo is quiet (low detail) and keep it off the dish; the band under the text is darkened for you, so choose its strength for the look, not for contrast. text_position top is for a photo whose dish sits in the lower half; then crop_focus_y should be about 0.58 so the dish stays under the text. type_scale above 1 when the headline is short or the photo is busy; never below 1 on a busy photo. Pick layout A only when a cutout is available and the plate is the whole subject. accent_word when the first headline line is a short lead-in ("Time to", "Fresh from"), never when it is the dish name. Explain in one sentence the owner would understand, naming the style.`,
     user: [
       describeStats(ctx.stats),
       r ? `Vision read: composition ${r.composition}, clutter ${r.background_clutter}, plate ${r.plate_shape}${r.subject_box ? `, dish box x ${pct(r.subject_box.x)} y ${pct(r.subject_box.y)} w ${pct(r.subject_box.w)} h ${pct(r.subject_box.h)}` : ', dish not located'}.` : 'No vision read of this photo.',
-      ctx.cutoutAvailable ? `A plate cutout is available (mask covers ${pct(ctx.cutoutCoverage ?? 0)} of the plate region).` : 'No usable plate cutout: layout A is not possible, choose B.',
+      ctx.cutoutAvailable ? `A plate cutout is available (mask covers ${pct(ctx.cutoutCoverage ?? 0)} of the plate region).` : 'No usable plate cutout: layout A, poster and flat are not possible.',
+      ctx.templateStyle ? `The calendar template prefers the ${STYLES[ctx.templateStyle].name} style (${ctx.templateStyle}).` : 'The calendar template has no preferred style.',
       `Headline: "${ctx.headline.replace(/\n/g, ' / ')}" (${ctx.headline.replace(/\n/g, ' ').length} characters). Line: "${ctx.line}" (${ctx.line.length} characters).`,
       ctx.designNotes ? `Owner's standing design notes: "${ctx.designNotes}"` : '',
       ctx.note ? `Owner's note for this run: "${ctx.note}"` : '',
@@ -115,9 +124,10 @@ export interface CritiqueContext { spec: DesignSpec; dish: string | null; attemp
 
 export function critiquePrompt(ctx: CritiqueContext): { system: string; user: string } {
   return {
-    system: `${DESIGN_SYSTEM}\n\nYou are now the critic. You see the finished feed design at phone size. Judge it as a diner scrolling Instagram would: can every word be read without squinting, is the dish the first thing the eye lands on, is the plate whole, does any text cross the food, is the food muddy or underexposed, does the composition feel balanced. Score 0–10. Under 7 means a fix is needed; propose only the fields that should change, as new values (e.g. a larger type_scale, a stronger band_strength, text_position top, layout B). "reshoot" only when no layout can rescue the photo. Do not rewrite the copy.`,
+    system: `${DESIGN_SYSTEM}\n\nYou are now the critic. You see the finished feed design at phone size. Judge it as a diner scrolling Instagram would: can every word be read without squinting, is the dish the first thing the eye lands on, is the plate whole, does any text cross the food, is the food muddy or underexposed, does the composition feel balanced. Then judge it by its own style's rules, given below. Score 0–10. Under 7 means a fix is needed; propose only the fields that should change, as new values (e.g. a larger type_scale, a stronger band_strength, text_position top, layout B, or another style when this one fights the photo). "reshoot" only when no style can rescue the photo. Do not rewrite the copy.`,
     user: [
       `Design spec used: ${JSON.stringify({ ...ctx.spec, rationale: undefined })}.`,
+      `Style ${STYLES[ctx.spec.style].name}: ${STYLES[ctx.spec.style].rules}`,
       ctx.dish ? `The dish: ${ctx.dish}.` : '',
       ctx.attempt > 1 ? `This is attempt ${ctx.attempt}; the previous attempt was faulted for: ${ctx.previousIssues.join('; ') || 'nothing specific'}.` : '',
       'Fill the rubric.',

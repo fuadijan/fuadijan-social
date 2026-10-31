@@ -7,7 +7,9 @@ import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { analyzePhoto, describeStats } from '../src/images/analyze.js';
 import { bandStrengthFor, contrastRatio, legibilityFor, predictedContrast, relativeLuminance, typeFloors } from '../src/render/legibility.js';
-import { applyOwnerNote, heuristicSpec, mergeFixes } from '../src/pipeline/design.js';
+import { applyOwnerNote, heuristicSpec, heuristicStyle, mergeFixes, withLegibility } from '../src/pipeline/design.js';
+import { feasibleStyle, styleFromNote } from '../src/render/styles.js';
+import { inviteDate, styleFor } from '../src/render/index.js';
 import { loadBrand } from '../src/render/brand.js';
 import { renderPost, SAMPLE_INPUTS, SAMPLE_SETTINGS } from '../src/render/index.js';
 import { crop, decode } from '../src/images/prep.js';
@@ -107,7 +109,7 @@ describe('rule-based design', () => {
   });
 
   it('lets the owner override and locks what they said', () => {
-    const base = { layout: 'A' as const, text_position: 'bottom' as const, text_side: 'left' as const, band_strength: 0.9, type_scale: 1, crop_focus_y: 0.42, lift_tone: false, rationale: 'r' };
+    const base = { style: 'band' as const, accent_word: false, layout: 'A' as const, text_position: 'bottom' as const, text_side: 'left' as const, band_strength: 0.9, type_scale: 1, crop_focus_y: 0.42, lift_tone: false, rationale: 'r' };
     const { spec, locked } = applyOwnerNote(base, 'layout B, text on the right, bigger text');
     expect(spec).toMatchObject({ layout: 'B', text_side: 'right', type_scale: 1.15 });
     expect(locked).toEqual(['layout', 'text_side', 'type_scale']);
@@ -121,6 +123,72 @@ describe('rule-based design', () => {
     expect(merged.text_position).toBe('top');
     expect(merged.band_strength).toBe(1);
     expect(merged.crop_focus_y).toBeCloseTo(0.58);
+  });
+});
+
+describe('design styles', () => {
+  const input = (over: Record<string, unknown>) => ({ read: null, cutoutAvailable: false, cutoutCoverage: null, line: 'x', note: null, designNotes: '', ...over }) as Parameters<typeof heuristicStyle>[0];
+
+  it('reads a style and an accent from the owner\'s words', () => {
+    expect(styleFromNote('make it a poster')).toBe('poster');
+    expect(styleFromNote('style split please')).toBe('split');
+    expect(styleFromNote('flat, text on the right')).toBe('flat');
+    expect(styleFromNote('invitation look')).toBe('invite');
+    expect(styleFromNote('band style')).toBe('band');
+    expect(styleFromNote('stronger band')).toBeNull();
+    expect(styleFromNote('shorter caption')).toBeNull();
+    const base = { style: 'band' as const, accent_word: false, layout: 'B' as const, text_position: 'bottom' as const, text_side: 'left' as const, band_strength: 0.9, type_scale: 1, crop_focus_y: 0.42, lift_tone: false, rationale: 'r' };
+    const { spec, locked } = applyOwnerNote(base, 'poster with an accent');
+    expect(spec.style).toBe('poster');
+    expect(spec.accent_word).toBe(true);
+    expect(locked).toEqual(['style', 'accent_word']);
+    // The critic cannot change a locked style.
+    expect(mergeFixes(spec, { style: 'band' }, locked).style).toBe('poster');
+  });
+
+  it('only offers poster and flat with a cutout, and anything with a photo', () => {
+    expect(feasibleStyle('poster', { cutout: false, photo: true })).toBe('band');
+    expect(feasibleStyle('poster', { cutout: true, photo: true })).toBe('poster');
+    expect(feasibleStyle('flat', { cutout: false, photo: true })).toBe('band');
+    expect(feasibleStyle('split', { cutout: false, photo: true })).toBe('split');
+    expect(feasibleStyle('invite', { cutout: false, photo: false })).toBe('band');
+    expect(styleFor({ photo: Buffer.alloc(1), cutout: null, design: { style: 'flat' } })).toBe('band');
+  });
+
+  it('picks split for two short words on a mid-frame dish with quiet ends, else the template\'s style, else band', async () => {
+    const stats = await analyzePhoto(await splitPhoto());
+    const quiet = { ...stats, zones: { ...stats.zones, top: { ...stats.zones.top, detail: 0.1 }, bottom: { ...stats.zones.bottom, detail: 0.1 } } };
+    expect(heuristicStyle(input({ stats: quiet, headline: 'Karahi\nFirst' }), 0.5)).toBe('split');
+    expect(heuristicStyle(input({ stats: quiet, headline: 'Made Fresh\nin the Karahi' }), 0.5)).toBe('band');
+    expect(heuristicStyle(input({ stats: quiet, headline: 'Karahi\nFirst' }), 0.8)).toBe('band');
+    expect(heuristicStyle(input({ stats: quiet, headline: 'Karahi\nFirst', templateStyle: 'poster', cutoutAvailable: true }), 0.8)).toBe('poster');
+    expect(heuristicStyle(input({ stats: quiet, headline: 'Karahi\nFirst', templateStyle: 'poster' }), 0.8)).toBe('band');
+    expect(heuristicStyle(input({ stats: quiet, headline: 'Karahi\nFirst', templateStyle: 'invite' }), 0.8)).toBe('invite');
+    const spec = heuristicSpec(input({ stats: quiet, headline: 'Time to\nSavour the Karahi' }));
+    expect(spec.style).toBe('band');
+    expect(spec.accent_word).toBe(true);
+    expect(heuristicSpec(input({ stats: quiet, headline: 'Chicken\nKarahi' })).accent_word).toBe(false);
+  });
+
+  it('knows the contrast of the solid grounds and bands both ends of a split', async () => {
+    const stats = await analyzePhoto(await splitPhoto());
+    const base = { style: 'band' as const, accent_word: false, layout: 'B' as const, text_position: 'bottom' as const, text_side: 'left' as const, band_strength: 0.6, type_scale: 1, crop_focus_y: 0.42, lift_tone: false, rationale: 'r' };
+    const poster = withLegibility({ ...base, style: 'poster' }, stats, brand);
+    expect(poster.legibility.contrast).toBeGreaterThan(14); // Night on Cream
+    const flat = withLegibility({ ...base, style: 'flat' }, stats, brand);
+    expect(flat.legibility.contrast).toBeGreaterThanOrEqual(2.5); // Cream on Ember carries only the giant words; the subline is Night
+    const invite = withLegibility({ ...base, style: 'invite' }, stats, brand);
+    expect(invite.spec.band_strength).toBe(1);
+    const split = withLegibility({ ...base, style: 'split' }, stats, brand);
+    const top = legibilityFor(stats, 'top', 'left', brand);
+    const bottom = legibilityFor(stats, 'bottom', 'left', brand);
+    expect(split.spec.band_strength).toBeGreaterThanOrEqual(Math.max(top.bandStrength, bottom.bandStrength));
+  });
+
+  it('formats the invite date', () => {
+    expect(inviteDate('2026-11-08')).toEqual({ day: 'SUNDAY', date: '08 NOV' });
+    expect(inviteDate(null)).toEqual({ day: '', date: '' });
+    expect(inviteDate('nope')).toEqual({ day: '', date: '' });
   });
 });
 

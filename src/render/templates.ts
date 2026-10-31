@@ -15,19 +15,21 @@ import { typeFloors } from './legibility.js';
 import { fitHeadline, fontOf, measure, twoLines, wrap } from './text.js';
 
 type El = { type: string; props: Record<string, unknown> & { children?: El | El[] | string | (El | string)[] } };
-const el = (type: string, style: Record<string, unknown>, children?: El | El[] | string | (El | string)[], extra: Record<string, unknown> = {}): El =>
+export const el = (type: string, style: Record<string, unknown>, children?: El | El[] | string | (El | string)[], extra: Record<string, unknown> = {}): El =>
   ({ type, props: { style, ...extra, ...(children !== undefined ? { children } : {}) } });
 
 export type Layout = 'A' | 'B';
 export type Footer = 'brand' | 'address';
-export type Side = 'left' | 'right';
+export type Side = 'left' | 'right' | 'centre';
 export type Position = 'top' | 'bottom';
 
-const designFields = {
+export const designFields = {
   textPosition: z.enum(['bottom', 'top']).default('bottom'),
   textSide: z.enum(['left', 'right']).default('left'),
   bandStrength: z.number().min(0).max(1).default(1),
   typeScale: z.number().min(0.8).max(1.4).default(1),
+  /** The first headline line as an italic saffron lead-in. */
+  accentWord: z.boolean().default(false),
 };
 
 export const HeroData = z.object({
@@ -46,15 +48,15 @@ export const StoryData = z.object({ label: z.string().max(40), headline: z.strin
 export const ReelCoverData = z.object({ hook: z.string().max(70), label: z.string().max(40), bandStrength: designFields.bandStrength });
 export const TextOnlyData = z.object({ label: z.string().max(40), headline: z.string().max(60), line: z.string().max(140), footer: z.enum(['brand', 'address']).default('brand') });
 
-export interface RenderSettings { storeAddress: string; openHours: string }
+export interface RenderSettings { storeAddress: string; openHours: string; handle?: string | null; website?: string | null }
 
 interface Ctx { brand: Brand; w: number; h: number; settings: RenderSettings }
 
-const uc = (s: string) => s.toUpperCase();
-const alignItems = (side: Side) => (side === 'right' ? 'flex-end' : 'flex-start');
+export const uc = (s: string) => s.toUpperCase();
+export const alignItems = (side: Side) => (side === 'right' ? 'flex-end' : side === 'centre' ? 'center' : 'flex-start');
 const LOGO_RATIO = 200 / 272; // logo.png is 272×200
 
-function label(ctx: Ctx, text: string, color?: string, scale = 1, width = ctx.brand.layout.textColumn): El {
+export function label(ctx: Ctx, text: string, color?: string, scale = 1, width = ctx.brand.layout.textColumn): El {
   const { brand } = ctx;
   const floor = typeFloors(ctx.w).label;
   const font = fontOf(brand.fontFiles.bodyMedium ?? brand.fontFiles.body);
@@ -64,26 +66,43 @@ function label(ctx: Ctx, text: string, color?: string, scale = 1, width = ctx.br
   return el('div', { display: 'flex', whiteSpace: 'nowrap', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: size, letterSpacing: `${brand.layout.label.tracking}em`, color: color ?? brand.colors.saffron, textTransform: 'uppercase' }, uc(text));
 }
 
-function headline(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, italic = false, maxSize = ctx.brand.layout.headline.start, scale = 1, side: Side = 'left'): { el: El; size: number } {
+export const ACCENT_RATIO = 0.64;
+
+/**
+ * The two-line headline, fitted to `width`. With `accent` the first line becomes an italic saffron lead-in at
+ * ACCENT_RATIO of the size (the "Time to / Savour the flavours" idea from the owner's references), so only the
+ * second line decides the size.
+ */
+export function headline(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, italic = false, maxSize = ctx.brand.layout.headline.start, scale = 1, side: Side = 'left', accent = false): { el: El; size: number } {
   const { brand } = ctx;
   const lines = twoLines(text);
   const font = fontOf(italic && brand.fontFiles.headingItalic ? brand.fontFiles.headingItalic : brand.fontFiles.heading);
   const start = Math.round(Math.min(maxSize, brand.layout.headline.start) * scale);
   const min = Math.max(typeFloors(ctx.w).headline, Math.min(brand.layout.headline.min, start));
-  const size = fitHeadline(font, lines, width, start, min, brand.layout.headline.step);
-  return {
-    size,
-    el: el('div', { display: 'flex', flexDirection: 'column', alignItems: alignItems(side), fontFamily: brand.fonts.heading.family, fontStyle: italic ? 'italic' : 'normal', fontSize: size, lineHeight: brand.layout.headline.lineHeight, color: brand.colors.cream },
-      lines.filter(Boolean).map((l) => el('div', { display: 'flex' }, l))),
-  };
+  const useAccent = accent && Boolean(lines[1]);
+  // With a lead-in, the main line may itself need two lines when it will not fit at the smallest size.
+  const mainLines: [string, string] = useAccent && measure(font, lines[1], min) > width ? twoLines(lines[1]) : [lines[1], ''];
+  const size = useAccent ? fitHeadline(font, mainLines, width, start, min, brand.layout.headline.step) : fitHeadline(font, lines, width, start, min, brand.layout.headline.step);
+  const common = { display: 'flex', flexDirection: 'column', alignItems: alignItems(side), fontFamily: brand.fonts.heading.family, fontStyle: italic ? 'italic' : 'normal', fontSize: size, lineHeight: brand.layout.headline.lineHeight, color: brand.colors.cream };
+  if (useAccent) {
+    const accentSize = Math.round(size * ACCENT_RATIO);
+    return {
+      size,
+      el: el('div', common, [
+        el('div', { display: 'flex', fontStyle: 'italic', fontSize: accentSize, lineHeight: 1.0, color: brand.colors.saffron, marginBottom: Math.round(size * 0.04) }, lines[0]),
+        ...mainLines.filter(Boolean).map((l) => el('div', { display: 'flex' }, l)),
+      ]),
+    };
+  }
+  return { size, el: el('div', common, lines.filter(Boolean).map((l) => el('div', { display: 'flex' }, l))) };
 }
 
-function rule(ctx: Ctx): El {
+export function rule(ctx: Ctx): El {
   const [w, h] = ctx.brand.layout.ruleSize;
   return el('div', { display: 'flex', width: w, height: h, backgroundColor: ctx.brand.colors.ember, marginTop: 28, marginBottom: 28 });
 }
 
-function line(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, size = ctx.brand.layout.line.size, side: Side = 'left', maxLines = ctx.brand.layout.line.maxLines): El {
+export function line(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, size = ctx.brand.layout.line.size, side: Side = 'left', maxLines = ctx.brand.layout.line.maxLines, color = ctx.brand.colors.cream): El {
   const { brand } = ctx;
   const font = fontOf(brand.fontFiles.body);
   // Shrink in 2 px steps (at most 6 px, never under the phone floor) before ellipsising the last line.
@@ -95,12 +114,14 @@ function line(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, size 
     lines = wrap(font, text, used, width, 99);
   }
   lines = wrap(font, text, used, width, maxLines);
-  return el('div', { display: 'flex', flexDirection: 'column', alignItems: alignItems(side), fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: used, lineHeight: 1.28, color: brand.colors.cream }, lines.map((l) => el('div', { display: 'flex' }, l)));
+  return el('div', { display: 'flex', flexDirection: 'column', alignItems: alignItems(side), fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: used, lineHeight: 1.28, color }, lines.map((l) => el('div', { display: 'flex' }, l)));
 }
 
-function footer(ctx: Ctx, kind: Footer): El {
+/** The footer; `ink` colours it for a light ground (Night text, poster style). */
+export function footer(ctx: Ctx, kind: Footer, ink = false): El {
   const { brand } = ctx;
-  const base = { fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: brand.layout.footer.size, letterSpacing: `${brand.layout.footer.tracking}em`, color: brand.colors.sand, textTransform: 'uppercase' as const };
+  const color = ink ? brand.colors.night : brand.colors.sand;
+  const base = { fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: brand.layout.footer.size, letterSpacing: `${brand.layout.footer.tracking}em`, color, textTransform: 'uppercase' as const };
   if (kind === 'address') {
     return el('div', { display: 'flex', flexDirection: 'column', gap: 10, ...base }, [
       el('div', { display: 'flex' }, uc(ctx.settings.storeAddress)),
@@ -109,27 +130,27 @@ function footer(ctx: Ctx, kind: Footer): El {
   }
   return el('div', { display: 'flex', flexDirection: 'column', gap: 18, ...base }, [
     el('div', { display: 'flex', alignItems: 'center', gap: 16, width: 360 }, [
-      el('div', { display: 'flex', flexGrow: 1, height: 1, backgroundColor: brand.colors.sand, opacity: 0.7 }),
-      el('div', { display: 'flex', width: 10, height: 10, backgroundColor: brand.colors.sand, transform: 'rotate(45deg)' }),
-      el('div', { display: 'flex', flexGrow: 1, height: 1, backgroundColor: brand.colors.sand, opacity: 0.7 }),
+      el('div', { display: 'flex', flexGrow: 1, height: 1, backgroundColor: color, opacity: 0.7 }),
+      el('div', { display: 'flex', width: 10, height: 10, backgroundColor: color, transform: 'rotate(45deg)' }),
+      el('div', { display: 'flex', flexGrow: 1, height: 1, backgroundColor: color, opacity: 0.7 }),
     ]),
     el('div', { display: 'flex' }, brand.brandLine),
   ]);
 }
 
-function logoImg(ctx: Ctx, style: Record<string, unknown>): El {
+export function logoImg(ctx: Ctx, style: Record<string, unknown>): El {
   const { brand } = ctx;
   return el('img', { width: brand.layout.logoWidth, height: Math.round(brand.layout.logoWidth * LOGO_RATIO), ...style }, undefined,
     { src: `data:image/png;base64,${brand.logoPng.toString('base64')}` });
 }
 
 /** The logo in a top corner: left by default, right when the text block takes the top-left. */
-function logo(ctx: Ctx, corner: Side = 'left'): El {
+export function logo(ctx: Ctx, corner: Side = 'left'): El {
   const m = ctx.brand.layout.margin;
   return logoImg(ctx, corner === 'right' ? { position: 'absolute', top: m, right: m } : { position: 'absolute', top: m, left: m });
 }
 
-function logoHeight(ctx: Ctx): number {
+export function logoHeight(ctx: Ctx): number {
   return Math.round(ctx.brand.layout.logoWidth * LOGO_RATIO);
 }
 
@@ -137,7 +158,7 @@ function logoHeight(ctx: Ctx): number {
  * The Night band under the text: opaque Night at the edge fading to clear over `fraction` of the canvas, scaled by
  * `strength` (1 = the house band; the legibility maths raises it when the photo under the text is bright).
  */
-function gradient(ctx: Ctx, fraction = 0.45, strength = 1, from: Position = 'bottom'): El {
+export function gradient(ctx: Ctx, fraction = 0.45, strength = 1, from: Position = 'bottom'): El {
   const night = ctx.brand.colors.night;
   const alpha = (a: number) => `${night}${Math.round(Math.min(1, a * strength) * 255).toString(16).padStart(2, '0').toUpperCase()}`;
   const stops = `${alpha(1)} 0%, ${alpha(1)} 32%, ${alpha(0.95)} 52%, ${alpha(0.7)} 74%, ${alpha(0)} 100%`;
@@ -145,22 +166,22 @@ function gradient(ctx: Ctx, fraction = 0.45, strength = 1, from: Position = 'bot
   return el('div', { position: 'absolute', left: 0, right: 0, height: Math.round(ctx.h * fraction), ...anchor });
 }
 
-function canvas(ctx: Ctx, children: (El | string)[], background = 'transparent'): El {
+export function canvas(ctx: Ctx, children: (El | string)[], background = 'transparent'): El {
   return el('div', { display: 'flex', position: 'relative', width: ctx.w, height: ctx.h, backgroundColor: background }, children);
 }
 
 /** The text column on one side, between `top` and `bottom` of the height, 60 px margin. */
-function column(ctx: Ctx, children: El[], top = 0.35, bottom = 0.30, justify: 'center' | 'flex-end' | 'flex-start' = 'center', side: Side = 'left'): El {
+export function column(ctx: Ctx, children: El[], top = 0.35, bottom = 0.30, justify: 'center' | 'flex-end' | 'flex-start' = 'center', side: Side = 'left'): El {
   const { brand } = ctx;
   const place = side === 'right' ? { right: brand.layout.margin } : { left: brand.layout.margin };
   return el('div', { position: 'absolute', ...place, top: Math.round(ctx.h * top), bottom: Math.round(ctx.h * bottom), width: brand.layout.textColumn, display: 'flex', flexDirection: 'column', justifyContent: justify, alignItems: alignItems(side) }, children);
 }
 
-function footerBox(ctx: Ctx, kind: Footer): El {
-  return el('div', { position: 'absolute', left: ctx.brand.layout.margin, bottom: ctx.brand.layout.margin, display: 'flex' }, footer(ctx, kind));
+export function footerBox(ctx: Ctx, kind: Footer, ink = false): El {
+  return el('div', { position: 'absolute', left: ctx.brand.layout.margin, bottom: ctx.brand.layout.margin, display: 'flex' }, footer(ctx, kind, ink));
 }
 
-const spacer = (h: number): El => el('div', { display: 'flex', height: h });
+export const spacer = (h: number): El => el('div', { display: 'flex', height: h });
 
 // ─── the templates ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -180,7 +201,7 @@ export function heroLayer(ctx: Ctx, d: z.infer<typeof HeroData>): El {
   }
   // The logo takes the top corner the text block doesn't.
   parts.push(logo(ctx, atTop && side === 'left' ? 'right' : 'left'));
-  const h = headline(ctx, d.headline, brand.layout.textColumn, false, d.layout === 'B' ? 128 : undefined, d.typeScale, side);
+  const h = headline(ctx, d.headline, brand.layout.textColumn, false, d.layout === 'B' ? 128 : undefined, d.typeScale, side, d.accentWord);
   const belowLogo = (brand.layout.margin + logoHeight(ctx) + 40) / ctx.h;
   const textTop = d.layout === 'A' ? 0.26 : atTop ? belowLogo : 0.44;
   const textBottom = d.layout === 'A' ? 0.24 : atTop ? 0.36 : 0.115;
@@ -246,7 +267,7 @@ export function carouselSlideLayer(ctx: Ctx, d: z.infer<typeof CarouselSlideData
 export function storyLayer(ctx: Ctx, d: z.infer<typeof StoryData>): El {
   const { brand } = ctx;
   const atTop = d.textPosition === 'top';
-  const h = headline(ctx, d.headline, 760, false, undefined, d.typeScale);
+  const h = headline(ctx, d.headline, 760, false, undefined, d.typeScale, 'left', d.accentWord);
   const logoTop = brand.layout.storySafeTop + 20;
   const block = [
     label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx),
