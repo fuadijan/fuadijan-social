@@ -3,6 +3,7 @@
  * per carousel page, reel cover 1080×1920. The pipeline's render stage and `npm run render-samples` both come here.
  */
 import type { z } from 'zod';
+import type { DesignSpec } from '../brain/schemas.js';
 import { loadBrand, type Brand } from './brand.js';
 import { composeLayoutA, composeLayoutB, composeTextOnly, type Cutout } from './compose.js';
 import { templateEntry, templateKeyFor, type TemplateKey } from './registry.js';
@@ -34,6 +35,15 @@ export interface RenderInput {
   cutout: Cutout | null;
   busyPhoto?: boolean;
   settings: RenderSettings;
+  /** The art director's (or heuristic) decisions; anything missing falls back to the house defaults. */
+  design?: Partial<DesignSpec> | null;
+  /** A 9:16 crop for the story; the feed photo is re-cropped when it is missing. */
+  storyPhoto?: Buffer | null;
+}
+
+/** HeroData/StoryData fields from a design spec (undefined fields take the zod defaults). */
+function designFields(d: Partial<DesignSpec> | null | undefined) {
+  return { textPosition: d?.text_position, textSide: d?.text_side, bandStrength: d?.band_strength, typeScale: d?.type_scale };
 }
 
 export interface RenderOutput { format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; png: Buffer }
@@ -46,19 +56,25 @@ export async function renderPost(input: RenderInput, brand: Brand = loadBrand())
   const out: RenderOutput[] = [];
   const footer = entry.footer;
 
+  const design = input.design ?? null;
+  const lift = design?.lift_tone ?? 'auto';
   const feed = async (): Promise<Buffer | null> => {
     switch (key) {
       case 'hero-photo': {
-        const layout = input.cutout ? 'A' : 'B';
+        // The spec's layout wins when it can be honoured; A needs a cutout.
+        const layout: 'A' | 'B' = design?.layout === 'B' ? 'B' : input.cutout ? 'A' : 'B';
         if (!input.photo) return textOnly();
         const ctx = makeCtx(brand, fw, fh, input.settings);
-        const layer = await layerToPng(brand, heroLayer(ctx, HeroData.parse({ layout, label: input.label, headline: input.headline, line: input.line, footer, busyPhoto: input.busyPhoto ?? false })), fw, fh);
-        return layout === 'A' && input.cutout ? composeLayoutA(brand, fw, fh, input.cutout, layer) : composeLayoutB(brand, fw, fh, input.photo, layer);
+        const data = HeroData.parse({ layout, label: input.label, headline: input.headline, line: input.line, footer, busyPhoto: input.busyPhoto ?? false, ...designFields(design) });
+        const layer = await layerToPng(brand, heroLayer(ctx, data), fw, fh);
+        return layout === 'A' && input.cutout
+          ? composeLayoutA(brand, fw, fh, input.cutout, layer, data.textSide === 'left' ? 'right' : 'left')
+          : composeLayoutB(brand, fw, fh, input.photo, layer, { lift });
       }
       case 'review': {
         const ctx = makeCtx(brand, fw, fh, input.settings);
-        const layer = await layerToPng(brand, reviewLayer(ctx, ReviewData.parse({ quote: input.quote ?? input.line, reviewer: input.reviewer ?? 'A GUEST', label: 'CUSTOMER LOVE', footer, hasPhoto: Boolean(input.photo) })), fw, fh);
-        return input.photo ? composeLayoutB(brand, fw, fh, input.photo, layer) : composeTextOnly(brand, fw, fh, layer);
+        const layer = await layerToPng(brand, reviewLayer(ctx, ReviewData.parse({ quote: input.quote ?? input.line, reviewer: input.reviewer ?? 'A GUEST', label: 'CUSTOMER LOVE', footer, hasPhoto: Boolean(input.photo), bandStrength: design?.band_strength })), fw, fh);
+        return input.photo ? composeLayoutB(brand, fw, fh, input.photo, layer, { lift }) : composeTextOnly(brand, fw, fh, layer);
       }
       case 'text-only':
         return textOnly();
@@ -75,8 +91,8 @@ export async function renderPost(input: RenderInput, brand: Brand = loadBrand())
 
   if (key === 'carousel') {
     const ctx = makeCtx(brand, fw, fh, input.settings);
-    const coverLayer = await layerToPng(brand, carouselCoverLayer(ctx, CarouselCoverData.parse({ cover_title: input.headline, label: input.label })), fw, fh);
-    out.push({ format: 'carousel', page: 1, png: input.photo ? await composeLayoutB(brand, fw, fh, input.photo, coverLayer) : await composeTextOnly(brand, fw, fh, coverLayer) });
+    const coverLayer = await layerToPng(brand, carouselCoverLayer(ctx, CarouselCoverData.parse({ cover_title: input.headline, label: input.label, bandStrength: design?.band_strength })), fw, fh);
+    out.push({ format: 'carousel', page: 1, png: input.photo ? await composeLayoutB(brand, fw, fh, input.photo, coverLayer, { lift }) : await composeTextOnly(brand, fw, fh, coverLayer) });
     const slides = input.slides?.length ? input.slides : [input.line];
     const total = slides.length + 1;
     for (let i = 0; i < slides.length; i++) {
@@ -91,14 +107,14 @@ export async function renderPost(input: RenderInput, brand: Brand = loadBrand())
 
   if (input.slot === 'reel' && input.photo) {
     const ctx = makeCtx(brand, sw, sh, input.settings);
-    const layer = await layerToPng(brand, reelCoverLayer(ctx, ReelCoverData.parse({ hook: input.hook ?? input.headline, label: input.label })), sw, sh);
-    out.push({ format: 'reel-cover', page: null, png: await composeLayoutB(brand, sw, sh, input.photo, layer) });
+    const layer = await layerToPng(brand, reelCoverLayer(ctx, ReelCoverData.parse({ hook: input.hook ?? input.headline, label: input.label, bandStrength: design?.band_strength })), sw, sh);
+    out.push({ format: 'reel-cover', page: null, png: await composeLayoutB(brand, sw, sh, input.storyPhoto ?? input.photo, layer, { lift }) });
   }
 
   if (input.photo) {
     const ctx = makeCtx(brand, sw, sh, input.settings);
-    const layer = await layerToPng(brand, storyLayer(ctx, StoryData.parse({ label: input.label, headline: input.headline })), sw, sh);
-    out.push({ format: 'story', page: null, png: await composeLayoutB(brand, sw, sh, input.photo, layer) });
+    const layer = await layerToPng(brand, storyLayer(ctx, StoryData.parse({ label: input.label, headline: input.headline, ...designFields(design) })), sw, sh);
+    out.push({ format: 'story', page: null, png: await composeLayoutB(brand, sw, sh, input.storyPhoto ?? input.photo, layer, { lift }) });
   }
   return out;
 }

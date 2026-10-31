@@ -231,3 +231,17 @@ a { color: var(--fj-primary); }
 .sa-thumb--video .sa-thumb-kind { font-size: 1.4rem; color: var(--fj-text-secondary); }
 .sa-thumb--flagged { border-color: var(--fj-warning-border); }
 .sa-thumb-note { position: absolute; left: 0; right: 0; top: 0; padding: 3px 6px; background: var(--fj-warning-bg); color: var(--fj-warning); font-size: 0.65rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Wording options */
+.sa-wording { display: flex; flex-direction: column; gap: 14px; }
+.sa-wording-set { display: flex; flex-direction: column; gap: 8px; }
+.sa-wording-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.sa-wording-option { padding: 12px; border-radius: var(--fj-radius-md); border: 1px solid var(--fj-border); background: var(--fj-surface-raised, transparent); display: flex; flex-direction: column; gap: 6px; }
+.sa-wording-option--chosen { border-color: var(--fj-accent-border); background: var(--fj-accent-bg); }
+.sa-wording-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sa-wording-name { font-size: var(--fj-text-sm); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fj-text-secondary); }
+.sa-wording-chosen { font-size: var(--fj-text-xs, 12px); color: var(--fj-accent-text, var(--fj-text-secondary)); }
+.sa-wording-headline { font-family: var(--fj-font-display, inherit); font-size: var(--fj-text-lg); line-height: 1.15; display: flex; flex-direction: column; }
+.sa-wording-line { color: var(--fj-text-secondary); }
+.sa-wording-caption { font-size: var(--fj-text-sm); white-space: pre-wrap; }
+.sa-wording-actions { margin-top: 4px; }

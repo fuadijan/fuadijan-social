@@ -15,7 +15,9 @@ import { hasTag, parseCaption, type ParsedCaption } from '../intake/caption.js';
 import { findItem } from '../menu/source.js';
 import * as fmt from '../messaging/formats.js';
 import { templateEntry } from '../render/registry.js';
-import { allSettings, dishFactsFor } from '../settings.js';
+import { allSettings, dishFactsFor, getSetting } from '../settings.js';
+import { summarise, type DesignRun, type DesignSummary } from './design.js';
+import { addCustomOption, applyOption, latestCopyOptions, markChosen, storeCopyOptions } from './wording.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
 import { answeredQuestions, askQuestion, openQuestions, setQuestionMessageId } from './questions.js';
@@ -56,6 +58,10 @@ export interface JobState {
   isSetFollower?: boolean;
   /** Which question ids this job has already asked and sent, so a re-run doesn't repeat them. */
   askedQuestionIds?: number[];
+  /** The index of the wording option the owner chose (0 = the calendar wording); set once the choice is made. */
+  wordingChosen?: number;
+  /** How the design was decided and what the critic said, for the pack and the Telegram message. */
+  design?: DesignRun;
 }
 
 export interface Job {
@@ -276,7 +282,7 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   if (stillOpen.length) return { kind: 'wait', questionId: stillOpen[0]!.id };
 
   const menu = await ctx.menu.get();
-  const answers = (await answeredQuestions(ctx.pool, row.id)).filter((q) => !['quality', 'match', 'skip'].includes(q.field ?? '')).map((q) => ({ question: q.question, answer: q.answer ?? '' }));
+  const answers = (await answeredQuestions(ctx.pool, row.id)).filter((q) => !['quality', 'match', 'skip', 'wording'].includes(q.field ?? '')).map((q) => ({ question: q.question, answer: q.answer ?? '' }));
   const cap = caption(ctx.asset);
   const entry = templateEntry(row.template);
   const read = ctx.job.state.match ?? ctx.asset?.match ?? null;
@@ -299,7 +305,51 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
     }
     return { kind: 'wait', questionId: first!, state: { copy } };
   }
+  // The main copy and Claude's alternative wordings are kept; the render stage asks which to use.
+  await storeCopyOptions(ctx.pool, row.id, ctx.job.id, copy);
   return { kind: 'advance', stage: 'render', state: { copy } };
+}
+
+/**
+ * Before the design: which wording? The owner's answer (buttons, the Day page or a typed headline) is applied
+ * to the job's copy; with `/set wording off`, a set follower or a single option, the calendar wording is used.
+ * Returns a wait outcome while the question is open, null once the copy is settled.
+ */
+async function chooseWording(ctx: StageContext, row: CalendarRow): Promise<Outcome | null> {
+  const copy = ctx.job.state.copy!;
+  if (ctx.job.state.wordingChosen !== undefined || ctx.job.state.isSetFollower) return null;
+  const set = await latestCopyOptions(ctx.pool, row.id);
+  const mode = (await getSetting(ctx.pool, 'wording_choice')) || 'ask';
+  if (!set || set.options.length < 2 || mode === 'off') {
+    ctx.job.state.wordingChosen = 0;
+    return null;
+  }
+  const use = (index: number, options: typeof set.options) => {
+    ctx.job.state.copy = applyOption(copy, options[index]!);
+    ctx.job.state.wordingChosen = index;
+  };
+  const answered = (await answeredQuestions(ctx.pool, row.id)).filter((q) => q.field === 'wording' && q.job_id === ctx.job.id).at(-1);
+  if (answered?.answer != null) {
+    const n = Number(answered.answer);
+    if (Number.isInteger(n) && set.options[n]) {
+      await markChosen(ctx.pool, set.id, n);
+      use(n, set.options);
+    } else {
+      const custom = await addCustomOption(ctx.pool, set, answered.answer);
+      use(custom.index, custom.set.options);
+    }
+    return null;
+  }
+  if (set.chosen != null && set.options[set.chosen]) {
+    use(set.chosen, set.options);
+    return null;
+  }
+  const q = await sendQuestion(ctx, {
+    rowId: row.id, field: 'wording',
+    question: `Which wording for Day ${row.day_no}? Tap one, or type your own headline.`,
+    options: set.options.map((o, i) => ({ key: `v${i}`, label: `${i + 1} · ${o.name}`.slice(0, 40), value: String(i) })),
+  }, fmt.wordingOptions(row, set.options));
+  return { kind: 'wait', questionId: q.id };
 }
 
 function fieldFor(u: Unresolved): string {
@@ -313,13 +363,17 @@ export async function render(ctx: StageContext): Promise<Outcome> {
   if (!rowId) throw new Error('render needs a calendar row');
   const row = await rowById(ctx.pool, rowId);
   if (!row) throw new Error(`Row ${rowId} is gone.`);
-  const outputs = await renderForRow(ctx, row);
+  if (!ctx.job.state.copy) throw new Error('render needs resolved copy');
+  const choice = await chooseWording(ctx, row);
+  if (choice) return choice;
+  const { outputs, design } = await renderForRow(ctx, row);
   await ctx.pool.query('delete from renders where calendar_row_id = $1', [row.id]);
   for (const o of outputs) {
     const fileId = await putFile(ctx.pool, o.png, 'image/png');
     await ctx.pool.query('insert into renders (asset_id, calendar_row_id, template, format, page, file_id) values ($1, $2, $3, $4, $5, $6)',
       [ctx.asset?.id ?? null, row.id, row.template, o.format, o.page, fileId]);
   }
+  if (design) ctx.job.state.design = design;
   return { kind: 'advance', stage: 'pack' };
 }
 
@@ -340,9 +394,10 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
 
   const assets = (await ctx.pool.query<Asset>('select * from assets where calendar_row_id = $1 order by created_at', [row.id])).rows;
   const hero = ctx.asset?.prepped ? ctx.asset : assets.find((a) => a.prepped);
-  // Layout A when the plate cutout was made and used by the render stage (render-stage stores it in prepped).
-  const layout: 'A' | 'B' = hero?.prepped?.cutout && (await ctx.pool.query("select 1 from renders where calendar_row_id = $1 and format = 'feed'", [row.id])).rowCount ? 'A' : 'B';
-  const sources: Record<string, unknown> = { assetIds: assets.map((a) => a.id), crops: {} as Record<string, string>, renders: {} as Record<string, string>, layout };
+  // The layout the render stage decided; for older jobs, A when the plate cutout was made and used.
+  const design: DesignSummary | null = ctx.job.state.design ? summarise(ctx.job.state.design) : null;
+  const layout: 'A' | 'B' = design?.layout ?? (hero?.prepped?.cutout && (await ctx.pool.query("select 1 from renders where calendar_row_id = $1 and format = 'feed'", [row.id])).rowCount ? 'A' : 'B');
+  const sources: Record<string, unknown> = { assetIds: assets.map((a) => a.id), crops: {} as Record<string, string>, renders: {} as Record<string, string>, layout, design, wording: ctx.job.state.wordingChosen ?? null };
 
   const folderName = `${row.date} ${daySlug(row)}`;
   const folder = join(PACKS_DIR, folderName);
@@ -353,6 +408,7 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
   writeFileSync(join(folder, 'caption.txt'), captionText);
   writeFileSync(join(folder, 'canva-brief.txt'), brief);
   if (reelText) writeFileSync(join(folder, 'reel-pack.txt'), reelText);
+  if (design) writeFileSync(join(folder, 'design.json'), JSON.stringify({ ...design, spec: ctx.job.state.design?.spec, critique: ctx.job.state.design?.critique }, null, 2));
 
   for (const r of (await ctx.pool.query<{ format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; file_id: string }>('select format, page, file_id from renders where calendar_row_id = $1 order by format, page', [row.id])).rows) {
     const name = RENDER_FILENAMES[r.format](r.page);
@@ -408,13 +464,14 @@ export async function notify(ctx: StageContext): Promise<Outcome> {
     return { kind: 'done' };
   }
 
-  const p = (await ctx.pool.query<{ caption_txt: string; reel_pack_txt: string | null; hashtags: string[]; folder: string; sources: { crops?: Record<string, string>; renders?: Record<string, string> } }>(
+  const p = (await ctx.pool.query<{ caption_txt: string; reel_pack_txt: string | null; hashtags: string[]; folder: string; sources: { crops?: Record<string, string>; renders?: Record<string, string>; design?: DesignSummary | null } }>(
     'select caption_txt, reel_pack_txt, hashtags, folder, sources from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
   if (!p) throw new Error('No pack to send.');
   const s = await allSettings(ctx.pool);
   const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
 
   await sendPackImages(ctx, row, p.sources);
+  if (p.sources.design) await ctx.messenger.sendText(fmt.designLine(p.sources.design).replace('{N}', String(row.day_no)));
   await ctx.messenger.sendText(`${fmt.packHeader(row, postTime)}\n\n${p.reel_pack_txt ? `${p.reel_pack_txt}\n` : ''}${p.caption_txt.replace(/\n=== HASHTAGS[\s\S]*?\n\n/, '\n')}`);
   await ctx.messenger.sendText(p.hashtags.join(' '));
   await ctx.messenger.sendText(fmt.packFooter(row));

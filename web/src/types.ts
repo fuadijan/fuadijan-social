@@ -166,9 +166,14 @@ export interface MonthResponse {
   settings: { storeAddress: string | null; openHours: string | null };
 }
 
+export interface WordingOption { name: string; headline: string; line: string; caption: string }
+export interface WordingSet { id: number; options: WordingOption[]; chosen: number | null; createdAt: string }
+
 export interface DayResponse extends DayView {
   row: Row;
   questions: Question[];
+  wording: WordingSet[];
+  wordingWaiting: boolean;
   assets: Asset[];
   pack: Pack | null;
   renders: Render[];

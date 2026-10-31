@@ -4,7 +4,13 @@
   "line": "Bold flavour, a grilled finish, a place at the heart of the table.",
   "caption": "Bold flavour, a beautifully grilled finish and a place at the heart of the table. Meet the Chapli Kebab at Fuadijan.",
   "cta": "Have you tried Chapli Kebab? Tell us below.",
-  "hashtags": ["#Fuadijan", "#ChapliKebab", "#PakistaniCuisine", "#AuburnEats", "#FromTheFire"],
+  "hashtags": [
+    "#Fuadijan",
+    "#ChapliKebab",
+    "#PakistaniCuisine",
+    "#AuburnEats",
+    "#FromTheFire"
+  ],
   "alt_text": "A grilled Chapli Kebab on a plate with a little salad.",
   "story_text": "Poll: Have you tried Chapli Kebab? Yes / Not yet",
   "facebook_caption": "Bold flavour, a beautifully grilled finish and a place at the heart of the table. Meet the Chapli Kebab at Fuadijan. Have you tried Chapli Kebab? Tell us below.",
@@ -14,7 +20,25 @@
       "field": "line",
       "placeholder": "Boldly spiced. Hand-formed. Grilled over fire.",
       "question": "The design line says \"Boldly spiced. Hand-formed. Grilled over fire.\" Can the kitchen confirm all three?",
-      "suggestions": ["Yes, all three are true", "Use: Bold flavour. Grilled over fire.", "Use the dish name only"]
+      "suggestions": [
+        "Yes, all three are true",
+        "Use: Bold flavour. Grilled over fire.",
+        "Use the dish name only"
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "name": "Short and punchy",
+      "headline": "Chapli.\nFrom the fire.",
+      "line": "Hand-formed, grilled over charcoal, on the table in minutes.",
+      "caption": "Hand-formed, grilled over charcoal. Chapli Kebab at Fuadijan."
+    },
+    {
+      "name": "Warm and story-led",
+      "headline": "The kebab\nthat gathers us",
+      "line": "A Peshawari classic, grilled the way it has always been.",
+      "caption": "Some dishes bring everyone to the table. Our Chapli Kebab is grilled the way it has always been, and shared the same way too."
     }
   ]
 }

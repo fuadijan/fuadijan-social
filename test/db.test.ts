@@ -44,7 +44,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -106,10 +106,23 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
 
     await applyAnswer(ctx, open[0]!.id, 's0', 'dry-run');
     await worker.drain();
+    // The copy is resolved; before the design the owner picks the wording (calendar wording + two alternatives).
+    const wording = (await openQuestions(pool)).find((q) => q.field === 'wording')!;
+    expect(wording).toBeTruthy();
+    expect(wording.options.map((o) => o.label)).toEqual(['1 · Calendar wording', '2 · Short and punchy', '3 · Warm and story-led']);
+    expect(messenger.sent.some((m) => m.text?.startsWith('✍️'))).toBe(true);
+    expect((await pool.query('select stage, status from jobs order by id desc limit 1')).rows[0]).toEqual({ stage: 'render', status: 'waiting' });
+    await applyAnswer(ctx, wording.id, 'v1', 'dry-run');
+    await worker.drain();
     expect((await pool.query('select stage, status from jobs order by id desc limit 1')).rows[0]).toEqual({ stage: 'done', status: 'done' });
     expect((await rowByDay(pool, 2))!.status).toBe('ready');
-    const pack = (await pool.query<{ caption_txt: string; folder: string; hashtags: string[] }>('select caption_txt, folder, hashtags from packs')).rows[0]!;
+    const pack = (await pool.query<{ caption_txt: string; folder: string; hashtags: string[]; caption: string; sources: { design: { layout: string; score: number } | null; wording: number } }>('select caption_txt, folder, hashtags, caption, sources from packs')).rows[0]!;
     expect(pack.folder).toBe('2026-11-04 chapli-kebab');
+    expect(pack.caption).toBe('Hand-formed, grilled over charcoal. Chapli Kebab at Fuadijan.');
+    expect(pack.sources.wording).toBe(1);
+    expect(pack.sources.design).toMatchObject({ layout: 'B', score: 8.5 });
+    expect((await pool.query('select chosen from copy_options')).rows[0]).toEqual({ chosen: 1 });
+    expect(messenger.sent.some((m) => m.text?.startsWith('🎨 Layout B'))).toBe(true);
     expect(pack.hashtags).toHaveLength(5);
     expect(pack.caption_txt).toContain('=== POST AT ===');
     const files = messenger.sent.filter((m) => m.file).map((m) => m.file);
@@ -137,6 +150,11 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const day4 = (await rowByDay(pool, 4))!;
     expect(open[0]!.options.some((o) => o.value === String(day4.id))).toBe(true);
     await applyAnswer(ctx, open[0]!.id, `r${day4.id}`, 'dry-run');
+    await worker.drain();
+    // The wording question comes before the design; the calendar wording is option 1.
+    const wording = (await openQuestions(pool)).find((q) => q.field === 'wording' && q.row_id === day4.id)!;
+    expect(wording).toBeTruthy();
+    await applyAnswer(ctx, wording.id, 'v0', 'dry-run');
     await worker.drain();
     // Day 4 is a reel: the pack carries the reel text and the default fixture copy.
     const pack = (await pool.query<{ reel_pack_txt: string | null }>('select reel_pack_txt from packs where calendar_row_id = $1', [day4.id])).rows[0]!;

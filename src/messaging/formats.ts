@@ -102,3 +102,22 @@ export const PRIVATE_BOT = 'This bot is private.';
 export function questionsMessage(rowTitleText: string, qs: { n: number; question: string }[]): string {
   return [`${rowTitleText} needs ${qs.length} confirmation${qs.length === 1 ? '' : 's'} before it's ready:`, ...qs.map((q) => `${q.n}. ${q.question}`)].join('\n');
 }
+
+/** The wording options in full, sent before the question with the buttons. */
+export function wordingOptions(row: CalendarRow, options: { name: string; headline: string; line: string; caption: string }[]): string {
+  return [
+    `✍️ ${rowTitle(row)} — pick the wording before I design it:`,
+    ...options.map((o, i) => `${i + 1}. ${o.name}\n   ${o.headline.replace(/\n/g, ' / ')}\n   ${o.line}\n   ${o.caption.length > 160 ? `${o.caption.slice(0, 157)}…` : o.caption}`),
+    'Tap a button below, or type your own headline. /set wording off skips this step.',
+  ].join('\n\n');
+}
+
+export interface DesignLineInput { layout: 'A' | 'B'; text_position: string; text_side: string; type_scale: number; band_strength: number; source: string; rationale: string; score: number | null; first_score: number | null; verdict: string | null; issues: string[]; contrast: number | null }
+
+/** One line on how the design was decided and what the critic thought. */
+export function designLine(d: DesignLineInput): string {
+  const who = d.source === 'owner' ? 'your note' : d.source === 'claude' ? 'art director' : 'house rules';
+  const critic = d.score == null ? '' : ` · critic ${d.first_score != null && d.first_score !== d.score ? `${d.first_score}→${d.score}` : d.score}/10${d.verdict === 'reshoot' ? ' (suggests a reshoot)' : ''}`;
+  const issues = d.issues.length ? `\nStill noted: ${d.issues.join('; ')}.` : '';
+  return `🎨 Layout ${d.layout}${d.layout === 'B' ? ` · text ${d.text_position}-${d.text_side}` : d.text_side === 'right' ? ' · text right' : ''} · type ×${d.type_scale.toFixed(2)} · band ${Math.round(d.band_strength * 100)}%${d.contrast != null ? ` (contrast ${d.contrast}:1)` : ''} · by ${who}${critic}\n${d.rationale}${issues}\nNot right? /redo ${'{N}'} with "text on the right", "text at the top", "bigger text", "layout A" or "layout B".`;
+}

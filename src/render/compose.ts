@@ -26,13 +26,14 @@ export async function nightBackground(brand: Brand, w: number, h: number, glowAt
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
-/** Layout A: cutout (with shadow) scaled to widthRatio of the canvas, centred in the right two-thirds. */
-export async function composeLayoutA(brand: Brand, w: number, h: number, cut: Cutout, textLayer: Buffer): Promise<Buffer> {
+/** Layout A: cutout (with shadow) scaled to widthRatio of the canvas, on the side the text column isn't. */
+export async function composeLayoutA(brand: Brand, w: number, h: number, cut: Cutout, textLayer: Buffer, plateSide: 'left' | 'right' = 'right'): Promise<Buffer> {
   const targetW = Math.round(w * brand.cutout.widthRatio);
   const scale = Math.min(targetW / cut.width, (h * 0.78) / cut.height);
   const cw = Math.round(cut.width * scale);
   const ch = Math.round(cut.height * scale);
-  const left = Math.round(w - cw - w * 0.02); // flush to the right, 2% in; the left rim may run under the headline
+  // Flush to its edge, 2% in; the inner rim may run under the headline.
+  const left = plateSide === 'right' ? Math.round(w - cw - w * 0.02) : Math.round(w * 0.02);
   const top = Math.round((h - ch) / 2 + h * 0.02);
   const shadowMeta = await sharp(cut.shadow).metadata();
   const sw = Math.round(shadowMeta.width! * scale);
@@ -55,18 +56,21 @@ export async function composeLayoutA(brand: Brand, w: number, h: number, cut: Cu
  * Tone only (no painting): a dim phone photo gets lifted towards a mid luminance of ~118/255, capped at +30%, and a
  * touch of saturation. Bright photos are left alone.
  */
-export async function liftTone(jpeg: Buffer): Promise<Buffer> {
+export async function liftTone(jpeg: Buffer, force = false): Promise<Buffer> {
   const stats = await sharp(jpeg).greyscale().stats();
   const mean = stats.channels[0]?.mean ?? 128;
-  if (mean >= 105) return jpeg;
+  if (mean >= (force ? 140 : 105)) return jpeg;
   const brightness = Math.min(1.3, 118 / Math.max(mean, 60));
   return sharp(jpeg).modulate({ brightness, saturation: 1.06 }).normalise({ lower: 1, upper: 99.5 }).toBuffer();
 }
 
-/** Layout B: the photo fills the canvas (attention crop), tone lifted if dim, the text layer with its gradient on top. */
-export async function composeLayoutB(brand: Brand, w: number, h: number, jpeg: Buffer, textLayer: Buffer): Promise<Buffer> {
-  // The crop favours the upper part of the frame so the food sits above the text band, not under the gradient.
-  const lifted = await liftTone(jpeg);
+/**
+ * Layout B: the photo fills the canvas (attention crop when the ratio differs), tone lifted when asked (or when
+ * dim, with lift 'auto'), the text layer with its gradient on top.
+ */
+export async function composeLayoutB(brand: Brand, w: number, h: number, jpeg: Buffer, textLayer: Buffer, opts: { lift?: boolean | 'auto' } = {}): Promise<Buffer> {
+  const lift = opts.lift ?? 'auto';
+  const lifted = lift === 'auto' ? await liftTone(jpeg) : lift ? await liftTone(jpeg, true) : jpeg;
   const photo = await sharp(lifted).resize(w, h, { fit: 'cover', position: sharp.strategy.attention }).modulate({ saturation: 1.04 }).toBuffer();
   return sharp(photo).composite([{ input: textLayer, left: 0, top: 0 }]).png().toBuffer();
 }

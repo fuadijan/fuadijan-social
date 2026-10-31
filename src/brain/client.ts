@@ -23,6 +23,8 @@ export interface CallInput<T> {
   image?: ImageInput;
   schema: z.ZodType<T>;
   jobId?: number | null;
+  /** A cheaper model for a call that doesn't need the default (the design critique). */
+  model?: string;
 }
 
 export interface ClaudeClient {
@@ -59,8 +61,9 @@ export class LiveClaude implements ClaudeClient {
     }
     content.push({ type: 'text', text: input.user });
     try {
+      const model = input.model ?? this.model;
       const response = await this.client.beta.messages.parse({
-        model: this.model,
+        model,
         max_tokens: 4096,
         system: input.system,
         messages: [{ role: 'user', content }],
@@ -72,10 +75,10 @@ export class LiveClaude implements ClaudeClient {
       if (response.stop_reason === 'refusal') throw new Error('Claude declined this request.');
       const parsed = (response as { parsed_output?: T | null }).parsed_output;
       if (parsed == null) throw new Error('Claude answered without the expected structure.');
-      await logCall(this.db, { purpose: input.purpose, model: response.model ?? this.model, input: usage.input_tokens, output: usage.output_tokens, cacheRead: usage.cache_read_input_tokens ?? 0, latencyMs: Date.now() - started, ok: true, jobId: input.jobId });
+      await logCall(this.db, { purpose: input.purpose, model: response.model ?? model, input: usage.input_tokens, output: usage.output_tokens, cacheRead: usage.cache_read_input_tokens ?? 0, latencyMs: Date.now() - started, ok: true, jobId: input.jobId });
       return input.schema.parse(parsed);
     } catch (err) {
-      await logCall(this.db, { purpose: input.purpose, model: this.model, latencyMs: Date.now() - started, ok: false, error: err instanceof Error ? err.message : String(err), jobId: input.jobId });
+      await logCall(this.db, { purpose: input.purpose, model: input.model ?? this.model, latencyMs: Date.now() - started, ok: false, error: err instanceof Error ? err.message : String(err), jobId: input.jobId });
       throw err;
     }
   }

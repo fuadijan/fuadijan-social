@@ -1,7 +1,7 @@
 /** Key/value settings the owner edits from Telegram (/set address|hours|website) or that have defaults. */
 import type { Db } from './db/pool.js';
 
-export type SettingKey = 'store_address' | 'open_hours' | 'website_url' | 'post_time_default' | 'story_time_default' | 'instagram_handle' | 'paused';
+export type SettingKey = 'store_address' | 'open_hours' | 'website_url' | 'post_time_default' | 'story_time_default' | 'instagram_handle' | 'paused' | 'design_notes' | 'wording_choice';
 
 export const SET_ALIASES: Record<string, SettingKey> = {
   address: 'store_address',
@@ -9,6 +9,10 @@ export const SET_ALIASES: Record<string, SettingKey> = {
   website: 'website_url',
   'post-time': 'post_time_default',
   'story-time': 'story_time_default',
+  /** Standing notes for the art director, e.g. "prefer the whole photo, keep the plate, big type". */
+  design: 'design_notes',
+  /** "ask" (default) stops before the render for a wording pick; "off" renders the calendar wording at once. */
+  wording: 'wording_choice',
 };
 
 export async function getSetting(db: Db, key: SettingKey): Promise<string> {

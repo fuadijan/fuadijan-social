@@ -12,6 +12,7 @@ import { getFile } from '../files.js';
 import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
+import { allCopyOptions, copyOptionsById, markChosen, rerenderWithWording } from '../pipeline/wording.js';
 import { rowViews, type RowView } from '../reminders/brief.js';
 import { allSettings } from '../settings.js';
 import { addDays, sydneyDate } from '../time.js';
@@ -61,10 +62,13 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const renders = (await ctx.pool.query<{ id: number; format: string; page: number | null; file_id: string }>('select id, format, page, file_id from renders where calendar_row_id = $1 order by format, page', [row.id])).rows;
     const edits = (await ctx.pool.query<{ field: string; old_value: string | null; new_value: string | null; source: string; created_at: Date }>('select field, old_value, new_value, source, created_at from calendar_edits where row_id = $1 and source <> \'seed\' order by created_at desc limit 30', [row.id])).rows;
     const settings = await allSettings(ctx.pool);
+    const wording = (await allCopyOptions(ctx.pool, row.id)).map((w) => ({ id: w.id, options: w.options, chosen: w.chosen, createdAt: w.created_at }));
     return {
       ...viewJson(v!),
       row: { ...row, post_time: row.post_time },
       questions: qs.map(qJson),
+      wording,
+      wordingWaiting: qs.some((q) => q.field === 'wording'),
       assets: assets.map((a) => ({ id: a.id, kind: a.kind, caption: a.caption_raw, thumb: a.prepped?.thumb ?? a.prepped?.['1x1'] ?? a.original_file_id, crops: a.prepped, createdAt: a.created_at, quality: a.quality })),
       pack: pack && { ...pack, crops: pack.sources.crops ?? {} },
       renders,
@@ -80,6 +84,27 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     if (!answer) return reply.code(400).send({ ok: false, error: 'answer required' });
     const result = await applyAnswer(ctx, Number(req.params.id), answer, 'web');
     return { ok: true, message: result };
+  });
+
+  // The owner picks a wording: answers the open question when the pipeline is waiting, else rebuilds the pack.
+  app.post<{ Params: { dayNo: string }; Body: { setId?: number; index?: number } }>('/api/rows/:dayNo/wording', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const set = await copyOptionsById(ctx.pool, Number(req.body?.setId));
+    const index = Number(req.body?.index);
+    if (!set || set.calendar_row_id !== row.id || !Number.isInteger(index) || !set.options[index]) return reply.code(400).send({ ok: false, error: 'No such wording' });
+    const open = (await openQuestions(ctx.pool, row.id)).find((q) => q.field === 'wording');
+    if (open) {
+      await markChosen(ctx.pool, set.id, index);
+      const message = await applyAnswer(ctx, open.id, String(index), 'web');
+      return { ok: true, message };
+    }
+    const job = await rerenderWithWording(ctx.pool, row.id, set, index);
+    if (!job) {
+      await markChosen(ctx.pool, set.id, index);
+      return { ok: true, message: 'Noted; it is used when the day is rendered.' };
+    }
+    return { ok: true, message: `Wording ${index + 1} — rebuilding the designs and the pack.` };
   });
 
   app.post<{ Params: { dayNo: string }; Body: { status?: string } }>('/api/rows/:dayNo/status', async (req, reply) => {

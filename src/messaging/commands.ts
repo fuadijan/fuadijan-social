@@ -9,6 +9,7 @@ import * as fmt from './formats.js';
 import { answerQuestion, askQuestion, latestOpenQuestion, openQuestions, questionById, resolveAnswer, setQuestionMessageId } from '../pipeline/questions.js';
 import { resendPack } from '../pipeline/stages.js';
 import { redoRow } from '../pipeline/worker.js';
+import { allCopyOptions, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
 import { SET_ALIASES, allDishFacts, getSetting, removeDishFact, setDishFact, setSetting } from '../settings.js';
 import { formatDay, sydneyDate, sydneyTime, addDays } from '../time.js';
 import { weekLines } from '../reminders/brief.js';
@@ -16,10 +17,11 @@ import { weekLines } from '../reminders/brief.js';
 export const HELP = [
   '/today · /week · /status · /ask',
   '/pack N — resend Day N\'s pack · /brief N — resend the Canva brief',
-  '/redo N <note> — re-run the copy and design with a note ("shorter caption", "layout B", "layout A")',
+  '/redo N <note> — re-run the copy and design with a note ("shorter caption", "layout B", "text on the right", "text at the top", "bigger text")',
+  '/wording N — show the wordings written for Day N · /wording N k — use wording k (rebuilds the designs and the pack)',
   '/edit N <field> <text> — fields: dish, caption, cta, hashtags, story_ideas, post_time',
   '/push N <days> — move Day N · skip N — move it to the next free date',
-  '/set address|hours|website <text> · /pause · /resume',
+  '/set address|hours|website <text> · /set design <standing notes for the art director> · /set wording ask|off · /pause · /resume',
   '/fact <dish> -- <what is true about it> — remembered for every post about that dish (/fact alone lists them; /fact <dish> -- remove)',
   'posted N — mark Day N posted',
   'Send a photo with a caption like "chapli kebab", "chicken karahi -- cooked to order #day4", "karahi clip 1".',
@@ -104,10 +106,30 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
     case '/set': {
       const key = SET_ALIASES[(rest[0] ?? '').toLowerCase()];
       const value = rest.slice(1).join(' ').trim();
-      if (!key) return void say('/set address|hours|website|post-time|story-time <text>');
+      if (!key) return void say('/set address|hours|website|post-time|story-time|design|wording <text>');
       if (!value) return void say(`${key} is "${await getSetting(pool, key)}".`);
       await setSetting(pool, key, value);
       return void say(`${key} is now "${value}".`);
+    }
+    case '/wording': {
+      const row = await needRow(app, dayNo);
+      if (!row) return;
+      const k = Number(rest[1]);
+      const sets = await allCopyOptions(pool, row.id);
+      if (!sets.length) return void say(`No wordings for Day ${row.day_no} yet — they appear once a photo has been matched and the copy resolved.`);
+      if (!rest[1]) {
+        const latest = sets[0]!;
+        return void say(`${fmt.wordingOptions(row, latest.options)}${latest.chosen != null ? `\n\nIn use: ${latest.chosen + 1}.` : ''}${sets.length > 1 ? `\n${sets.length - 1} earlier set${sets.length > 2 ? 's' : ''} on the Day page.` : ''}\nUse one: /wording ${row.day_no} <number>`);
+      }
+      const latest = (await latestCopyOptions(pool, row.id))!;
+      if (!Number.isInteger(k) || !latest.options[k - 1]) return void say(`Pick 1–${latest.options.length}: /wording ${row.day_no} <number>`);
+      const open = (await openQuestions(pool, row.id)).find((q) => q.field === 'wording');
+      if (open) {
+        await applyAnswer(app, open.id, String(k - 1), 'telegram');
+        return;
+      }
+      const job = await rerenderWithWording(pool, row.id, latest, k - 1);
+      return void say(job ? `Wording ${k} for Day ${row.day_no} — rebuilding the designs and the pack.` : `Day ${row.day_no} has nothing rendered yet; the choice is noted for when it is.`);
     }
     case '/fact': {
       if (!arg) {
@@ -205,7 +227,10 @@ export async function applyAnswer(app: AppContext, questionId: number, keyOrText
   if (!q) return 'Already answered.';
 
   let reply = `Got it: ${value}`;
-  if (q.field === 'skip' && q.row_id) {
+  if (q.field === 'wording') {
+    const n = Number(value);
+    reply = Number.isInteger(n) ? `Wording ${n + 1} — designing now.` : `Using your headline "${value}" — designing now.`;
+  } else if (q.field === 'skip' && q.row_id) {
     const row = (await allRows(pool)).find((r) => r.id === q.row_id);
     if (row && value !== 'cancel') {
       const next = await skipRow(pool, row, value === 'push-all' ? 'push-all' : 'just-this', via === 'web' ? 'owner-web' : 'owner-telegram');

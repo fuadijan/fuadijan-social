@@ -96,8 +96,15 @@ Photos under 1600 px, too dark or blurry get one question (use it / resend) — 
 
 `/today` `/week` `/status` (rows, jobs, open questions, Claude spend this month, menu source) `/ask`
 `/pack N` `/brief N` `/redo N <note>` `/edit N <field> <text>` (`dish`, `caption`, `cta`, `hashtags`,
-`story_ideas`, `post_time`) `/push N <days>` `/set address|hours|website <text>` `/pause` `/resume`,
+`story_ideas`, `post_time`) `/push N <days>` `/set address|hours|website <text>` `/set design <standing notes>`
+`/set wording ask|off` `/fact <dish> -- <what is true>` `/wording N [k]` `/pause` `/resume`,
 plus `posted N`, `skip N`, `ok`. Every question has buttons; a free-text reply answers the latest open one.
+
+**Wording first.** After the copy is resolved and before anything is designed, the bot shows the calendar's wording
+and two alternatives Claude wrote (shorter and punchier; warmer and story-led) and asks which to use; tap a button
+or type your own headline. Every set is kept in `copy_options` and listed on the Day page under "Wording", where
+any earlier wording can be chosen again (`/wording N k` does the same); after the pack is made a pick rebuilds the
+designs and the pack. `/set wording off` skips the question and uses the calendar wording.
 
 ## What arrives at post time
 
@@ -125,6 +132,18 @@ Templates: `hero-photo` (layout A = plate cutout on Night with the text column l
 with a Night gradient), `review`, `carousel`, `story`, `reel-cover`, `text-only`. The registry in
 `src/render/registry.ts` maps every sheet `template` value to one of them; boot fails on an unmapped value, and
 every template renders once at boot with sample data so a missing font fails loudly.
+
+**The design is decided per photo**, not by a fixed recipe. The photo is measured (`src/images/analyze.ts`: a 4×4
+grid of luminance and detail, the quietest zone, where the bright mass sits); the art director (Claude, with the
+thumbnail and those numbers, `direct-design`) picks layout A or B, text top or bottom, left or right, band strength,
+type scale and the crop focus, improving on a rule-based default (`src/pipeline/design.ts`); the legibility maths
+(`src/render/legibility.ts`) raises the band until cream text over that zone reaches 5.5:1 and floors every type
+size at what a 390 px phone can read; the owner's `/redo` note ("layout B", "text on the right", "text at the top",
+"bigger text") overrides and locks fields, and `/set design …` gives standing notes. Then the critic
+(`critique-design`, `CLAUDE_CRITIQUE_MODEL`, Sonnet by default) looks at the finished feed PNG at phone size and
+scores it; under 7 its fixes are applied and the design is rendered once more, and the better of the two is kept.
+The pack's `design.json` and the Telegram line "🎨 Layout B · text bottom-left · type ×1.10 · …" say what was
+decided and why. `DESIGN_CRITIQUE=0` turns the critic off.
 
 `npm run render-samples` writes every template with the owner's real photos to `samples/out/`, next to the
 matching reference, for approval. Snapshot tests (`test/render.test.ts`, `test/__snapshots__/*.png`) compare a

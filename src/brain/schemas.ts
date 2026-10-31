@@ -26,6 +26,14 @@ export const Unresolved = z.object({
 });
 export type Unresolved = z.infer<typeof Unresolved>;
 
+export const CopyVariant = z.object({
+  name: z.string().max(30).describe('A two-or-three-word name for this wording, e.g. "Short and punchy".'),
+  headline: z.string().describe('Two short lines separated by a newline.'),
+  line: z.string().describe('Supporting line, at most ~90 characters, same facts as the main copy.'),
+  caption: z.string().describe('The caption in this wording; same facts, no address line, no hashtags.'),
+});
+export type CopyVariant = z.infer<typeof CopyVariant>;
+
 export const ResolvedCopy = z.object({
   label: z.string().describe('Series label in capitals, e.g. FROM THE FIRE.'),
   headline: z.string().describe('Two short lines separated by a newline, the dish or the hook.'),
@@ -38,8 +46,36 @@ export const ResolvedCopy = z.object({
   facebook_caption: z.string().describe('The caption and CTA without hashtags.'),
   on_screen_text: z.array(z.string()).describe('For reels: the on-screen text cards in order, brackets resolved or dropped.'),
   unresolved: z.array(Unresolved).describe('Everything that still needs the owner before this is publishable.'),
+  variants: z.array(CopyVariant).max(3).default([]).describe('Two alternative wordings of headline, line and caption for the owner to choose from; the main copy above is the first option.'),
 });
 export type ResolvedCopy = z.infer<typeof ResolvedCopy>;
+
+/** The art director's decision for one photo: how the design is laid out, before anything is rendered. */
+export const DesignSpec = z.object({
+  layout: z.enum(['A', 'B']).describe('A: the plate cut out on the Night canvas (only when a cutout exists). B: the photo full-bleed under a gradient band.'),
+  text_position: z.enum(['bottom', 'top']).describe('Where the text block sits in layout B; layout A ignores it.'),
+  text_side: z.enum(['left', 'right']).describe('Which side the text column sits on; in layout A the plate goes on the other side.'),
+  band_strength: z.number().min(0.5).max(1).describe('Opacity of the Night gradient under the text in layout B, 0.5 (light) to 1 (solid). Raised automatically if the maths needs more.'),
+  type_scale: z.number().min(0.9).max(1.2).describe('Multiplier on the label, headline and line sizes; 1 is the house default.'),
+  crop_focus_y: z.number().min(0.3).max(0.65).describe('Where the dish centre lands in the 4:5 frame, as a fraction from the top: ~0.42 with text at the bottom, ~0.58 with text at the top.'),
+  lift_tone: z.boolean().describe('Lift a dim photo towards a mid exposure before compositing.'),
+  rationale: z.string().max(200).describe('One sentence on why, for the owner.'),
+});
+export type DesignSpec = z.infer<typeof DesignSpec>;
+
+/** The critic's read of a rendered design, at phone size. */
+export const Critique = z.object({
+  score: z.number().min(0).max(10).describe('10 is ready to post; under 7 needs a fix.'),
+  legible_on_phone: z.boolean(),
+  subject_prominent: z.boolean().describe('The dish is the first thing the eye lands on.'),
+  plate_intact: z.boolean().describe('Layout A only: the plate is whole, not clipped by the cutout. True for layout B.'),
+  text_over_food: z.boolean().describe('Any text crosses the dish.'),
+  too_dark: z.boolean().describe('The food reads muddy or underexposed.'),
+  issues: z.array(z.string()).max(5).describe('What is wrong, one short phrase each; empty when nothing is.'),
+  fixes: DesignSpec.omit({ rationale: true }).partial().describe('Only the fields that should change, as the new values.'),
+  verdict: z.enum(['ship', 'fix', 'reshoot']).describe('ship: send it; fix: apply fixes and render once more; reshoot: no design can rescue this photo.'),
+});
+export type Critique = z.infer<typeof Critique>;
 
 export const WeeklyReview = z.object({
   summary: z.string(),
@@ -47,4 +83,4 @@ export const WeeklyReview = z.object({
 });
 export type WeeklyReview = z.infer<typeof WeeklyReview>;
 
-export type Purpose = 'match-photo-to-row' | 'resolve-copy' | 'weekly-review';
+export type Purpose = 'match-photo-to-row' | 'resolve-copy' | 'weekly-review' | 'direct-design' | 'critique-design';

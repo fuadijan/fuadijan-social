@@ -1,0 +1,11 @@
+{
+  "score": 8.5,
+  "legible_on_phone": true,
+  "subject_prominent": true,
+  "plate_intact": true,
+  "text_over_food": false,
+  "too_dark": false,
+  "issues": [],
+  "fixes": {},
+  "verdict": "ship"
+}

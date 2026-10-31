@@ -9,6 +9,7 @@ import { ShareButton } from '../components/ShareButton';
 import { Empty, ErrorCard, Loading } from '../components/States';
 import { StatusPill } from '../components/StatusPill';
 import { UploadPhotos } from '../components/UploadPhotos';
+import { WordingOptions } from '../components/WordingOptions';
 import { fmtDate, fmtDateTime, fmtTime, paragraphs, SLOT_LABEL, splitArrows } from '../format';
 import type { Asset, DayResponse, EditSource, Pack, Row } from '../types';
 import { useApi } from '../useApi';
@@ -140,6 +141,16 @@ function CopySection({ d, reload }: { d: DayResponse; reload: Reload }) {
       ) : d.row.caption_hint ? (
         <Field label="Caption hint (from the sheet)" value={d.row.caption_hint} />
       ) : null}
+    </Card>
+  );
+}
+
+function WordingSection({ d, reload }: { d: DayResponse; reload: Reload }) {
+  if (d.wording.length === 0) return null;
+  return (
+    <Card title="Wording" id="wording">
+      <div className="sa-note" style={{ marginBottom: 10 }}>Every wording written for this day. Pick one and the designs and pack are made with it.</div>
+      <WordingOptions dayNo={d.dayNo} sets={d.wording} waiting={d.wordingWaiting} onChosen={reload} />
     </Card>
   );
 }
@@ -376,6 +387,7 @@ export function Day() {
             <ShootSection d={data} reload={reload} />
             <CopySection d={data} reload={reload} />
           </div>
+          <WordingSection d={data} reload={reload} />
           <ConfirmSection d={data} reload={reload} />
           <ImagesSection d={data} reload={reload} />
           <StatusSection d={data} onChanged={reload} />

@@ -57,6 +57,10 @@ export const config = {
   claude: {
     apiKey: str('ANTHROPIC_API_KEY'),
     model: str('CLAUDE_MODEL', 'claude-opus-5-5'),
+    /** The design critic looks at a 540 px PNG and fills a short rubric; Sonnet is plenty. */
+    critiqueModel: str('CLAUDE_CRITIQUE_MODEL', 'claude-sonnet-5-5'),
+    /** DESIGN_CRITIQUE=0 turns the critique pass off (the director still runs). */
+    critique: str('DESIGN_CRITIQUE', '1') !== '0',
     fixtures: str('CLAUDE_FIXTURES') === '1',
     /** USD per million tokens, for the claude_calls cost column. */
     prices: {

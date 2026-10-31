@@ -1,0 +1,10 @@
+{
+  "layout": "B",
+  "text_position": "bottom",
+  "text_side": "left",
+  "band_strength": 0.95,
+  "type_scale": 1.1,
+  "crop_focus_y": 0.42,
+  "lift_tone": false,
+  "rationale": "Fixture: the whole photo with the text low on the left, type enlarged for a short headline."
+}

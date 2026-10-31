@@ -75,6 +75,7 @@ export const getDay = (dayNo: number) => apiFetch<DayResponse>(`/api/day/${dayNo
 export const getStatus = () => apiFetch<StatusResponse>('/api/status');
 
 export const answerQuestion = (id: number, answer: string) => post<{ ok: true; message: string }>(`/api/questions/${id}/answer`, { answer });
+export const chooseWording = (dayNo: number, setId: number, index: number) => post<{ ok: true; message: string }>(`/api/rows/${dayNo}/wording`, { setId, index });
 export const markPosted = (dayNo: number) => post<{ ok: true }>(`/api/rows/${dayNo}/status`, { status: 'posted' });
 export const skipDay = (dayNo: number, mode: 'push-all' | 'just-this') => post<{ ok: true; date: string }>(`/api/rows/${dayNo}/skip`, { mode });
 export const pushDay = (dayNo: number, days: number) => post<{ ok: true; date: string }>(`/api/rows/${dayNo}/push`, { days });

@@ -4,10 +4,28 @@
   "line": "Smoked. Grilled. Rooted in tradition.",
   "caption": "Fresh from the fire and the karahi at Fuadijan, Auburn.",
   "cta": "Come by and see for yourself.",
-  "hashtags": ["#Fuadijan", "#AuburnEats", "#SydneyFood"],
+  "hashtags": [
+    "#Fuadijan",
+    "#AuburnEats",
+    "#SydneyFood"
+  ],
   "alt_text": "A dish from Fuadijan on a dark background.",
   "story_text": "Question sticker: What should we cook next?",
   "facebook_caption": "Fresh from the fire and the karahi at Fuadijan, Auburn. Come by and see for yourself.",
   "on_screen_text": [],
-  "unresolved": []
+  "unresolved": [],
+  "variants": [
+    {
+      "name": "Short and punchy",
+      "headline": "Fire.\nTradition.",
+      "line": "Charcoal BBQ and karahi, Auburn.",
+      "caption": "Charcoal BBQ and karahi, fresh at Fuadijan, Auburn."
+    },
+    {
+      "name": "Warm and story-led",
+      "headline": "Rooted in\ntradition",
+      "line": "Smoked and grilled the way our families always have.",
+      "caption": "Smoked, grilled and cooked the way our families always have. Fuadijan, Auburn."
+    }
+  ]
 }
