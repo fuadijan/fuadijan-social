@@ -86,6 +86,16 @@ size. Everything else is already paid for (GoDaddy domain, Vercel hub, Anthropic
 3. Wait for Railway to show the certificate as issued (minutes to an hour). `https://social.nutrimeals.au/health`
    must answer `{"ok":true,"hub":true,...}`.
 
+## 3b. The front door is a Vercel proxy (since 31 Oct 2026)
+
+Railway never bound `social.nutrimeals.au` (edge 404 with the fallback certificate for over a day, support ticket
+suggested). Instead, the Vercel project `fuadijan-social-proxy` (folder `deploy/vercel-proxy`, one `vercel.json`
+rewrite) serves the hostname and forwards every request to the Railway service's generated domain. GoDaddy's
+`social` CNAME points at `eefed0b44e5bea0e.vercel-dns-017.com`; the certificate was issued with
+`vercel certs issue social.nutrimeals.au`. The hub cookie works because the browser still sees `social.nutrimeals.au`.
+Large photo uploads should go through Telegram (Vercel caps proxied request bodies). If Railway ever binds the
+domain, the CNAME can go back to `sd9gqk3y.up.railway.app`; nothing in the app changes either way.
+
 ## 4. Seed the calendar
 
 From this PC, against the Railway database, once. Postgres is private by default: on its card → Settings →
