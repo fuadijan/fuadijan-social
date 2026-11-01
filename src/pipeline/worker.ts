@@ -37,9 +37,11 @@ export async function receiveAsset(db: pg.Pool, input: IncomingAsset, note?: str
 export async function redoRow(db: pg.Pool, rowId: number, note: string | null): Promise<Job | null> {
   const asset = (await db.query<Asset>('select * from assets where calendar_row_id = $1 and prepped is not null order by created_at desc limit 1', [rowId])).rows[0]
     ?? (await db.query<Asset>('select * from assets where calendar_row_id = $1 order by created_at desc limit 1', [rowId])).rows[0];
+  // The upright JPEG the intake made for this photo, so the redo designs from the same picture, the same way up.
+  const prior = asset ? (await db.query<{ jpeg: string | null }>("select state->>'jpegFileId' jpeg from jobs where asset_id = $1 and state ? 'jpegFileId' order by id desc limit 1", [asset.id])).rows[0] : undefined;
   const job = (await db.query<Job>(
     "insert into jobs (asset_id, calendar_row_id, stage, status, state) values ($1, $2, 'resolve', 'queued', $3) returning *",
-    [asset?.id ?? null, rowId, JSON.stringify({ note, redo: true })])).rows[0]!;
+    [asset?.id ?? null, rowId, JSON.stringify({ note, redo: true, jpegFileId: prior?.jpeg ?? undefined })])).rows[0]!;
   return job;
 }
 

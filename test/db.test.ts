@@ -265,10 +265,12 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     // Picking the new wording renders with it.
     await applyAnswer(ctx, open[0]!.id, '1', 'dry-run');
     await new Worker(ctx, 1000).drain();
-    const job = (await pool.query<{ state: { copy: { headline: string }; wordingChosen: number } }>(
+    const job = (await pool.query<{ state: { copy: { headline: string }; wordingChosen: number; jpegFileId?: string } }>(
       "select state from jobs where calendar_row_id = $1 and state ? 'redo' order by id desc limit 1", [row.id])).rows[0]!;
     expect(job.state.copy.headline).toBe('Fuadijan\nAuburn');
     expect(job.state.wordingChosen).toBe(0);
+    // The redo designs from the intake's upright JPEG, not the raw original.
+    expect(job.state.jpegFileId).toBeTruthy();
     expect((await openQuestions(pool, row.id))).toHaveLength(0);
   });
 

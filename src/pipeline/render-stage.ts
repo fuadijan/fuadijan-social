@@ -11,7 +11,7 @@ import type { CalendarRow } from '../calendar/rows.js';
 import { getFile, putFile } from '../files.js';
 import { analyzePhoto, type PhotoStats } from '../images/analyze.js';
 import { cutoutFrom, cutoutUsable, removerFromConfig, type BackgroundRemover } from '../images/cutout.js';
-import { cropAround, regionAround, thumbnail } from '../images/prep.js';
+import { cropAround, regionAround, thumbnail, upright } from '../images/prep.js';
 import type { Critique, DesignSpec, MatchResult } from '../brain/schemas.js';
 import { loadBrand } from '../render/brand.js';
 import type { Cutout } from '../render/compose.js';
@@ -38,11 +38,22 @@ function getRemover(log: StageContext['log']): BackgroundRemover | null {
 
 export interface CutoutResult { cutout: Cutout | null; coverage: number | null }
 
+/**
+ * The photo a design is made from: the upright JPEG the intake stored, or, when a job carries none (a redo of an
+ * older row), the original set upright. The original may still hold the camera's orientation tag, which the
+ * compositing ignores.
+ */
+async function sourcePhoto(ctx: StageContext, jpegFileId: string | null | undefined, originalId: string | null | undefined): Promise<{ bytes: Buffer; mime: string } | null> {
+  const f = await getFile(ctx.pool, jpegFileId ?? originalId ?? '');
+  if (!f) return null;
+  return jpegFileId ? f : { ...f, bytes: await upright(f.bytes, f.mime) };
+}
+
 export async function cutoutForAsset(ctx: StageContext, asset: Asset, jpegFileId: string | null, read: MatchResult | null): Promise<CutoutResult> {
   const r = getRemover(ctx.log);
   if (!r || r.name === 'none') return { cutout: null, coverage: null };
   const brand = loadBrand();
-  const original = await getFile(ctx.pool, jpegFileId ?? asset.original_file_id ?? '');
+  const original = await sourcePhoto(ctx, jpegFileId, asset.original_file_id);
   if (!original) return { cutout: null, coverage: null };
   try {
     // Segment the region around the dish, not the whole scene, so the plate (not the bread basket) is the subject.
@@ -148,7 +159,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   spec = feasible(spec);
   const source = locked.length ? 'owner' : directed.source;
 
-  const original = ctx.job.state.jpegFileId || hero.original_file_id ? (await getFile(ctx.pool, ctx.job.state.jpegFileId ?? hero.original_file_id!))?.bytes ?? null : null;
+  const original = (await sourcePhoto(ctx, ctx.job.state.jpegFileId, hero.original_file_id))?.bytes ?? null;
   const dish = read?.dish_canonical ?? row.dish;
 
   /** Layout A, poster and flat need the cutout; without one they become B / band. */

@@ -40,6 +40,16 @@ export async function decode(bytes: Buffer, mime?: string | null, filename?: str
   return { jpeg, width: meta.width ?? 0, height: meta.height ?? 0 };
 }
 
+/**
+ * A stored original set the right way up: an upright JPEG comes back as it is; anything with a camera orientation
+ * tag (or a HEIC) is decoded like the intake does, so a design never shows a phone photo on its side.
+ */
+export async function upright(bytes: Buffer, mime?: string | null): Promise<Buffer> {
+  const meta = await sharp(bytes, { failOn: 'none' }).metadata().catch(() => null);
+  if (meta?.format === 'jpeg' && (meta.orientation ?? 1) === 1) return bytes;
+  return (await decode(bytes, mime)).jpeg;
+}
+
 export async function measure(jpeg: Buffer): Promise<Quality> {
   const meta = await sharp(jpeg).metadata();
   const width = meta.width ?? 0;
