@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { getStrategy } from '../api';
-import { Card, PageHeader } from '../components/fj';
+import { getStrategy, seedStrategyPlan } from '../api';
+import { Button, Card, PageHeader } from '../components/fj';
 import { ErrorCard, Loading } from '../components/States';
-import type { Strategy as StrategyData } from '../types';
+import type { SeedPlanResponse, Strategy as StrategyData } from '../types';
 import { useApi } from '../useApi';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -30,11 +30,40 @@ function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
 }
 
 function Plan({ s, today }: { s: StrategyData; today: string }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<SeedPlanResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function seed() {
+    if (!window.confirm(`Make this the month's plan?\n\nDays that already have a photo, or are past "planned", stay as they are; the other days take the strategy's dish, template, caption and dates. Fields you edited are never overwritten.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await seedStrategyPlan());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Card title={`Content plan · ${fmtDay(s.plan.from)} – ${fmtDay(s.plan.to)}`}>
       <div className="sa-note" style={{ marginBottom: 10 }}>
-        Four themed weeks, one post a day, Stories every day. The workbook built from this plan is <code>calendar/Fuadijan-Strategy-2026-11.xlsx</code>; seeding it makes it the month's plan and the designs are made from it as photos arrive.
+        Four themed weeks, one post a day, Stories every day. Making it the month's plan writes these days into the calendar; the designs are then made from them as photos arrive.
       </div>
+      <div className="sa-actions" style={{ marginBottom: 12 }}>
+        <Button variant="primary" disabled={busy} onClick={() => void seed()}>{busy ? 'Writing the plan…' : "Make this the month's plan"}</Button>
+        <Link to="/month" className="sa-chip">See the month</Link>
+      </div>
+      {result ? (
+        <div className="sa-result" role="status" style={{ marginBottom: 12 }}>
+          Plan {result.plan}: {result.inserted} day{result.inserted === 1 ? '' : 's'} added, {result.updated} updated
+          {result.kept.length ? `, ${result.kept.length} left as they were (started): Day ${result.kept.join(', ')}` : ''}
+          {result.protectedFields.length ? `; ${result.protectedFields.length} edited field${result.protectedFields.length === 1 ? '' : 's'} kept` : ''}.
+        </div>
+      ) : null}
+      {error ? <div className="sa-result sa-result--error" role="alert" style={{ marginBottom: 12 }}>{error}</div> : null}
       <Table head={['Week', 'Theme', 'Goal']} rows={s.plan.weeks.map((w) => [`${w.week} · ${w.dates}`, w.theme, w.goal])} />
       <ul className="sa-plan">
         {s.plan.days.map((d) => (

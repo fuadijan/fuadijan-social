@@ -255,6 +255,26 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     return { today, strategy, todayRituals: ritualsOn(strategy, today).map((r) => r.name), runningEvents: eventsOn(strategy, today).map((e) => e.name), wordingsInBank: wordings };
   });
 
+  /**
+   * Makes the strategy's 30-day plan the month's calendar: the same seed as the workbook, run in-process, with the
+   * dates as written (no CALENDAR_START shift) and every day that has started (a photo received, or past
+   * "planned") left as it is. Owner-edited fields stay protected as always.
+   */
+  app.post('/api/strategy/seed', async (_req, reply) => {
+    let strategy;
+    try {
+      strategy = loadStrategy();
+    } catch (e) {
+      return reply.code(404).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    const { strategyRows } = await import('../../calendar/strategy-workbook.js');
+    const { seedRows } = await import('../../calendar/seed.js');
+    const { cleanRow } = await import('../../calendar/calendar.schema.js');
+    const rows = strategyRows(strategy).map((r, i) => cleanRow(r, i + 1));
+    const result = await seedRows(ctx.pool, rows, rows[0]!.date, { keepStarted: true });
+    return { ok: true, ...result };
+  });
+
   // ─── the wording bank (slogans): one product, many wordings ───────────────────────────────────────────
 
   const wordingJson = (s: Slogan) => ({ id: s.id, item: s.item, itemKey: s.item_key, headline: s.headline, line: s.line, caption: s.caption, source: s.source });

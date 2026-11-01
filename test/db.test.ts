@@ -286,6 +286,26 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(messenger.sent.some((m) => /^Got it — .*Day 3/.test(m.text ?? ''))).toBe(true);
   });
 
+  it('lays the strategy plan over the running month, leaving started days alone', async () => {
+    const { strategyRows } = await import('../calendar/strategy-workbook.js');
+    const { cleanRow } = await import('../calendar/calendar.schema.js');
+    const { loadStrategy } = await import('../src/strategy.js');
+    const rows = strategyRows(loadStrategy()).map((r, i) => cleanRow(r, i + 1));
+    const day2Before = (await rowByDay(pool, 2))!;
+    const day9Before = (await rowByDay(pool, 9))!;
+    const res = await seedRows(pool, rows, rows[0]!.date, { keepStarted: true });
+    expect(res.plan).toBe('2026-11');
+    expect(res.inserted).toBe(0);
+    // Day 2 (photo received, posted) and Day 3 (photo received) stay; Day 9 takes the strategy's row as written.
+    expect(res.kept).toEqual(expect.arrayContaining([2, 3]));
+    expect(await rowByDay(pool, 2)).toMatchObject({ dish: day2Before.dish, date: day2Before.date, template: day2Before.template });
+    const day9 = (await rowByDay(pool, 9))!;
+    expect(day9.date).toBe('2026-11-10');
+    expect(day9).toMatchObject({ slot: 'carousel', dish: 'Chicken Karahi', template: 'audience-poll', theme: 'Karahi Week' });
+    expect(day9.date).not.toBe(day9Before.date);
+    expect((await rowByDay(pool, 10))).toMatchObject({ date: '2026-11-11', type: 'karahi-night', post_time: '17:00' });
+  });
+
   it('seeds the strategy wordings into the bank once, however often it runs', async () => {
     const { seedStrategyWordings, strategyWordings, loadStrategy } = await import('../src/strategy.js');
     const before = Number((await pool.query("select count(*)::int n from slogans where source = 'strategy'")).rows[0]!.n);

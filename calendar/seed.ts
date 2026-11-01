@@ -58,6 +58,13 @@ export interface SeedResult {
   inserted: number;
   updated: number;
   protectedFields: { day_no: number; field: string }[];
+  /** Days left as they were because they had started (a photo received, or no longer "planned"); keepStarted only. */
+  kept: number[];
+}
+
+export interface SeedOptions {
+  /** Leave a day alone when its row already has a photo or has moved past "planned": a plan laid over a running month. */
+  keepStarted?: boolean;
 }
 
 /** The plan a workbook belongs to: the month of its first date. */
@@ -68,12 +75,12 @@ export const planOf = (firstDate: string): string => firstDate.slice(0, 7);
  * offset only when it falls in the same month as the sheet's first date (the first month's workbook was written
  * with a sample start); a workbook for another month is taken as written.
  */
-export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: string = config.calendarStart): Promise<SeedResult> {
+export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: string = config.calendarStart, opts: SeedOptions = {}): Promise<SeedResult> {
   if (!rows.length) throw new Error('No rows to seed.');
   for (const r of rows) templateKeyFor(r.template); // throws on an unmapped template
   const offset = planOf(rows[0]!.date) === planOf(calendarStart) ? daysBetween(rows[0]!.date, calendarStart) : 0;
   const plan = planOf(offset ? addDays(rows[0]!.date, offset) : rows[0]!.date);
-  const result: SeedResult = { plan, inserted: 0, updated: 0, protectedFields: [] };
+  const result: SeedResult = { plan, inserted: 0, updated: 0, protectedFields: [], kept: [] };
   await inTransaction(pool, async (c) => {
     for (const r of rows) {
       const date = offset ? addDays(r.date, offset) : r.date;
@@ -89,6 +96,14 @@ export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: s
           [plan, r.day_no, date, r.slot, r.type, r.dish, r.theme, r.caption_hint, r.post_time, r.template, r.status, r.asset, r.objective, r.creative_instructions, r.on_screen_text, r.caption, r.cta, r.hashtags, r.story_ideas, r.confirmation_notes]);
         result.inserted++;
         continue;
+      }
+      if (opts.keepStarted) {
+        const started = existing.status !== 'planned'
+          || Number((await c.query<{ n: string }>('select count(*) n from assets where calendar_row_id = $1', [existing.id])).rows[0]!.n) > 0;
+        if (started) {
+          result.kept.push(r.day_no);
+          continue;
+        }
       }
       const edited = new Set((await c.query<{ field: string }>("select distinct field from calendar_edits where row_id = $1 and source <> 'seed'", [existing.id])).rows.map((x) => x.field));
       let changed = false;
