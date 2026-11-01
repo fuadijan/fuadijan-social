@@ -42,6 +42,8 @@ describe('the marketing strategy as data', () => {
   it('picks hashtag sets from the post\'s words, core first', () => {
     expect(hashtagsFor(s, ['Chicken Karahi'])).toEqual(['#Fuadijan', '#AuburnEats', '#HalalSydney', '#Karahi', '#ChickenKarahi']);
     expect(hashtagsFor(s, ['Exam fuel', 'student'])).toContain('#SydneyStudents');
+    expect(hashtagsFor(s, ['Carrot Juice'])).toContain('#FreshJuice');
+    expect(hashtagsFor(s, ['Gulab Jamun'])).toContain('#GulabJamun');
     expect(hashtagsFor(s, ['something else'])).toEqual(['#Fuadijan', '#AuburnEats', '#HalalSydney']);
   });
 

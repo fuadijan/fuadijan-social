@@ -22,6 +22,11 @@ describe('/custom from Telegram', () => {
   it('picks the karahi series for a karahi and matches a product to its earlier photos', () => {
     expect(defaultTemplate('Chicken Karahi')).toMatch(/karahi/);
     expect(defaultTemplate('Chapli Kebab')).not.toMatch(/karahi/);
+    expect(defaultTemplate('Carrot Juice', 'Beverages')).toBe('fresh-pour');
+    expect(defaultTemplate('Mango Lassi')).toBe('fresh-pour');
+    expect(defaultTemplate('Gulab Jamun', 'Sweets')).toBe('save-room');
+    expect(defaultTemplate('Lamb Karahi', 'Karahis & Curries')).toMatch(/karahi/);
+    expect(defaultTemplate('Lamb Burger', 'Burgers, Wraps & Snacks')).toBe('modern-fuadijan');
     const photos = [
       { assetId: 1, thumb: null, caption: 'chapli kebab #day2', dayNo: 2, dish: 'Chapli Kebab', createdAt: new Date() },
       { assetId: 2, thumb: null, caption: 'karahi', dayNo: 4, dish: 'Chicken Karahi', createdAt: new Date() },

@@ -172,6 +172,8 @@ export function placeholders(row: Pick<CalendarRow, 'dish' | 'caption' | 'cta' |
 export function seriesLabel(row: Pick<CalendarRow, 'template' | 'theme' | 'type'>): string {
   const t = `${row.template} ${row.theme ?? ''} ${row.type}`.toLowerCase();
   if (t.includes('karahi')) return 'FROM THE KARAHI';
+  if (/juice|lassi|chai|shake|drink|beverage|pour|soda|cola/.test(t)) return 'FRESH POUR';
+  if (/kheer|gulab|jamun|dessert|sweet|save-room|save room|mithai/.test(t)) return 'SAVE ROOM';
   if (t.includes('fire') || t.includes('bbq') || t.includes('seek') || t.includes('tikka') || t.includes('snack')) return 'FROM THE FIRE';
   if (t.includes('modern') || t.includes('shami') || t.includes('teaser') || t.includes('reveal')) return 'MODERN FUADIJAN';
   if (t.includes('behind') || t.includes('team') || t.includes('people') || t.includes('community') || t.includes('auburn')) return 'BEHIND FUADIJAN';

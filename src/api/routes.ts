@@ -16,7 +16,7 @@ import { openQuestions } from '../pipeline/questions.js';
 import { allCopyOptions, copyOptionsById, markChosen, rerenderWithWording } from '../pipeline/wording.js';
 import { adoptAsset, createCustomPost, parseCustomInput, recentPhotos } from '../pipeline/custom.js';
 import { rowViews, type RowView } from '../reminders/brief.js';
-import { heroTemplates } from '../render/registry.js';
+import { heroTemplates, suggestedTemplate } from '../render/registry.js';
 import { STYLE_KEYS, STYLES } from '../render/styles.js';
 import { allSettings } from '../settings.js';
 import { addSlogan, itemKey, listSlogans, removeSlogan, updateSlogan, type Slogan } from '../slogans.js';
@@ -187,7 +187,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
   // ─── the Create flow: a custom design ──────────────────────────────────────────────────────────────────
 
   /** Menu items plus every item in the wording bank, with how many wordings each has. */
-  async function products(): Promise<{ name: string; category: string | null; wordings: number }[]> {
+  async function products(): Promise<{ name: string; category: string | null; wordings: number; template: string }[]> {
     let menu: { name: string; category: string | null }[] = [];
     try {
       menu = (await ctx.menu.get()).items.filter((i) => !i.soldOut).map((i) => ({ name: i.name, category: i.category }));
@@ -201,9 +201,9 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       counts.set(s.item_key, (counts.get(s.item_key) ?? 0) + 1);
       names.set(s.item_key, s.item);
     }
-    const out = new Map<string, { name: string; category: string | null; wordings: number }>();
-    for (const m of menu) out.set(itemKey(m.name), { name: m.name, category: m.category, wordings: counts.get(itemKey(m.name)) ?? 0 });
-    for (const [k, name] of names) if (!out.has(k)) out.set(k, { name, category: null, wordings: counts.get(k) ?? 0 });
+    const out = new Map<string, { name: string; category: string | null; wordings: number; template: string }>();
+    for (const m of menu) out.set(itemKey(m.name), { name: m.name, category: m.category, wordings: counts.get(itemKey(m.name)) ?? 0, template: suggestedTemplate(m.name, m.category) });
+    for (const [k, name] of names) if (!out.has(k)) out.set(k, { name, category: null, wordings: counts.get(k) ?? 0, template: suggestedTemplate(name) });
     return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 

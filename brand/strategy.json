@@ -43,7 +43,9 @@
     { "dish": "Seekh Kebab", "role": "Grill star", "why": "Skewer-on-flame shots; platter staple" },
     { "dish": "Lamb Karahi", "role": "Premium", "why": "Higher ticket; family feasts and Eid" },
     { "dish": "Shami Kebab", "role": "Supporting", "why": "Snack and Ramadan iftar item" },
-    { "dish": "Burgers", "role": "Bridge", "why": "Gets non-Pakistani, younger and student customers through the door" }
+    { "dish": "Burgers", "role": "Bridge", "why": "Gets non-Pakistani, younger and student customers through the door" },
+    { "dish": "Carrot & sugarcane juice", "role": "Pairing", "why": "The drink beside the plate and a Story of its own; carries the FRESH POUR series with lassi and chai" },
+    { "dish": "Gulab jamun & kheer", "role": "Finish", "why": "How a family table ends; small, photogenic, easy to add to any order; the SAVE ROOM series" }
   ],
   "segments": [
     { "segment": "Pakistani & South Asian diaspora", "want": "Taste of home, authenticity, Ramadan/Eid", "message": "Just like back home", "channels": "Facebook, Instagram, WhatsApp groups, mosques" },
@@ -65,7 +67,8 @@
     "review": "\"[short review line]\" — [Name], ⭐⭐⭐⭐⭐. Thank you! Come try the [dish] they're talking about.",
     "behindTheScenes": "It's [time] and we're already [prep task]. That's why it tastes like this. #FuadijanKitchen",
     "question": "Settle this: [A] or [B]? Wrong answers only 😄",
-    "offer": "[Offer] — [days/times only]. Show this post or order direct at fuadijan.com.au."
+    "offer": "[Offer] — [days/times only]. Show this post or order direct at fuadijan.com.au.",
+    "pairing": "[Drink or sweet] with [dish]: [one line on why they go together]. Ask for it with your order."
   },
   "hashtagSets": {
     "core": { "when": "always", "tags": ["#Fuadijan", "#AuburnEats", "#HalalSydney", "#PakistaniFood", "#SydneyFood"] },
@@ -74,7 +77,9 @@
     "halal": { "when": "halal promise, Ramadan, Eid", "tags": ["#HalalFood", "#HalalEats", "#SydneyHalal", "#MuslimSydney", "#HalalFoodie"] },
     "local": { "when": "community, parking, the space, Auburn", "tags": ["#WesternSydney", "#ParramattaRoad", "#AuburnNSW", "#SydneyEats", "#WesternSydneyFood"] },
     "student": { "when": "student deals, exams, uni", "tags": ["#SydneyStudents", "#CheapEatsSydney", "#UniLife", "#StudentDeals"] },
-    "family": { "when": "family feasts, platters, kids", "tags": ["#FamilyDinnerSydney", "#FamilyFeast", "#SydneyFamilies"] }
+    "family": { "when": "family feasts, platters, kids", "tags": ["#FamilyDinnerSydney", "#FamilyFeast", "#SydneyFamilies"] },
+    "drinks": { "when": "drink, drinks, juice, lassi, chai, shakes, sugarcane, carrot, mocktail", "tags": ["#FreshJuice", "#SugarcaneJuice", "#MangoLassi", "#DesiDrinks", "#SydneyDrinks"] },
+    "sweets": { "when": "sweet, sweets, kheer, gulab jamun, dessert, mithai", "tags": ["#GulabJamun", "#Kheer", "#PakistaniSweets", "#SydneyDesserts", "#Mithai"] }
   },
   "rituals": [
     { "name": "Karahi Night", "item": "Karahi Night", "when": "Every Wednesday, 5–10pm", "weekday": 3, "offer": "Free naan basket with any full karahi, or $X off large karahi", "measure": "Karahi units sold on Wednesdays vs previous 4 Wednesdays" },
@@ -104,7 +109,12 @@
     { "name": "Eid Mubarak", "item": "Eid", "headline": "Eid\nMubarak", "line": "From our table to yours · Eid feasts & catering", "visual": "Crescent over karahi, green and gold" },
     { "name": "Winter BBQ Festival", "item": "Winter BBQ Festival", "headline": "Winter BBQ\nFestival", "line": "Two weeks of grill specials · July", "visual": "Glowing skewers, smoke, night-blue sky" },
     { "name": "Review wall", "item": "Reviews", "headline": "4.8★ and\ncounting", "line": "Thank you, Auburn [verify the live rating first]", "visual": "Grid of short real review quotes, 4.8★ large" },
-    { "name": "Catering", "item": "Catering", "headline": "We\ncater", "line": "Eid, weddings, mosques, offices · [phone]", "visual": "Trays of tikka and karahi on a long table" }
+    { "name": "Catering", "item": "Catering", "headline": "We\ncater", "line": "Eid, weddings, mosques, offices · [phone]", "visual": "Trays of tikka and karahi on a long table" },
+    { "name": "Fresh pour", "item": "Carrot Juice", "headline": "Poured cold.\nDrunk fast.", "line": "Carrot juice beside the plate.", "visual": "Tall glass of carrot juice, bright orange on Night, condensation; a chapli plate soft behind" },
+    { "name": "Sugarcane", "item": "Sugarcane Juice", "headline": "Sugarcane,\nover ice", "line": "The grill's best friend.", "visual": "Pale green juice in a tall glass, ice, a length of cane beside it on Cream" },
+    { "name": "Lassi", "item": "Mango Lassi", "headline": "Cool the\nkarahi down", "line": "Mango lassi, thick and cold.", "visual": "Lassi in a tall glass next to a karahi: steam on one side, condensation on the other" },
+    { "name": "Save room", "item": "Gulab Jamun", "headline": "Save\nroom.", "line": "Gulab jamun, in syrup.", "visual": "Two jamun in a Cream bowl on Night, syrup catching the light, a spoon ready" },
+    { "name": "Kheer", "item": "Kheer", "headline": "The sweet\nfinish", "line": "Kheer, by the bowl, for the table.", "visual": "Small bowls of kheer down a dark table, nuts scattered, hands reaching in" }
   ],
   "captions": [
     { "name": "Chicken Karahi", "item": "Chicken Karahi", "headline": "Cooked fresh\nwhen you order", "line": "Tomatoes, ginger, green chilli, and a wok that's seen a thousand Friday nights.", "caption": "Tomatoes, ginger, green chilli, and a wok that's seen a thousand Friday nights. Our Chicken Karahi is cooked fresh when you order — never sitting in a tray. 100% halal.", "hashtags": "#ChickenKarahi #HalalSydney #AuburnEats" },
@@ -116,12 +126,16 @@
     { "name": "Student", "item": "Student Combo", "headline": "Exams are hard.\nDinner shouldn't be.", "line": "Student combo, Tuesdays, with student ID.", "caption": "Exams are hard. Dinner shouldn't be. Student combo: [item] + chips + drink for $[X] with student ID, Tuesdays.", "hashtags": "#SydneyStudents #CheapEatsSydney #UniLife" },
     { "name": "Halal promise", "item": "Halal", "headline": "Our halal\npromise", "line": "100% halal meat from certified suppliers — always.", "caption": "Our halal promise: 100% halal meat from certified suppliers — always. Certificates on display in store and in our Halal highlight. Eat with peace of mind.", "hashtags": "#HalalFood #SydneyHalal #MuslimSydney" },
     { "name": "Behind the scenes", "item": "Behind Fuadijan", "headline": "There isn't\na shortcut", "line": "The marinade's been going since last night; the grill's warming up.", "caption": "9am. The marinade's been going since last night, the grill's warming up, and the naan dough is resting. That's the secret — there isn't a shortcut.", "hashtags": "#FuadijanKitchen #PakistaniFood" },
-    { "name": "Burger bridge", "item": "Burgers", "headline": "Karahi for you,\nburger for them", "line": "Not everyone at the table wants karahi — and that's fine.", "caption": "Not everyone at the table wants karahi — and that's fine. Our [burger name]: [patty], [sauce], toasted bun, 100% halal. Karahi for you, burger for them.", "hashtags": "#HalalBurger #AuburnEats #SydneyEats" }
+    { "name": "Burger bridge", "item": "Burgers", "headline": "Karahi for you,\nburger for them", "line": "Not everyone at the table wants karahi — and that's fine.", "caption": "Not everyone at the table wants karahi — and that's fine. Our [burger name]: [patty], [sauce], toasted bun, 100% halal. Karahi for you, burger for them.", "hashtags": "#HalalBurger #AuburnEats #SydneyEats" },
+    { "name": "Fresh pour", "item": "Carrot Juice", "headline": "Poured cold.\nDrunk fast.", "line": "Carrot juice beside the plate.", "caption": "Carrot juice, poured cold, beside a plate from the grill. Ask for it with your order, or on its own at the counter.", "hashtags": "#FreshJuice #CarrotJuice #AuburnEats" },
+    { "name": "Save room", "item": "Gulab Jamun", "headline": "Save\nroom.", "line": "Gulab jamun, in syrup.", "caption": "Gulab jamun in syrup: how the family table ends. Add it to any order, and share it if you can.", "hashtags": "#GulabJamun #SydneyDesserts #PakistaniSweets" }
   ],
   "photoPrompts": [
     "Tikka skewers on the grill, flame rising behind, shallow depth of field.",
     "Karahi in its wok on a dark table, steam lit from the side, coriander and ginger julienne on top.",
     "Chapli kebab broken in half, showing the texture, tomato slice and pomegranate visible.",
+    "A tall glass of carrot or sugarcane juice, condensation on the glass, beside a plate from the grill.",
+    "Gulab jamun or kheer in a small bowl at the end of a table, the empty plates behind it.",
     "Top-down family spread: two karahis, platter, naan basket, raita, salad, six hands reaching in.",
     "Burger cross-section with cheese pull, on brown paper.",
     "Owner portrait at the grill, warm light, looking at the food not the camera.",

@@ -9,6 +9,7 @@ import * as fmt from './formats.js';
 import { answerQuestion, askQuestion, latestOpenQuestion, openQuestions, questionById, resolveAnswer, setQuestionMessageId } from '../pipeline/questions.js';
 import { resendPack } from '../pipeline/stages.js';
 import { CUSTOM_USAGE, adoptAsset, createCustomPost, defaultTemplate, parseCustomCommand, parseCustomInput, photosOf, recentPhotos } from '../pipeline/custom.js';
+import { findItem } from '../menu/source.js';
 import { redoRow } from '../pipeline/worker.js';
 import { allCopyOptions, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
 import { addSlogan, listSlogans, removeSlogan, slogansByItem } from '../slogans.js';
@@ -195,7 +196,13 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       }
       let input;
       try {
-        input = parseCustomInput({ ...cmd, template: defaultTemplate(cmd.product), wording, sloganId, postTime: cmd.postTime ?? (await getSetting(pool, 'post_time_default')) ?? '18:00' });
+        let category: string | null = null;
+        try {
+          category = findItem(await app.menu.get(), cmd.product)?.category ?? null;
+        } catch {
+          // No menu right now: the product's name decides the series.
+        }
+        input = parseCustomInput({ ...cmd, template: defaultTemplate(cmd.product, category), wording, sloganId, postTime: cmd.postTime ?? (await getSetting(pool, 'post_time_default')) ?? '18:00' });
       } catch (e) {
         return void say(e instanceof Error ? e.message : String(e));
       }

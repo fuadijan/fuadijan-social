@@ -10,7 +10,7 @@
 import type { Db } from '../db/pool.js';
 import type { ResolvedCopy } from '../brain/schemas.js';
 import { currentPlan, recordEdit, rowById, type CalendarRow, type CustomSpec, type CustomWording } from '../calendar/rows.js';
-import { heroTemplates, templateEntry } from '../render/registry.js';
+import { heroTemplates, suggestedTemplate, templateEntry } from '../render/registry.js';
 import type { RenderOutput } from '../render/index.js';
 import { STYLE_KEYS, styleFromNote, type Style } from '../render/styles.js';
 import { addDays, sydneyDate, type IsoDate } from '../time.js';
@@ -80,10 +80,8 @@ export async function createCustomPost(db: Db, input: CustomInput, today: IsoDat
 }
 
 /** The series for a custom post made without picking one: the karahi template for a karahi, else the first. */
-export function defaultTemplate(product: string): string {
-  const all = heroTemplates();
-  const karahi = /karahi/i.test(product) ? all.find((t) => /karahi/i.test(t.label)) : null;
-  return (karahi ?? all[0])!.template;
+export function defaultTemplate(product: string, category?: string | null): string {
+  return suggestedTemplate(product, category);
 }
 
 /** What `/custom …` says, read from the one line: the product, and any of a style, feed/story, a date, a time, and after `--` the wording. */

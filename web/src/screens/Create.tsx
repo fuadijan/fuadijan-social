@@ -57,7 +57,7 @@ function ProductStep({ opts, value, onChange }: { opts: CreateOptions; value: st
   );
 }
 
-function SeriesStep({ opts, value, onChange }: { opts: CreateOptions; value: string; onChange: (v: string) => void }) {
+function SeriesStep({ opts, value, suggested, onChange }: { opts: CreateOptions; value: string; suggested?: string; onChange: (v: string) => void }) {
   const styleName = (k: StyleKey | null) => opts.styles.find((s) => s.key === k)?.name;
   return (
     <Card title="2 · Which series?">
@@ -65,7 +65,7 @@ function SeriesStep({ opts, value, onChange }: { opts: CreateOptions; value: str
       <ul className="sa-options" role="radiogroup" aria-label="Series">
         {opts.templates.map((t) => (
           <Option key={t.template} on={value === t.template} onPick={() => onChange(t.template)} title={t.label}
-            sub={[t.template, t.footer === 'address' ? 'address in the footer' : 'brand line in the footer', t.style ? `prefers ${styleName(t.style)}` : null].filter(Boolean).join(' · ')} />
+            sub={[t.template, t.footer === 'address' ? 'address in the footer' : 'brand line in the footer', t.style ? `prefers ${styleName(t.style)}` : null, t.template === suggested ? 'suggested for this product' : null].filter(Boolean).join(' · ')} />
         ))}
       </ul>
     </Card>
@@ -244,6 +244,14 @@ export function Create() {
   const canGenerate = ready.every(Boolean);
   const styleName = style === 'auto' ? 'art director’s choice' : opts.styles.find((s) => s.key === style)?.name ?? style;
   const seriesLabel = opts.templates.find((t) => t.template === template)?.label ?? '';
+  const suggestionFor = (name: string) => opts.products.find((p) => key(p.name) === key(name))?.template ?? '';
+  // Picking a product suggests its series (a drink pours, a sweet saves room); a series you chose yourself stays.
+  function pickProduct(name: string) {
+    const previous = suggestionFor(product);
+    setProduct(name);
+    const next = suggestionFor(name);
+    if (next && (!template || template === previous)) setTemplate(next);
+  }
 
   async function generate() {
     if (!canGenerate || !photo) return;
@@ -281,8 +289,8 @@ export function Create() {
         })}
       </div>
       <div className="sa-stack">
-        {step === 0 ? <ProductStep opts={opts} value={product} onChange={(v) => { setProduct(v); if (wording?.kind === 'bank') setWording(null); }} /> : null}
-        {step === 1 ? <SeriesStep opts={opts} value={template} onChange={setTemplate} /> : null}
+        {step === 0 ? <ProductStep opts={opts} value={product} onChange={(v) => { pickProduct(v); if (wording?.kind === 'bank') setWording(null); }} /> : null}
+        {step === 1 ? <SeriesStep opts={opts} value={template} suggested={suggestionFor(product)} onChange={setTemplate} /> : null}
         {step === 2 ? <WordingStep product={product} bank={wordings} value={wording} onChange={setWording} /> : null}
         {step === 3 ? <StyleStep opts={opts} template={template} value={style} onChange={setStyle} /> : null}
         {step === 4 ? <OutputStep opts={opts} formats={formats} date={theDate} time={time} onFormats={setFormats} onDate={setDate} onTime={setTime} /> : null}

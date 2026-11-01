@@ -173,7 +173,8 @@ The pack's `design.json` and the Telegram line "🎨 Layout B · text bottom-lef
 decided and why. `DESIGN_CRITIQUE=0` turns the critic off.
 
 **Custom designs** (web app, Create → New design): a one-off post outside the monthly plan. The flow asks for the
-product (the menu plus every item in the wording bank), the series (the hero-photo templates: label and footer),
+product (the menu plus every item in the wording bank), the series (the hero-photo templates: label and footer; the product's menu category suggests one, FRESH POUR for
+drinks and SAVE ROOM for sweets),
 the title and writing (the product's wordings from the bank, the house ones, your own words, or let the agent
 write it), the style (the art director's choice or one of the five, locked), feed and/or story with the date and
 time, and the photo (a new upload or one already received, which keeps its crops and cut-out). It becomes a

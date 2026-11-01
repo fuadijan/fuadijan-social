@@ -37,6 +37,9 @@ describe('row helpers', () => {
   it('finds placeholders, labels, slugs and titles', () => {
     expect(placeholders(row())).toEqual(['confirm available bread/rice options']);
     expect(seriesLabel(row())).toBe('FROM THE KARAHI');
+    expect(seriesLabel(row({ template: 'fresh-pour', theme: null }))).toBe('FRESH POUR');
+    expect(seriesLabel(row({ template: 'save-room', theme: 'Save room' }))).toBe('SAVE ROOM');
+    expect(seriesLabel(row({ template: 'from-the-fire', theme: 'Chai after the karahi' }))).toBe('FROM THE KARAHI');
     expect(daySlug(row())).toBe('chicken-karahi');
     expect(daySlug(row({ dish: '[Confirm dessert]', theme: 'Save room — confirm dessert' }))).toBe('save-room-confirm-dessert');
     expect(rowTitle(row())).toBe('Day 4 — Chicken Karahi');

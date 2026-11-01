@@ -233,7 +233,8 @@ export interface RecentPhoto {
 export interface CreateOptions {
   today: string;
   postTimeDefault: string;
-  products: { name: string; category: string | null; wordings: number }[];
+  /** `template` is the series suggested for the product (its menu category: drinks pour, sweets save room, karahis from the karahi). */
+  products: { name: string; category: string | null; wordings: number; template: string }[];
   templates: { template: string; label: string; footer: 'brand' | 'address'; style: StyleKey | null }[];
   styles: { key: StyleKey; name: string; blurb: string; needsCutout: boolean; story: boolean }[];
   photos: RecentPhoto[];
