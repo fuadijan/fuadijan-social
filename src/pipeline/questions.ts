@@ -70,7 +70,40 @@ export async function answerQuestion(db: Db, id: number, answer: string, via: 't
   return q;
 }
 
-/** A button key → its value, or the raw text when it isn't one of the options. */
+/**
+ * A button key → its value. Typed replies are read generously: an option's key, value or label ("use this one"),
+ * a reply that clearly means one of them ("use current", "keep it", "ok" → use; "I'll resend", "file" → resend;
+ * "Day 5" → that day's option), or the raw text when nothing fits.
+ */
 export function resolveAnswer(q: Question, keyOrText: string): string {
-  return q.options.find((o) => o.key === keyOrText)?.value ?? keyOrText;
+  const raw = keyOrText.trim();
+  const byKey = q.options.find((o) => o.key === raw);
+  if (byKey) return byKey.value;
+  const text = raw.toLowerCase().replace(/[^\p{L}\p{N}\s#]/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return raw;
+  const exact = q.options.find((o) => o.value.toLowerCase() === text || o.label.toLowerCase() === text || o.key.toLowerCase() === text);
+  if (exact) return exact.value;
+
+  if (q.field === 'quality') {
+    if (/\b(resend|re send|file|another|retake|again|new one|better one)\b/.test(text)) return q.options.find((o) => o.value === 'resend')?.value ?? raw;
+    if (/\b(use|current|keep|this one|ok|okay|yes|yep|fine|go|proceed|continue|anyway)\b/.test(text)) return q.options.find((o) => o.value === 'use')?.value ?? raw;
+  }
+  if (q.field === 'match') {
+    if (/\b(unscheduled|none|no day|not scheduled)\b/.test(text)) return q.options.find((o) => o.value === 'unscheduled')?.value ?? raw;
+    const day = text.match(/(?:^|\bday\s*|#day)(\d{1,3})\b/);
+    if (day) {
+      const opt = q.options.find((o) => new RegExp(`^day ${day[1]}\\b`).test(o.label.toLowerCase()));
+      if (opt) return opt.value;
+      return `day ${day[1]}`;
+    }
+  }
+
+  // One option whose label (or a word of it) is named in the reply.
+  const words = new Set(text.split(' '));
+  const named = q.options.filter((o) => {
+    const label = o.label.toLowerCase();
+    return text.includes(label) || label.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 3).some((w) => words.has(w));
+  });
+  if (named.length === 1) return named[0]!.value;
+  return raw;
 }

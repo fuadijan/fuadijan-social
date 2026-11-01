@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { AppContext } from '../context.js';
 import { MatchResult, ResolvedCopy, type Unresolved } from '../brain/schemas.js';
 import { matchPrompt, resolvePrompt } from '../brain/prompts.js';
-import { allRows, daySlug, rowById, rowsBetween, seriesLabel, setStatus, type CalendarRow } from '../calendar/rows.js';
+import { allRows, daySlug, rowByDay, rowById, rowsBetween, seriesLabel, setStatus, type CalendarRow } from '../calendar/rows.js';
 import { getFile, putFile } from '../files.js';
 import { crop, cropAround, decode, measure, thumbnail, type Quality } from '../images/prep.js';
 import { hasTag, parseCaption, type ParsedCaption } from '../intake/caption.js';
@@ -135,7 +135,8 @@ export async function intake(ctx: StageContext): Promise<Outcome> {
     asset.height = height;
   }
   const quality = asset.quality!;
-  const accepted = ctx.job.state.qualityAccepted || lastAnswer === 'use';
+  // Any answer other than "resend" means go ahead: the owner has seen the warning, and asking again would loop.
+  const accepted = ctx.job.state.qualityAccepted || (lastAnswer != null && lastAnswer !== 'resend');
   if (!accepted && quality.verdict !== 'ok') {
     const text = quality.verdict === 'small' ? fmt.QUALITY_SMALL : fmt.qualityBad(quality.verdict);
     const q = await sendQuestion(ctx, {
@@ -189,8 +190,10 @@ export async function match(ctx: StageContext): Promise<Outcome> {
     (await ctx.pool.query<import('./questions.js').Question>('select * from questions where job_id = $1 and field = $2 and answered_at is not null order by answered_at desc limit 1', [ctx.job.id, 'match'])).rows);
   const matchAnswer = prior.find((q) => q.field === 'match' && q.job_id === ctx.job.id)?.answer;
   if (matchAnswer === 'unscheduled') return { kind: 'advance', stage: asset.kind === 'video' ? 'done' : 'prep', state: { unscheduled: true } };
-  if (matchAnswer && /^\d+$/.test(matchAnswer)) {
-    const row = await rowById(ctx.pool, Number(matchAnswer));
+  if (matchAnswer && /^(\d+|day \d{1,3})$/.test(matchAnswer)) {
+    // A button carries the row id; a typed "Day 5" (resolved to "day 5") names the day.
+    const typedDay = matchAnswer.match(/^day (\d{1,3})$/);
+    const row = typedDay ? await rowByDay(ctx.pool, Number(typedDay[1])) : await rowById(ctx.pool, Number(matchAnswer));
     if (row) {
       await assignRow(ctx, row, null);
       await ctx.messenger.sendText(fmt.photoReceived(row, cap.subject || asset.kind));

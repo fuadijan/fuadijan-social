@@ -251,8 +251,11 @@ export async function applyAnswer(app: AppContext, questionId: number, keyOrText
   const q = await answerQuestion(pool, questionId, value, via);
   if (!q) return 'Already answered.';
 
-  let reply = `Got it: ${value}`;
-  if (q.field === 'wording') {
+  const picked = q.options.find((o) => o.value === value);
+  let reply = picked ? `Got it: ${picked.label}.` : `Got it: ${value}`;
+  if (q.field === 'quality') {
+    reply = value === 'resend' ? 'Okay — send it again as a File (📎 → File) and I\'ll take it from there.' : 'Using this one — on it.';
+  } else if (q.field === 'wording') {
     reply = /^\d{1,2}$/.test(value.trim()) ? `Wording ${value.trim()} — designing now.` : `Using your headline "${value}" — designing now.`;
   } else if (q.field === 'skip' && q.row_id) {
     const row = (await allRows(pool)).find((r) => r.id === q.row_id);
