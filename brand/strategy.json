@@ -8,7 +8,7 @@
   "knownFor": {
     "primary": "Fresh-off-the-grill Pakistani BBQ (tikka, seekh, chapli) and made-to-order karahi.",
     "secondary": "Generous, good-value family meals with no-stress parking.",
-    "trust": "100% halal, no pork, no alcohol — stated plainly, every time."
+    "trust": "100% halal meat from certified suppliers — stated plainly, every time."
   },
   "taglines": [
     { "text": "Fresh off the grill. Halal, always.", "use": "Default bio and posters" },
@@ -20,7 +20,7 @@
     "do": [
       "Make the grill the star: fire, char, steam, the wok being finished.",
       "Say what is true and visible instead of adjectives: the spice blend, the cut of meat, the cooking time, the person cooking.",
-      "State the trust layer plainly: 100% halal, no pork, no alcohol.",
+      "State the trust layer plainly: 100% halal meat from certified suppliers.",
       "Say \"fresh, grilled, halal\" and \"grilled not deep-fried, fresh meat, made to order\" rather than \"healthy\".",
       "Mention easy parking in every family post.",
       "Point every post to direct ordering at fuadijan.com.au.",
@@ -48,7 +48,7 @@
   "segments": [
     { "segment": "Pakistani & South Asian diaspora", "want": "Taste of home, authenticity, Ramadan/Eid", "message": "Just like back home", "channels": "Facebook, Instagram, WhatsApp groups, mosques" },
     { "segment": "Families (all backgrounds)", "want": "Value, space, parking, kid-friendly options", "message": "Family platters, easy parking", "channels": "Facebook, Google Maps" },
-    { "segment": "Halal seekers", "want": "Certainty it's fully halal", "message": "100% halal, no alcohol", "channels": "Google, halal directories, Instagram" },
+    { "segment": "Halal seekers", "want": "Certainty it's fully halal", "message": "100% halal, certified suppliers", "channels": "Google, halal directories, Instagram" },
     { "segment": "Students", "want": "Cheap, filling, late-ish, group meals", "message": "Student deal + burgers + karahi to share", "channels": "TikTok, Instagram, uni clubs" },
     { "segment": "BBQ & food lovers", "want": "Smoke, char, spice, something new", "message": "Grill theatre, try chapli", "channels": "TikTok, Instagram Reels, food creators" },
     { "segment": "Local workers", "want": "Fast lunch", "message": "Lunch box / wrap deal", "channels": "Google Maps, flyers, Uber Eats" }
@@ -97,7 +97,7 @@
   "posters": [
     { "name": "Karahi Night", "item": "Karahi Night", "headline": "Karahi\nNight", "line": "Every Wednesday · 5–10pm · [offer]", "visual": "Karahi in wok, steam, dark wood, warm gold" },
     { "name": "Chapli Kebab Day", "item": "Chapli Kebab Day", "headline": "Chapli\nKebab Day", "line": "First Friday of every month", "visual": "Chapli split open, pomegranate, on a tawa" },
-    { "name": "Halal promise", "item": "Halal", "headline": "100% halal.\nAlways.", "line": "No pork · No alcohol · Certified suppliers", "visual": "Deep-green background, crescent and grill icon" },
+    { "name": "Halal promise", "item": "Halal", "headline": "100% halal.\nAlways.", "line": "Fresh meat · Certified suppliers · Every dish", "visual": "Deep-green background, crescent and grill icon" },
     { "name": "Student combo", "item": "Student Combo", "headline": "Exam\nfuel", "line": "Student combo $[X] · Tuesdays · Show ID", "visual": "Burger and drink, bright, bold type" },
     { "name": "Family feast", "item": "Family Feast", "headline": "Feed the\nwhole family", "line": "Platters for 4–6 · Easy parking", "visual": "Top-down spread with many hands" },
     { "name": "Ramadan iftar", "item": "Ramadan", "headline": "Iftar at\nFuadijan", "line": "Iftar platters · Family bookings · Open late", "visual": "Lanterns, dates, platter at dusk" },
@@ -114,7 +114,7 @@
     { "name": "Review", "item": "Reviews", "headline": "This is why\nwe cook to order", "line": "Thank you!", "caption": "\"[Short real review line]\" — [Name] ⭐⭐⭐⭐⭐ Thank you! This is why we cook everything to order.", "hashtags": "#Fuadijan #HalalFood" },
     { "name": "Family", "item": "Family Feast", "headline": "Big table?\nBig platter.", "line": "Tikka, seekh, karahi, naan and something for the kids. Easy parking.", "caption": "Big table? Big platter. Easy parking. Our family feast feeds [4–6] with tikka, seekh, karahi, naan and something for the kids. Book your table: [phone]", "hashtags": "#FamilyDinnerSydney #HalalSydney" },
     { "name": "Student", "item": "Student Combo", "headline": "Exams are hard.\nDinner shouldn't be.", "line": "Student combo, Tuesdays, with student ID.", "caption": "Exams are hard. Dinner shouldn't be. Student combo: [item] + chips + drink for $[X] with student ID, Tuesdays.", "hashtags": "#SydneyStudents #CheapEatsSydney #UniLife" },
-    { "name": "Halal promise", "item": "Halal", "headline": "Our halal\npromise", "line": "100% halal meat from certified suppliers, no pork, no alcohol — ever.", "caption": "Our halal promise: 100% halal meat from certified suppliers, no pork, no alcohol — ever. Certificates on display in store and in our Halal highlight. Eat with peace of mind.", "hashtags": "#HalalFood #SydneyHalal #MuslimSydney" },
+    { "name": "Halal promise", "item": "Halal", "headline": "Our halal\npromise", "line": "100% halal meat from certified suppliers — always.", "caption": "Our halal promise: 100% halal meat from certified suppliers — always. Certificates on display in store and in our Halal highlight. Eat with peace of mind.", "hashtags": "#HalalFood #SydneyHalal #MuslimSydney" },
     { "name": "Behind the scenes", "item": "Behind Fuadijan", "headline": "There isn't\na shortcut", "line": "The marinade's been going since last night; the grill's warming up.", "caption": "9am. The marinade's been going since last night, the grill's warming up, and the naan dough is resting. That's the secret — there isn't a shortcut.", "hashtags": "#FuadijanKitchen #PakistaniFood" },
     { "name": "Burger bridge", "item": "Burgers", "headline": "Karahi for you,\nburger for them", "line": "Not everyone at the table wants karahi — and that's fine.", "caption": "Not everyone at the table wants karahi — and that's fine. Our [burger name]: [patty], [sauce], toasted bun, 100% halal. Karahi for you, burger for them.", "hashtags": "#HalalBurger #AuburnEats #SydneyEats" }
   ],
