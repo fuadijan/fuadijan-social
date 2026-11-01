@@ -1,7 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import type { CustomSpec } from '../src/calendar/rows.js';
-import { applyCustomWording, customNote, customResolveNote, keepFormats, parseCustomInput } from '../src/pipeline/custom.js';
+import { applyCustomWording, customNote, customResolveNote, defaultTemplate, keepFormats, parseCustomCommand, parseCustomInput, photosOf } from '../src/pipeline/custom.js';
 import { parseCaption } from '../src/intake/caption.js';
+
+describe('/custom from Telegram', () => {
+  it('reads the product and the choices from one line', () => {
+    const c = parseCustomCommand('chapli kebab poster story tomorrow 7pm -- Hand-formed. / Fire-finished. | Grilled every evening. | Come hungry.', '2026-11-04');
+    expect(c).toEqual({
+      product: 'chapli kebab', style: 'poster', formats: ['story'], date: '2026-11-05', postTime: '19:00',
+      wording: { headline: 'Hand-formed.\nFire-finished.', line: 'Grilled every evening.', caption: 'Come hungry.' }, sloganIndex: null,
+    });
+  });
+
+  it('defaults to both formats, today, the art director and the agent’s wording', () => {
+    expect(parseCustomCommand('Beef Seekh', '2026-11-04')).toEqual({ product: 'Beef Seekh', style: 'auto', formats: ['feed', 'story'], date: '2026-11-04', postTime: null, wording: null, sloganIndex: null });
+    expect(parseCustomCommand('beef seekh both 2026-11-20 18:30 -- 2', '2026-11-04')).toMatchObject({ formats: ['feed', 'story'], date: '2026-11-20', postTime: '18:30', sloganIndex: 2, wording: null });
+    expect(() => parseCustomCommand('poster story', '2026-11-04')).toThrow(/Which product/);
+    expect(() => parseCustomCommand('chapli -- | only a line', '2026-11-04')).toThrow(/headline/);
+  });
+
+  it('picks the karahi series for a karahi and matches a product to its earlier photos', () => {
+    expect(defaultTemplate('Chicken Karahi')).toMatch(/karahi/);
+    expect(defaultTemplate('Chapli Kebab')).not.toMatch(/karahi/);
+    const photos = [
+      { assetId: 1, thumb: null, caption: 'chapli kebab #day2', dayNo: 2, dish: 'Chapli Kebab', createdAt: new Date() },
+      { assetId: 2, thumb: null, caption: 'karahi', dayNo: 4, dish: 'Chicken Karahi', createdAt: new Date() },
+    ];
+    expect(photosOf(photos, 'chapli').map((p) => p.assetId)).toEqual([1]);
+    expect(photosOf(photos, 'Lamb Karahi').map((p) => p.assetId)).toEqual([2]);
+  });
+});
 
 const good = { product: 'Chicken Karahi', template: 'from-the-karahi', style: 'poster', formats: ['feed', 'story'], wording: { headline: 'Time to\nSavour the Karahi', line: 'Cooked to order.', caption: '' }, date: '2026-11-10', postTime: '18:30' };
 

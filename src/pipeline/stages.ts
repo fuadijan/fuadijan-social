@@ -172,6 +172,8 @@ async function assignRow(ctx: StageContext, row: CalendarRow, match: MatchResult
   await ctx.pool.query('update assets set calendar_row_id = $2, set_key = $3 where id = $1', [asset.id, row.id, setKey]);
   asset.calendar_row_id = row.id;
   asset.set_key = setKey;
+  // A custom post still asking which photo to use has its answer: this one.
+  await ctx.pool.query("update questions set answer = 'new', answered_via = 'telegram', answered_at = now() where row_id = $1 and field = 'photo' and answered_at is null", [row.id]);
   if (match?.dish_canonical && (!row.dish || row.dish.startsWith('['))) {
     // Never fill dish on the agent's own; it's a suggestion the owner sees in the pack questions instead.
   }

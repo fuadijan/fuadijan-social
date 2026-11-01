@@ -88,7 +88,7 @@ export function resolveAnswer(q: Question, keyOrText: string): string {
     if (/\b(resend|re send|file|another|retake|again|new one|better one)\b/.test(text)) return q.options.find((o) => o.value === 'resend')?.value ?? raw;
     if (/\b(use|current|keep|this one|ok|okay|yes|yep|fine|go|proceed|continue|anyway)\b/.test(text)) return q.options.find((o) => o.value === 'use')?.value ?? raw;
   }
-  if (q.field === 'match') {
+  if (q.field === 'match' || q.field === 'photo') {
     if (/\b(unscheduled|none|no day|not scheduled)\b/.test(text)) return q.options.find((o) => o.value === 'unscheduled')?.value ?? raw;
     const day = text.match(/(?:^|\bday\s*|#day)(\d{1,3})\b/);
     if (day) {

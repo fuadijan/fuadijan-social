@@ -10,10 +10,10 @@
 import type { Db } from '../db/pool.js';
 import type { ResolvedCopy } from '../brain/schemas.js';
 import { currentPlan, recordEdit, rowById, type CalendarRow, type CustomSpec, type CustomWording } from '../calendar/rows.js';
-import { templateEntry } from '../render/registry.js';
+import { heroTemplates, templateEntry } from '../render/registry.js';
 import type { RenderOutput } from '../render/index.js';
 import { STYLE_KEYS, styleFromNote, type Style } from '../render/styles.js';
-import { sydneyDate, type IsoDate } from '../time.js';
+import { addDays, sydneyDate, type IsoDate } from '../time.js';
 import type { Job } from './stages.js';
 
 export const CUSTOM_FIRST_DAY = 101;
@@ -66,17 +66,87 @@ export function parseCustomInput(body: unknown): CustomInput {
 }
 
 /** The row for a custom post, in the running plan (as of `today`), numbered from 101. */
-export async function createCustomPost(db: Db, input: CustomInput, today: IsoDate = sydneyDate(new Date())): Promise<CalendarRow> {
+export async function createCustomPost(db: Db, input: CustomInput, today: IsoDate = sydneyDate(new Date()), source: 'owner-web' | 'owner-telegram' = 'owner-web'): Promise<CalendarRow> {
   const plan = (await currentPlan(db, today)) ?? input.date.slice(0, 7);
   const spec: CustomSpec = { product: input.product, style: input.style, formats: input.formats, wording: input.wording, sloganId: input.sloganId };
   const { rows } = await db.query<{ id: number }>(
     `insert into calendar_rows (plan, day_no, date, slot, type, dish, post_time, template, status, objective, caption, custom)
      values ($1, (select greatest(coalesce(max(day_no), 0), $2::int - 1) + 1 from calendar_rows where plan = $1), $3, 'feed', 'custom', $4, $5, $6, 'planned', $7, $8, $9)
      returning id`,
-    [plan, CUSTOM_FIRST_DAY, input.date, input.product, input.postTime, input.template, `Custom design: ${input.product}, made in the web app.`, input.wording?.caption || null, JSON.stringify(spec)]);
+    [plan, CUSTOM_FIRST_DAY, input.date, input.product, input.postTime, input.template, `Custom design: ${input.product}, made ${source === 'owner-web' ? 'in the web app' : 'from Telegram'}.`, input.wording?.caption || null, JSON.stringify(spec)]);
   const id = rows[0]!.id;
-  await recordEdit(db, id, 'created', null, `custom design · ${input.style === 'auto' ? 'style by the art director' : `${input.style} style`} · ${input.formats.join(' + ')}`, 'owner-web');
+  await recordEdit(db, id, 'created', null, `custom design · ${input.style === 'auto' ? 'style by the art director' : `${input.style} style`} · ${input.formats.join(' + ')}`, source);
   return (await rowById(db, id))!;
+}
+
+/** The series for a custom post made without picking one: the karahi template for a karahi, else the first. */
+export function defaultTemplate(product: string): string {
+  const all = heroTemplates();
+  const karahi = /karahi/i.test(product) ? all.find((t) => /karahi/i.test(t.label)) : null;
+  return (karahi ?? all[0])!.template;
+}
+
+/** What `/custom …` says, read from the one line: the product, and any of a style, feed/story, a date, a time, and after `--` the wording. */
+export interface CustomCommand {
+  product: string;
+  style: Style | 'auto';
+  formats: CustomFormat[];
+  date: IsoDate;
+  postTime: string | null;
+  /** Written out after `--` as `headline | line | caption` (a ` / ` in the headline breaks the line). */
+  wording: CustomWording | null;
+  /** `-- 2`: the second wording in the product's bank (as /slogan <item> lists them). */
+  sloganIndex: number | null;
+}
+
+export const CUSTOM_USAGE = [
+  '/custom <product> [band|split|poster|flat|invite] [feed|story] [date] [time] [-- <headline> | <line> | <caption>]',
+  'e.g. /custom chapli kebab poster story tomorrow 7pm -- Hand-formed. / Fire-finished. | Grilled every evening.',
+  'Leave the style out and the art director picks; leave feed/story out for both; "-- 2" uses wording 2 from /slogan chapli kebab; no "--" and the agent writes it.',
+].join('\n');
+
+export function parseCustomCommand(arg: string, today: IsoDate): CustomCommand {
+  const m = arg.trim().match(/^([\s\S]*?)\s*(?:--|—)\s*([\s\S]+)$/);
+  const head = (m ? m[1]! : arg).trim();
+  const body = m ? m[2]!.trim() : '';
+  let style: Style | 'auto' = 'auto';
+  const formats: CustomFormat[] = [];
+  let date: IsoDate | null = null;
+  let postTime: string | null = null;
+  const product: string[] = [];
+  for (const tok of head.split(/\s+/).filter(Boolean)) {
+    const t = tok.toLowerCase();
+    if ((STYLE_KEYS as readonly string[]).includes(t)) style = t as Style;
+    else if (t === 'auto') style = 'auto';
+    else if (t === 'feed' || t === 'story') formats.push(t);
+    else if (t === 'both') formats.push('feed', 'story');
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(t)) date = t as IsoDate;
+    else if (t === 'today') date = today;
+    else if (t === 'tomorrow') date = addDays(today, 1);
+    else if (/^\d{1,2}:\d{2}$/.test(t)) postTime = t.padStart(5, '0');
+    else if (/^\d{1,2}(:\d{2})?(am|pm)$/.test(t)) {
+      const [, h, mm, ap] = t.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/)!;
+      const hour = (Number(h) % 12) + (ap === 'pm' ? 12 : 0);
+      postTime = `${String(hour).padStart(2, '0')}:${mm ?? '00'}`;
+    } else product.push(tok);
+  }
+  if (!product.length) throw new Error(`Which product?\n${CUSTOM_USAGE}`);
+  let wording: CustomWording | null = null;
+  let sloganIndex: number | null = null;
+  if (/^\d{1,2}$/.test(body)) sloganIndex = Number(body);
+  else if (body) {
+    const [headline = '', line = '', caption = ''] = body.split('|').map((p) => p.trim());
+    if (!headline) throw new Error('The wording needs a headline: -- <headline> | <line> | <caption>');
+    wording = { headline: headline.replace(/\s*\/\s*/g, '\n'), line, caption };
+  }
+  return { product: product.join(' '), style, formats: formats.length ? [...new Set(formats)] : ['feed', 'story'], date: date ?? today, postTime, wording, sloganIndex };
+}
+
+/** The product's earlier photos, newest first: the ones the owner may want to reuse for a custom post. */
+export function photosOf(photos: RecentPhoto[], product: string): RecentPhoto[] {
+  const words = product.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2);
+  const hit = (s: string | null) => Boolean(s) && words.some((w) => s!.toLowerCase().includes(w));
+  return photos.filter((p) => hit(p.dish) || hit(p.caption));
 }
 
 /**

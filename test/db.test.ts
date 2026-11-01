@@ -247,6 +247,25 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect((await recentPhotos(pool)).filter((p) => p.thumb === chapli.thumb)).toHaveLength(1);
   });
 
+  it('makes a custom post from /custom in Telegram, offering the product\'s earlier photo as a button', async () => {
+    messenger.sent.length = 0;
+    await handleCommand(ctx, '/custom Chapli Kebab flat story 2026-11-12 7pm -- Hot. / Fresh. | Tonight only.');
+    const row = (await rowByDay(pool, 102))!;
+    expect(row).toMatchObject({ type: 'custom', dish: 'Chapli Kebab', date: '2026-11-12', post_time: '19:00', template: 'from-the-fire' });
+    expect(row.custom).toMatchObject({ style: 'flat', formats: ['story'], wording: { headline: 'Hot.\nFresh.', line: 'Tonight only.' } });
+    expect(messenger.sent[0]!.text).toMatch(/^🆕 Day 102 — Chapli Kebab \(custom\)/);
+    const q = (await openQuestions(pool, row.id)).find((x) => x.field === 'photo')!;
+    // Day 101 adopted the same photo; it is offered once, under the day it was first sent for.
+    expect(q.options.map((o) => o.label)).toEqual([expect.stringMatching(/^Day 2 · Chapli/), "I'll send a new one"]);
+    // Typed, not tapped: "day 2" is read as that day's photo.
+    await applyAnswer(ctx, q.id, 'Day 2', 'telegram');
+    expect(messenger.sent.at(-1)!.text).toMatch(/→ Day 102\. Designing now\./);
+    await new Worker(ctx, 1000).drain();
+    expect((await rowByDay(pool, 102))!.status).toBe('ready');
+    expect((await pool.query('select format from renders where calendar_row_id = $1', [row.id])).rows).toEqual([{ format: 'story' }]);
+    expect((await openQuestions(pool, row.id))).toHaveLength(0);
+  });
+
   it('understands "posted 2" and "skip 3"', async () => {
     messenger.sent.length = 0;
     await handleFreeText(ctx, 'posted 2');

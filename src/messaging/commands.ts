@@ -3,11 +3,12 @@
  * free text that goes to the latest open question. Shared by Telegram and the web app's question buttons.
  */
 import type { AppContext } from '../context.js';
-import { EDITABLE_FIELDS, allRows, editField, markPosted, pushRow, rowByDay, rowTitle, rowsBetween, skipRow, type EditableField } from '../calendar/rows.js';
+import { EDITABLE_FIELDS, allRows, editField, markPosted, pushRow, rowByDay, rowById, rowTitle, rowsBetween, skipRow, type EditableField } from '../calendar/rows.js';
 import { spendThisMonth } from '../brain/client.js';
 import * as fmt from './formats.js';
 import { answerQuestion, askQuestion, latestOpenQuestion, openQuestions, questionById, resolveAnswer, setQuestionMessageId } from '../pipeline/questions.js';
 import { resendPack } from '../pipeline/stages.js';
+import { CUSTOM_USAGE, adoptAsset, createCustomPost, defaultTemplate, parseCustomCommand, parseCustomInput, photosOf, recentPhotos } from '../pipeline/custom.js';
 import { redoRow } from '../pipeline/worker.js';
 import { allCopyOptions, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
 import { addSlogan, listSlogans, removeSlogan, slogansByItem } from '../slogans.js';
@@ -25,6 +26,7 @@ export const HELP = [
   '/set address|hours|website <text> · /set design <standing notes for the art director> · /set wording ask|off · /pause · /resume',
   '/fact <dish> -- <what is true about it> — remembered for every post about that dish (/fact alone lists them; /fact <dish> -- remove)',
   '/slogan <item> -- <headline> | <line> | <caption> — add a slogan offered as a wording for posts about that item ("all" = every post) · /slogan <item> lists · /slogan <item> -- remove <n>',
+  '/custom <product> [style] [feed|story] [date] [time] [-- headline | line | caption] — a one-off design outside the plan (/custom alone explains)',
   'posted N — mark Day N posted',
   'Send a photo with a caption like "chapli kebab", "chicken karahi -- cooked to order #day4", "karahi clip 1".',
 ].join('\n');
@@ -171,6 +173,45 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       await setDishFact(pool, dish, fact);
       return void say(`Noted for ${dish}: ${fact}. It applies to every post about ${dish}; /redo the day to refresh a pack.`);
     }
+    case '/custom': {
+      if (!arg) return void say(CUSTOM_USAGE);
+      const today = sydneyDate(app.now());
+      let cmd;
+      try {
+        cmd = parseCustomCommand(arg, today);
+      } catch (e) {
+        return void say(e instanceof Error ? e.message : String(e));
+      }
+      let wording = cmd.wording;
+      let sloganId: number | null = null;
+      let wordingWords = wording ? `your wording "${wording.headline.replace(/\n/g, ' / ')}"` : 'the agent writes the wording';
+      if (cmd.sloganIndex != null) {
+        const list = await listSlogans(pool, cmd.product);
+        const s = list[cmd.sloganIndex - 1];
+        if (!s) return void say(list.length ? `${cmd.product} has ${list.length} wording${list.length === 1 ? '' : 's'} — /slogan ${cmd.product} shows them.` : `No wordings for ${cmd.product} yet. Write it after --, or add one with /slogan ${cmd.product} -- <headline> | <line> | <caption>.`);
+        wording = { headline: s.headline, line: s.line ?? '', caption: s.caption ?? '' };
+        sloganId = s.id;
+        wordingWords = `wording ${cmd.sloganIndex} "${s.headline.replace(/\n/g, ' / ')}"`;
+      }
+      let input;
+      try {
+        input = parseCustomInput({ ...cmd, template: defaultTemplate(cmd.product), wording, sloganId, postTime: cmd.postTime ?? (await getSetting(pool, 'post_time_default')) ?? '18:00' });
+      } catch (e) {
+        return void say(e instanceof Error ? e.message : String(e));
+      }
+      const row = await createCustomPost(pool, input, today, 'owner-telegram');
+      await say(fmt.customCreated(row, row.custom!, wordingWords));
+      const photos = photosOf(await recentPhotos(pool, 60), cmd.product).slice(0, 3);
+      if (!photos.length) return void say(`Send the photo with the caption "#day${row.day_no}" and I'll make the design.`);
+      const q = await askQuestion(pool, {
+        rowId: row.id, jobId: null, field: 'photo',
+        question: `Which photo for Day ${row.day_no}? One of the ${cmd.product} photos below, or send a new one with "#day${row.day_no}".`,
+        options: [...photos.map((p) => ({ key: `a${p.assetId}`, label: p.dayNo ? `Day ${p.dayNo} · ${(p.dish ?? p.caption ?? 'photo').split(',')[0]!.slice(0, 24)}` : (p.caption ?? 'photo').slice(0, 30), value: String(p.assetId) })), { key: 'new', label: "I'll send a new one", value: 'new' }],
+      });
+      const sent = await app.messenger.sendText(q.question, { buttons: q.options.map((o) => ({ key: `q:${q.id}:${o.key}`, label: o.label })), questionId: q.id });
+      await setQuestionMessageId(pool, q.id, sent.messageId);
+      return;
+    }
     case '/pause':
       await setSetting(pool, 'paused', 'true');
       return void say('Paused: no reminders until /resume. Photos you send are still processed.');
@@ -263,6 +304,25 @@ export async function applyAnswer(app: AppContext, questionId: number, keyOrText
       const next = await skipRow(pool, row, value === 'push-all' ? 'push-all' : 'just-this', via === 'web' ? 'owner-web' : 'owner-telegram');
       reply = `${rowTitle(row)} moved to ${formatDay(next)}${value === 'push-all' ? ', and everything after it by a day' : ''}.`;
     } else reply = 'Left as it was.';
+  } else if (q.field === 'photo' && q.row_id) {
+    // /custom asked which photo to use: an earlier photo (by button, or a typed "Day 5"), or a new one.
+    const row = await rowById(pool, q.row_id);
+    const typedDay = value.match(/^day (\d{1,3})$/);
+    let assetId = /^\d+$/.test(value) ? Number(value) : null;
+    if (typedDay) {
+      const from = await rowByDay(pool, Number(typedDay[1]));
+      assetId = from ? (await pool.query<{ id: number }>("select id from assets where calendar_row_id = $1 and kind in ('photo','document') and prepped is not null order by created_at desc limit 1", [from.id])).rows[0]?.id ?? null : null;
+      if (!assetId) reply = from ? `Day ${from.day_no} has no photo yet.` : `There is no Day ${typedDay[1]}.`;
+    }
+    if (!row) reply = 'That day is gone.';
+    else if (assetId) {
+      try {
+        await adoptAsset(pool, row, assetId);
+        reply = `${picked ? `${picked.label}'s photo` : 'That photo'} → Day ${row.day_no}. Designing now.`;
+      } catch (e) {
+        reply = e instanceof Error ? e.message : String(e);
+      }
+    } else if (!typedDay) reply = `Send the photo with the caption "#day${row.day_no}" and I'll make the design.`;
   } else if (q.field === 'dish' && q.row_id) {
     const row = (await allRows(pool)).find((r) => r.id === q.row_id);
     if (row && value && value !== 'skip') {

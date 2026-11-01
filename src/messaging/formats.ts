@@ -70,6 +70,17 @@ export function photoReceived(row: CalendarRow, subject: string): string {
   return `Got it — ${subject} → Day ${row.day_no} (${formatDay(row.date)}, ${SLOT_WORD[row.slot]}). Working on it.`;
 }
 
+/** /custom made its row: what was understood, and how to change it. */
+export function customCreated(row: CalendarRow, spec: NonNullable<CalendarRow['custom']>, wordingWords: string): string {
+  const when = row.post_time ? `${formatDay(row.date)} ${row.post_time}` : formatDay(row.date);
+  const style = spec.style === 'auto' ? 'style by the art director' : `${spec.style} style`;
+  return [
+    `🆕 Day ${row.day_no} — ${spec.product} (custom) · ${when}`,
+    `${style} · ${spec.formats.join(' + ')} · ${wordingWords}`,
+    `/redo ${row.day_no} <note> changes it later; the pack comes here when the design is made.`,
+  ].join('\n');
+}
+
 export const QUALITY_SMALL = 'Got it. For a sharper post, send it as a File (📎 → File) — or reply ok to use this one.';
 export const qualityBad = (verdict: 'dark' | 'blurry') => `This one looks ${verdict === 'dark' ? 'too dark' : 'blurry'} for a post. Could you take another? Same angle, more light${verdict === 'blurry' ? ', hold still a second' : ''}. (Reply ok to use it anyway.)`;
 
