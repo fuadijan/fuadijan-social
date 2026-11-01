@@ -117,9 +117,11 @@ export async function intake(ctx: StageContext): Promise<Outcome> {
   if (!asset) throw new Error('intake needs an asset');
   if (asset.kind === 'video' || asset.kind === 'text') return { kind: 'advance', stage: 'match' };
 
-  // A quality question answered → read the answer.
-  const answered = (await answeredQuestions(ctx.pool, asset.calendar_row_id ?? -1)).filter((q) => q.job_id === ctx.job.id && q.field === 'quality');
-  const lastAnswer = answered.at(-1)?.answer;
+  // A quality question answered → read the answer. The question is asked before the photo has a day, so it is
+  // found by job, not by row.
+  const answered = (await ctx.pool.query<{ answer: string | null }>(
+    "select answer from questions where job_id = $1 and field = 'quality' and answered_at is not null order by answered_at desc limit 1", [ctx.job.id])).rows[0];
+  const lastAnswer = answered?.answer ?? undefined;
   if (lastAnswer === 'resend') return { kind: 'cancel', reason: 'The owner will resend this photo as a File.' };
 
   let jpegFileId = ctx.job.state.jpegFileId;

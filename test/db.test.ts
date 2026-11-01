@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import sharp from 'sharp';
 import '../src/config.js';
 import { createDatabaseIfMissing, createPool } from '../src/db/pool.js';
 import { migrate } from '../src/db/migrate.js';
@@ -264,6 +265,25 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect((await rowByDay(pool, 102))!.status).toBe('ready');
     expect((await pool.query('select format from renders where calendar_row_id = $1', [row.id])).rows).toEqual([{ format: 'story' }]);
     expect((await openQuestions(pool, row.id))).toHaveLength(0);
+  });
+
+  it('warns once about a small photo, and "use this one" lets it through', async () => {
+    messenger.sent.length = 0;
+    const small = await sharp(readFileSync('brand/reference/real-01.jpg')).resize({ width: 900 }).jpeg().toBuffer();
+    await receiveAsset(pool, { kind: 'photo', bytes: small, mime: 'image/jpeg', filename: null, caption: 'beef seekh #day3' });
+    const worker = new Worker(ctx, 1000);
+    await worker.drain();
+    const q = (await openQuestions(pool)).find((x) => x.field === 'quality')!;
+    expect(q).toBeTruthy();
+    expect(q.question).toMatch(/sharper post/);
+    expect(q.row_id).toBeNull(); // asked before the photo has a day
+    await applyAnswer(ctx, q.id, 'use this one', 'telegram');
+    await worker.drain();
+    // Asked once for this job, and the photo went on to its day.
+    expect((await pool.query("select count(*)::int n from questions where job_id = $1 and field = 'quality'", [q.job_id])).rows[0]!.n).toBe(1);
+    expect((await openQuestions(pool)).filter((x) => x.field === 'quality')).toHaveLength(0);
+    expect((await pool.query('select stage from jobs where id = $1', [q.job_id])).rows[0]!.stage).not.toBe('intake');
+    expect(messenger.sent.some((m) => /^Got it — .*Day 3/.test(m.text ?? ''))).toBe(true);
   });
 
   it('understands "posted 2" and "skip 3"', async () => {
