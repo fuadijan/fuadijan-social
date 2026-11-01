@@ -264,21 +264,27 @@ export function carouselSlideLayer(ctx: Ctx, d: z.infer<typeof CarouselSlideData
   return canvas(ctx, [logo(ctx), card, footerBox(ctx, 'brand')], d.hasPhoto ? 'transparent' : brand.colors.night);
 }
 
+/**
+ * The 9:16 story spreads towards the edges the way the feed does, stopping at the story safe margins (brand.json
+ * `storySafeTop` / `storySafeBottom`, the strips Instagram's own header and reply bar cover): the logo sits at the
+ * top margin, the text block ends at the bottom margin, and with the text at the top the brand line moves to the
+ * bottom margin on its own so the frame is still held at both ends.
+ */
 export function storyLayer(ctx: Ctx, d: z.infer<typeof StoryData>): El {
   const { brand } = ctx;
+  const { margin, storySafeTop: top, storySafeBottom: bottom } = brand.layout;
   const atTop = d.textPosition === 'top';
   const h = headline(ctx, d.headline, 760, false, undefined, d.typeScale, 'left', d.accentWord);
-  const logoTop = brand.layout.storySafeTop + 20;
-  const block = [
-    label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx),
-    el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 28, letterSpacing: '0.2em', color: brand.colors.sand }, brand.brandLine),
-  ];
+  const brandLine = el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 28, letterSpacing: '0.2em', color: brand.colors.sand }, brand.brandLine);
+  const block = [label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx)];
   return canvas(ctx, [
-    gradient(ctx, atTop ? 0.55 : 0.5, d.bandStrength, atTop ? 'top' : 'bottom'),
-    el('div', { position: 'absolute', top: logoTop, left: brand.layout.margin, display: 'flex' }, logoImg(ctx, {})),
+    gradient(ctx, atTop ? 0.5 : 0.48, d.bandStrength, atTop ? 'top' : 'bottom'),
+    ...(atTop ? [gradient(ctx, 0.16, Math.min(1, d.bandStrength), 'bottom')] : []),
+    el('div', { position: 'absolute', top, left: margin, display: 'flex' }, logoImg(ctx, {})),
     atTop
-      ? el('div', { position: 'absolute', left: brand.layout.margin, right: brand.layout.margin, top: logoTop + logoHeight(ctx) + 60, display: 'flex', flexDirection: 'column' }, block)
-      : el('div', { position: 'absolute', left: brand.layout.margin, right: brand.layout.margin, bottom: brand.layout.storySafeBottom + 40, display: 'flex', flexDirection: 'column' }, block),
+      ? el('div', { position: 'absolute', left: margin, right: margin, top: top + logoHeight(ctx) + 56, display: 'flex', flexDirection: 'column' }, block)
+      : el('div', { position: 'absolute', left: margin, right: margin, bottom, display: 'flex', flexDirection: 'column' }, [...block, brandLine]),
+    ...(atTop ? [el('div', { position: 'absolute', left: margin, bottom, display: 'flex' }, brandLine)] : []),
   ]);
 }
 

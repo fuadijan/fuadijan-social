@@ -75,7 +75,7 @@ export const PosterData = z.object({
 
 /** Where the plate goes on a poster, as fractions of the canvas, shared with the compositor. */
 export function posterPlate(ctx: Ctx): { top: number; maxHeight: number; width: number } {
-  return isStory(ctx) ? { top: 0.45, maxHeight: 0.4, width: 0.92 } : { top: 0.43, maxHeight: 0.5, width: 0.86 };
+  return isStory(ctx) ? { top: 0.44, maxHeight: 0.36, width: 0.92 } : { top: 0.43, maxHeight: 0.5, width: 0.86 };
 }
 
 /** The ink layer behind the plate: eyebrow, stacked Night headline, footer, all on the paper. */
