@@ -187,6 +187,18 @@ it); the bot then offers the product's earlier photos as buttons or waits for a 
 maintains the bank the Slogans sheet and `/slogan` feed: one product, many wordings (two headline lines, a line, a
 caption), offered on every post about that product and in the Create flow.
 
+**Strategy** (`brand/strategy.json`, web app → Strategy): the marketing strategy as data — positioning, voice rules
+(do and never), taglines, signature dishes, audiences, caption patterns, hashtag sets, the weekly rituals (Karahi
+Night on Wednesdays, Chapli Kebab Day on the first Friday, Student Night, Family Combo Weekends), the event year
+with a poster concept each, the ten poster concepts and ten ready captions, the shot list and reel ideas, the KPI
+list and the 30-day content plan. `src/strategy.ts` turns it into a brief for the copy writer (positioning, voice,
+the day's ritual or running event, the hashtag sets to draw from) and for the art director (palette and visual
+rules), and seeds the taglines, posters and captions into the wording bank at boot (source `strategy`, idempotent),
+so every ritual and event is a product in Create → New design with its wording ready. `npm run strategy-workbook`
+writes the 30-day plan as a plan workbook (`calendar/Fuadijan-Strategy-2026-11.xlsx`, same 18 columns plus a
+Slogans sheet); `npm run seed-calendar -- --file <that file>` makes it the month's plan. Edit the JSON, never the
+code, to change what the agent is told; bracketed offers and prices stay placeholders the agent asks about.
+
 `npm run render-samples` writes every template with the owner's real photos to `samples/out/`, next to the
 matching reference, for approval. Snapshot tests (`test/render.test.ts`, `test/__snapshots__/*.png`) compare a
 perceptual hash; delete a snapshot to re-record it after an intended change.

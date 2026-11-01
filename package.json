@@ -19,7 +19,8 @@
     "dry-run": "tsx src/dry-run.ts",
     "build:web": "vite build --config web/vite.config.ts",
     "dev:web": "vite --config web/vite.config.ts",
-    "render-samples": "tsx src/render-samples.ts"
+    "render-samples": "tsx src/render-samples.ts",
+    "strategy-workbook": "tsx calendar/strategy-workbook.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

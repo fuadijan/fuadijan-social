@@ -94,7 +94,7 @@ function WordingCard({ w, onChanged }: { w: Wording; onChanged: () => Promise<vo
       <div className="sa-wording-actions sa-actions">
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => setEditing(true)}>Edit</Button>
         <Button variant="ghost" size="sm" disabled={busy} onClick={() => void remove()}>Forget</Button>
-        <span className="sa-note">{w.source === 'sheet' ? 'from the Slogans sheet' : w.source === 'owner-web' ? 'added here' : 'added in Telegram'}</span>
+        <span className="sa-note">{w.source === 'sheet' ? 'from the Slogans sheet' : w.source === 'strategy' ? 'from the strategy' : w.source === 'owner-web' ? 'added here' : 'added in Telegram'}</span>
       </div>
       {error ? <div className="sa-result sa-result--error" role="alert">{error}</div> : null}
     </li>

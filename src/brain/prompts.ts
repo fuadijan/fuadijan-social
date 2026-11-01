@@ -50,6 +50,8 @@ export interface ResolveContext {
   facts: string[];
   /** The owner's slogans for this item, e.g. "Chapli Kebab: Hand-formed. Fire-finished." */
   slogans: string[];
+  /** The marketing strategy's brief for this row (src/strategy.ts copyBrief), when the strategy file is present. */
+  strategy?: string | null;
 }
 
 export function resolvePrompt(ctx: ResolveContext): { system: string; user: string } {
@@ -74,6 +76,7 @@ export function resolvePrompt(ctx: ResolveContext): { system: string; user: stri
       ctx.facts.length ? `Facts the owner has confirmed about dishes (treat as true):\n${ctx.facts.map((f) => `- ${f}`).join('\n')}` : '',
       ctx.slogans.length ? `The owner's own slogans for this item (they are offered as wording options separately; one variant may build on one, in the owner's voice):\n${ctx.slogans.map((s) => `- ${s}`).join('\n')}` : '',
       ctx.answers.length ? `Owner's answers so far:\n${ctx.answers.map((a) => `- Q: ${a.question}\n  A: ${a.answer}`).join('\n')}` : 'No answers from the owner yet.',
+      ctx.strategy ? `\n${ctx.strategy}\nThe strategy shapes tone and emphasis; it never adds a fact the menu, the owner or the calendar has not given you.` : '',
       '',
       `Menu (with the kitchen's descriptions):\n${menuBlock(ctx.menu, true)}`,
     ].filter((l) => l !== '').join('\n'),
@@ -101,6 +104,8 @@ export interface DirectContext {
   heuristic: DesignSpec;
   /** The style the calendar template prefers, if any. */
   templateStyle?: Style | null;
+  /** The marketing strategy's visual rules (src/strategy.ts designBrief), when the strategy file is present. */
+  strategy?: string | null;
 }
 
 export function directPrompt(ctx: DirectContext): { system: string; user: string } {
@@ -115,6 +120,7 @@ export function directPrompt(ctx: DirectContext): { system: string; user: string
       `Headline: "${ctx.headline.replace(/\n/g, ' / ')}" (${ctx.headline.replace(/\n/g, ' ').length} characters). Line: "${ctx.line}" (${ctx.line.length} characters).`,
       ctx.designNotes ? `Owner's standing design notes: "${ctx.designNotes}"` : '',
       ctx.note ? `Owner's note for this run: "${ctx.note}"` : '',
+      ctx.strategy ?? '',
       `The rule-based default would be: ${JSON.stringify({ ...ctx.heuristic, rationale: undefined })}. Improve on it where the photo asks for it.`,
     ].filter((l) => l !== '').join('\n'),
   };

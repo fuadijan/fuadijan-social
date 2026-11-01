@@ -9,6 +9,7 @@ import { Month } from './screens/Month';
 import { Week } from './screens/Week';
 import { Create } from './screens/Create';
 import { Wordings } from './screens/Wordings';
+import { Strategy } from './screens/Strategy';
 
 /** The kit's link, backed by react-router so in-app navigation stays client-side. */
 const Link: FjLink = ({ href, children, ...rest }) => (
@@ -31,6 +32,7 @@ const NAV: FjNavSection[] = [
     items: [
       { href: '/create', label: 'New design', shortLabel: 'Create', icon: '✨' },
       { href: '/wordings', label: 'Wordings', icon: '✍️' },
+      { href: '/strategy', label: 'Strategy', icon: '🧭' },
     ],
   },
 ];
@@ -62,6 +64,7 @@ export function App() {
         <Route path="/day/:dayNo" element={<Day />} />
         <Route path="/create" element={<Create />} />
         <Route path="/wordings" element={<Wordings />} />
+        <Route path="/strategy" element={<Strategy />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppFrame>

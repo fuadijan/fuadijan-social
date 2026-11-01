@@ -68,6 +68,8 @@ export interface DesignInput {
   designNotes: string;
   /** The style the calendar template prefers (registry), if any. */
   templateStyle?: Style | null;
+  /** The marketing strategy's visual rules, passed on to the art director. */
+  strategy?: string | null;
 }
 
 const headlineLines = (headline: string): string[] => headline.split('\n').map((l) => l.trim()).filter(Boolean);

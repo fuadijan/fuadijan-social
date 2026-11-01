@@ -57,7 +57,7 @@ export async function readSheetRows(path: string, sheetName: string): Promise<Ce
     for (const c of rowMatch[2]!.matchAll(/<c\s([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const attrs = c[1]!;
       const inner = c[2] ?? '';
-      const ref = attrs.match(/\sr="([A-Z]+)\d+"/)?.[1] ?? '';
+      const ref = attrs.match(/(?:^|\s)r="([A-Z]+)\d+"/)?.[1] ?? '';
       const type = attrs.match(/\st="([^"]+)"/)?.[1] ?? 'n';
       const v = inner.match(/<v>([\s\S]*?)<\/v>/)?.[1];
       let value: Cell = null;

@@ -1,0 +1,230 @@
+{
+  "name": "Fuadijan Social Media & Marketing Strategy 2026–27",
+  "version": 1,
+  "source": "Strategy document of 2 Nov 2026 (Ahmad). Edit this file to change what the agent is told; numbers marked \"verify\" are not confirmed.",
+  "positioning": "For families, students and halal food lovers across Western Sydney, Fuadijan is the Pakistani grill on Parramatta Road where BBQ and karahi are cooked fresh to order, portions are generous, and parking is easy.",
+  "descriptor": "Fuadijan · Pakistani Grill & Karahi",
+  "oneIdea": "Pakistani BBQ and karahi, made fresh to order, with family-size portions and easy parking.",
+  "knownFor": {
+    "primary": "Fresh-off-the-grill Pakistani BBQ (tikka, seekh, chapli) and made-to-order karahi.",
+    "secondary": "Generous, good-value family meals with no-stress parking.",
+    "trust": "100% halal, no pork, no alcohol — stated plainly, every time."
+  },
+  "taglines": [
+    { "text": "Fresh off the grill. Halal, always.", "use": "Default bio and posters" },
+    { "text": "Karahi made the way it's made at home.", "use": "Karahi content, diaspora audience" },
+    { "text": "Big plates. Bigger flavour. Easy parking.", "use": "Family and Facebook audience" },
+    { "text": "Your table on Parramatta Road.", "use": "Community, Ramadan and Eid" }
+  ],
+  "voice": {
+    "do": [
+      "Make the grill the star: fire, char, steam, the wok being finished.",
+      "Say what is true and visible instead of adjectives: the spice blend, the cut of meat, the cooking time, the person cooking.",
+      "State the trust layer plainly: 100% halal, no pork, no alcohol.",
+      "Say \"fresh, grilled, halal\" and \"grilled not deep-fried, fresh meat, made to order\" rather than \"healthy\".",
+      "Mention easy parking in every family post.",
+      "Point every post to direct ordering at fuadijan.com.au.",
+      "Keep the emotional arc \"the taste of home, shared with everyone\".",
+      "Australian English; warm, close, appetising; owner and staff faces regularly."
+    ],
+    "dont": [
+      "Never lead with \"healthy halal meals\": it reads as a vague health claim and invites scepticism and consumer-law risk.",
+      "Never rely on \"authentic\" alone; it is what every competitor says.",
+      "Never say \"halal certified\" unless Fuadijan itself holds a certificate; say \"100% halal meat from certified suppliers\".",
+      "Never name a city (Lahore, Peshawar, Karachi) in a dish or story until the family roots are confirmed.",
+      "Never incentivise reviews, and never offer compensation publicly for editing one.",
+      "Never quote a review count or rating in an ad before re-checking the live Google numbers."
+    ]
+  },
+  "signatureDishes": [
+    { "dish": "Chicken Karahi", "role": "Hero", "why": "Most-loved, shareable, theatre of the wok" },
+    { "dish": "Beef Chapli Kebab", "role": "Hero", "why": "Distinctive; fewer competitors make it well; owns a day" },
+    { "dish": "Chicken Tikka", "role": "Grill star", "why": "Most visual grill item; entry point for newcomers" },
+    { "dish": "Seekh Kebab", "role": "Grill star", "why": "Skewer-on-flame shots; platter staple" },
+    { "dish": "Lamb Karahi", "role": "Premium", "why": "Higher ticket; family feasts and Eid" },
+    { "dish": "Shami Kebab", "role": "Supporting", "why": "Snack and Ramadan iftar item" },
+    { "dish": "Burgers", "role": "Bridge", "why": "Gets non-Pakistani, younger and student customers through the door" }
+  ],
+  "segments": [
+    { "segment": "Pakistani & South Asian diaspora", "want": "Taste of home, authenticity, Ramadan/Eid", "message": "Just like back home", "channels": "Facebook, Instagram, WhatsApp groups, mosques" },
+    { "segment": "Families (all backgrounds)", "want": "Value, space, parking, kid-friendly options", "message": "Family platters, easy parking", "channels": "Facebook, Google Maps" },
+    { "segment": "Halal seekers", "want": "Certainty it's fully halal", "message": "100% halal, no alcohol", "channels": "Google, halal directories, Instagram" },
+    { "segment": "Students", "want": "Cheap, filling, late-ish, group meals", "message": "Student deal + burgers + karahi to share", "channels": "TikTok, Instagram, uni clubs" },
+    { "segment": "BBQ & food lovers", "want": "Smoke, char, spice, something new", "message": "Grill theatre, try chapli", "channels": "TikTok, Instagram Reels, food creators" },
+    { "segment": "Local workers", "want": "Fast lunch", "message": "Lunch box / wrap deal", "channels": "Google Maps, flyers, Uber Eats" }
+  ],
+  "platforms": [
+    { "platform": "Instagram", "job": "Crave + convert", "cadence": "4–5 posts a week (3 Reels, 1–2 carousels/photos); Stories daily, 3–6 frames", "share": "35%" },
+    { "platform": "TikTok", "job": "Discovery", "cadence": "4–5 videos a week", "share": "30%" },
+    { "platform": "Facebook", "job": "Families, community, events", "cadence": "3–4 a week (reuse Reels + events + offers)", "share": "15%" },
+    { "platform": "Google Business Profile", "job": "Search → visit", "cadence": "2 posts + 5–10 photos a week; every review answered within 48 hours", "share": "20%" }
+  ],
+  "captionTemplates": {
+    "dishHero": "[Dish] — [one sensory line: smoky / juicy / slow-cooked]. Made fresh when you order, 100% halal.",
+    "event": "[Event name] is back this [day]! [Offer]. [Time]. Tag who you're bringing 👇",
+    "review": "\"[short review line]\" — [Name], ⭐⭐⭐⭐⭐. Thank you! Come try the [dish] they're talking about.",
+    "behindTheScenes": "It's [time] and we're already [prep task]. That's why it tastes like this. #FuadijanKitchen",
+    "question": "Settle this: [A] or [B]? Wrong answers only 😄",
+    "offer": "[Offer] — [days/times only]. Show this post or order direct at fuadijan.com.au."
+  },
+  "hashtagSets": {
+    "core": { "when": "always", "tags": ["#Fuadijan", "#AuburnEats", "#HalalSydney", "#PakistaniFood", "#SydneyFood"] },
+    "bbq": { "when": "grill, tikka, seekh, chapli, platter", "tags": ["#PakistaniBBQ", "#ChickenTikka", "#SeekhKebab", "#ChapliKebab", "#SydneyBBQ"] },
+    "karahi": { "when": "karahi, Karahi Night", "tags": ["#Karahi", "#ChickenKarahi", "#LambKarahi", "#DesiFood", "#KarahiNight"] },
+    "halal": { "when": "halal promise, Ramadan, Eid", "tags": ["#HalalFood", "#HalalEats", "#SydneyHalal", "#MuslimSydney", "#HalalFoodie"] },
+    "local": { "when": "community, parking, the space, Auburn", "tags": ["#WesternSydney", "#ParramattaRoad", "#AuburnNSW", "#SydneyEats", "#WesternSydneyFood"] },
+    "student": { "when": "student deals, exams, uni", "tags": ["#SydneyStudents", "#CheapEatsSydney", "#UniLife", "#StudentDeals"] },
+    "family": { "when": "family feasts, platters, kids", "tags": ["#FamilyDinnerSydney", "#FamilyFeast", "#SydneyFamilies"] }
+  },
+  "rituals": [
+    { "name": "Karahi Night", "item": "Karahi Night", "when": "Every Wednesday, 5–10pm", "weekday": 3, "offer": "Free naan basket with any full karahi, or $X off large karahi", "measure": "Karahi units sold on Wednesdays vs previous 4 Wednesdays" },
+    { "name": "Chapli Kebab Day", "item": "Chapli Kebab Day", "when": "First Friday of each month", "weekday": 5, "rule": "first-of-month", "offer": "Chapli plate deal; limited chef's special chapli variant", "measure": "Chapli units vs normal Friday; Reel views" },
+    { "name": "Student Night", "item": "Student Combo", "when": "Tuesdays during semester", "weekday": 2, "offer": "Student combo (burger or tikka wrap + chips + drink) with student ID", "measure": "Student-ID redemptions in Square" },
+    { "name": "Family Combo Weekend", "item": "Family Feast", "when": "Sat–Sun during NSW school holidays", "weekday": null, "offer": "Family feast for 4–6 with kids' burger included", "measure": "Family-combo sales; average order value" }
+  ],
+  "events": [
+    { "name": "Summer & school holidays", "item": "Family Feast", "from": "2026-12-18", "to": "2027-01-31", "offers": "Family Combo Weekends; catering for gatherings; New Year's BBQ platters", "poster": { "headline": "Summer feasts,\neasy parking", "line": "Family platters all holidays · Easy parking", "visual": "Long table spread, sunny warm light" } },
+    { "name": "Ramadan", "item": "Ramadan", "from": "2027-02-08", "to": "2027-03-09", "approximate": true, "offers": "Iftar platter (dates, samosa, shami, tikka, drink); late-night suhoor hours; family iftar bookings; mosque iftar catering", "poster": { "headline": "Iftar at\nFuadijan", "line": "Iftar platters · Family bookings · Open late", "visual": "Lantern-lit table at sunset, iftar platter centre, daily iftar time strip" } },
+    { "name": "Chand Raat & Eid al-Fitr", "item": "Eid", "from": "2027-03-09", "to": "2027-03-11", "approximate": true, "offers": "Eid family feast; Eid party catering trays; Chand Raat late opening", "poster": { "headline": "Eid\nMubarak", "line": "From our table to yours · Eid feasts & catering", "visual": "Crescent moon over a karahi, gold and deep green" } },
+    { "name": "Pakistan Day", "item": "Pakistan Day", "from": "2027-03-23", "to": "2027-03-23", "offers": "\"Taste of Pakistan\" tasting plate", "poster": { "headline": "Taste of\nPakistan", "line": "23 March · Tasting plate", "visual": "Green-and-white palette, dishes arranged as a map" } },
+    { "name": "Uni O-week / Semester 1", "item": "Student Combo", "from": "2027-02-22", "to": "2027-03-31", "offers": "Student Night launch; club partnerships (Muslim Students Associations, Pakistani student societies)", "poster": { "headline": "Your new\nlocal", "line": "Student Night every Tuesday · Show ID", "visual": "Students with burgers and karahi" } },
+    { "name": "Eid al-Adha", "item": "Eid", "from": "2027-05-16", "to": "2027-05-18", "approximate": true, "offers": "Eid lamb karahi special; bulk catering; open for Eid lunch", "poster": { "headline": "Eid al-Adha\nMubarak", "line": "Lamb karahi special · Catering · Open for Eid lunch", "visual": "Lamb karahi hero, warm gold" } },
+    { "name": "Winter BBQ Festival", "item": "Winter BBQ Festival", "from": "2027-07-03", "to": "2027-07-18", "offers": "Two weeks of grill specials: mixed grill platter, new skewers, hot chai station", "poster": { "headline": "Winter BBQ\nFestival", "line": "Two weeks of grill specials · July", "visual": "Fire and smoke against dark blue night, skewers glowing" } },
+    { "name": "Pakistan Independence Day", "item": "Pakistan Day", "from": "2027-08-14", "to": "2027-08-14", "offers": "Community night with music; green-themed desserts", "poster": { "headline": "14 August\nat Fuadijan", "line": "Community night · Green-themed desserts", "visual": "Fireworks over a grill, green and white" } },
+    { "name": "Semester 2 & spring", "item": "Student Combo", "from": "2027-07-26", "to": "2027-10-31", "offers": "Student Night returns; spring family weekends", "poster": { "headline": "Student Night\nis back", "line": "Tuesdays · Show ID", "visual": "Student and family templates refreshed" } },
+    { "name": "Creator Tasting Night", "item": "Creator Night", "from": "2026-12-01", "to": "2026-12-31", "quarterly": true, "offers": "Invite 6–10 Sydney food creators; free tasting menu; no paid demands, ask for honest content", "poster": { "headline": "Creator\nTasting Night", "line": "Fuadijan Grill · By invitation", "visual": "Invite-style card" } }
+  ],
+  "posters": [
+    { "name": "Karahi Night", "item": "Karahi Night", "headline": "Karahi\nNight", "line": "Every Wednesday · 5–10pm · [offer]", "visual": "Karahi in wok, steam, dark wood, warm gold" },
+    { "name": "Chapli Kebab Day", "item": "Chapli Kebab Day", "headline": "Chapli\nKebab Day", "line": "First Friday of every month", "visual": "Chapli split open, pomegranate, on a tawa" },
+    { "name": "Halal promise", "item": "Halal", "headline": "100% halal.\nAlways.", "line": "No pork · No alcohol · Certified suppliers", "visual": "Deep-green background, crescent and grill icon" },
+    { "name": "Student combo", "item": "Student Combo", "headline": "Exam\nfuel", "line": "Student combo $[X] · Tuesdays · Show ID", "visual": "Burger and drink, bright, bold type" },
+    { "name": "Family feast", "item": "Family Feast", "headline": "Feed the\nwhole family", "line": "Platters for 4–6 · Easy parking", "visual": "Top-down spread with many hands" },
+    { "name": "Ramadan iftar", "item": "Ramadan", "headline": "Iftar at\nFuadijan", "line": "Iftar platters · Family bookings · Open late", "visual": "Lanterns, dates, platter at dusk" },
+    { "name": "Eid Mubarak", "item": "Eid", "headline": "Eid\nMubarak", "line": "From our table to yours · Eid feasts & catering", "visual": "Crescent over karahi, green and gold" },
+    { "name": "Winter BBQ Festival", "item": "Winter BBQ Festival", "headline": "Winter BBQ\nFestival", "line": "Two weeks of grill specials · July", "visual": "Glowing skewers, smoke, night-blue sky" },
+    { "name": "Review wall", "item": "Reviews", "headline": "4.8★ and\ncounting", "line": "Thank you, Auburn [verify the live rating first]", "visual": "Grid of short real review quotes, 4.8★ large" },
+    { "name": "Catering", "item": "Catering", "headline": "We\ncater", "line": "Eid, weddings, mosques, offices · [phone]", "visual": "Trays of tikka and karahi on a long table" }
+  ],
+  "captions": [
+    { "name": "Chicken Karahi", "item": "Chicken Karahi", "headline": "Cooked fresh\nwhen you order", "line": "Tomatoes, ginger, green chilli, and a wok that's seen a thousand Friday nights.", "caption": "Tomatoes, ginger, green chilli, and a wok that's seen a thousand Friday nights. Our Chicken Karahi is cooked fresh when you order — never sitting in a tray. 100% halal.", "hashtags": "#ChickenKarahi #HalalSydney #AuburnEats" },
+    { "name": "Chapli Kebab Day", "item": "Chapli Kebab Day", "headline": "It's Chapli\nKebab Day", "line": "Hand-pressed beef, crushed coriander, pomegranate, a crisp edge and a juicy middle.", "caption": "It's Chapli Kebab Day 🔥 Hand-pressed beef, crushed coriander, pomegranate, a crisp edge and a juicy middle. First Friday of every month — today only, [offer]. Tag the friend who's never tried chapli.", "hashtags": "#ChapliKebab #PakistaniBBQ #SydneyFood" },
+    { "name": "Grill hero", "item": "Chicken Tikka", "headline": "Fresh off\nthe grill", "line": "Chicken tikka, seekh kebab, and that smoky char you can't fake.", "caption": "Fresh off the grill, straight to your table. Chicken tikka, seekh kebab, and that smoky char you can't fake. Who's coming tonight?", "hashtags": "#PakistaniBBQ #ChickenTikka #AuburnEats" },
+    { "name": "Karahi Night", "item": "Karahi Night", "headline": "Wednesday =\nKarahi Night", "line": "Bring the family, we'll bring the karahi.", "caption": "Wednesday = Karahi Night 🍲 [Offer], 5–10pm. Bring the family, we'll bring the karahi.", "hashtags": "#KarahiNight #Karahi #WesternSydney" },
+    { "name": "Review", "item": "Reviews", "headline": "This is why\nwe cook to order", "line": "Thank you!", "caption": "\"[Short real review line]\" — [Name] ⭐⭐⭐⭐⭐ Thank you! This is why we cook everything to order.", "hashtags": "#Fuadijan #HalalFood" },
+    { "name": "Family", "item": "Family Feast", "headline": "Big table?\nBig platter.", "line": "Tikka, seekh, karahi, naan and something for the kids. Easy parking.", "caption": "Big table? Big platter. Easy parking. Our family feast feeds [4–6] with tikka, seekh, karahi, naan and something for the kids. Book your table: [phone]", "hashtags": "#FamilyDinnerSydney #HalalSydney" },
+    { "name": "Student", "item": "Student Combo", "headline": "Exams are hard.\nDinner shouldn't be.", "line": "Student combo, Tuesdays, with student ID.", "caption": "Exams are hard. Dinner shouldn't be. Student combo: [item] + chips + drink for $[X] with student ID, Tuesdays.", "hashtags": "#SydneyStudents #CheapEatsSydney #UniLife" },
+    { "name": "Halal promise", "item": "Halal", "headline": "Our halal\npromise", "line": "100% halal meat from certified suppliers, no pork, no alcohol — ever.", "caption": "Our halal promise: 100% halal meat from certified suppliers, no pork, no alcohol — ever. Certificates on display in store and in our Halal highlight. Eat with peace of mind.", "hashtags": "#HalalFood #SydneyHalal #MuslimSydney" },
+    { "name": "Behind the scenes", "item": "Behind Fuadijan", "headline": "There isn't\na shortcut", "line": "The marinade's been going since last night; the grill's warming up.", "caption": "9am. The marinade's been going since last night, the grill's warming up, and the naan dough is resting. That's the secret — there isn't a shortcut.", "hashtags": "#FuadijanKitchen #PakistaniFood" },
+    { "name": "Burger bridge", "item": "Burgers", "headline": "Karahi for you,\nburger for them", "line": "Not everyone at the table wants karahi — and that's fine.", "caption": "Not everyone at the table wants karahi — and that's fine. Our [burger name]: [patty], [sauce], toasted bun, 100% halal. Karahi for you, burger for them.", "hashtags": "#HalalBurger #AuburnEats #SydneyEats" }
+  ],
+  "photoPrompts": [
+    "Tikka skewers on the grill, flame rising behind, shallow depth of field.",
+    "Karahi in its wok on a dark table, steam lit from the side, coriander and ginger julienne on top.",
+    "Chapli kebab broken in half, showing the texture, tomato slice and pomegranate visible.",
+    "Top-down family spread: two karahis, platter, naan basket, raita, salad, six hands reaching in.",
+    "Burger cross-section with cheese pull, on brown paper.",
+    "Owner portrait at the grill, warm light, looking at the food not the camera.",
+    "Exterior at golden hour with the car park visible.",
+    "Naan coming out of the oven, close-up on blistering.",
+    "Spice tray: whole spices in small bowls, top-down.",
+    "Students around a table with a large karahi and drinks."
+  ],
+  "photoRules": [
+    "Motion beats stills: steam, sizzle, pour, pull-apart naan, chapli cracking.",
+    "Shoot at the pass, within 30 seconds of plating, before steam and gloss fade.",
+    "Side window light by day; one warm LED panel at 45° by night. Never overhead fluorescent alone.",
+    "45° for karahi and platters, top-down for spreads, macro for char on tikka.",
+    "Record grill sizzle and wok sounds clean.",
+    "Hands in frame: tearing naan, dipping in raita.",
+    "Batch film: one 90-minute session every Thursday prep + Friday service gives a week of content."
+  ],
+  "reelIdeas": [
+    { "concept": "Grill flame ASMR", "hook": "Fat drips, flame jumps", "shots": "Skewers turning, macro char, plate drop", "length": "12–15s" },
+    { "concept": "Karahi from zero", "hook": "Watch a karahi go from raw to ready", "shots": "Oil, chicken, tomatoes, ginger, wok toss, coriander", "length": "20–30s" },
+    { "concept": "Chapli crack", "hook": "Chapli broken in half, steam", "shots": "Hand-pressing, frying, the break, the bite", "length": "10–15s" },
+    { "concept": "Founder story", "hook": "Owner: \"I opened Fuadijan because…\"", "shots": "Talking head + B-roll of kitchen", "length": "45–60s" },
+    { "concept": "First-time taster", "hook": "She's never had Pakistani food before", "shots": "Customer reaction, rating out of 10", "length": "20–30s" },
+    { "concept": "Review read-aloud", "hook": "On-screen 5★ review", "shots": "Voiceover over the dish they reviewed", "length": "15s" },
+    { "concept": "Feeding 6 for $X", "hook": "Price on screen", "shots": "Platter build, family reaching in", "length": "20s" },
+    { "concept": "Friday rush", "hook": "It's 7pm on a Friday at a Pakistani grill", "shots": "Fast cuts of tickets, grill, wok, packed tables", "length": "20–30s" },
+    { "concept": "Burger vs karahi", "hook": "Split screen: Which one are you?", "shots": "Two dishes, comment prompt", "length": "10–15s" },
+    { "concept": "Iftar countdown (Ramadan)", "hook": "Clock showing minutes to iftar", "shots": "Platter prep, dates, sunset, first bite", "length": "20–30s" }
+  ],
+  "visual": {
+    "palette": "The kit's Night, Cream, Ember and Saffron carry every post; warm gold reads as Saffron. Deep green belongs to the halal promise, Ramadan, Eid and Pakistan Day posts only, and only as an accent.",
+    "rules": [
+      "Warm, close, appetising: dark backgrounds, steam, char, hands breaking naan; a consistent warm grade.",
+      "Make the grill the star; the plate stays whole and the type stays big.",
+      "Real photos of the real dishes for anything that shows food sold; generated imagery only for backgrounds and mood.",
+      "Text on screen that TikTok search can read: Sydney, halal, Pakistani BBQ."
+    ]
+  },
+  "kpis": [
+    { "layer": "Discovery", "metric": "Google Business Profile views and searches", "where": "GBP Performance", "target": "+10% month on month" },
+    { "layer": "Discovery", "metric": "Instagram + TikTok + Facebook reach", "where": "Meta Business Suite, TikTok Analytics", "target": "+10–15% month on month" },
+    { "layer": "Discovery", "metric": "Average views per Reel/TikTok", "where": "Platform insights", "target": "Grow the 3-month rolling average" },
+    { "layer": "Engagement", "metric": "Engagement rate (likes+comments+saves+shares ÷ reach)", "where": "Insights", "target": "3–6% on Instagram Reels" },
+    { "layer": "Engagement", "metric": "Saves + shares per post", "where": "Insights", "target": "Track the top 3 posts; replicate their format" },
+    { "layer": "Engagement", "metric": "Follower growth", "where": "Insights", "target": "+3–5% month on month on IG and TikTok" },
+    { "layer": "Intent", "metric": "Google actions: calls, directions, website clicks", "where": "GBP Performance", "target": "+10% month on month" },
+    { "layer": "Intent", "metric": "Link-in-bio clicks to fuadijan.com.au", "where": "IG insights, Square Online analytics", "target": "1–2% of profile visits" },
+    { "layer": "Conversion", "metric": "Direct online orders (count, revenue)", "where": "Square Online", "target": "+10% month on month" },
+    { "layer": "Conversion", "metric": "Delivery-app orders", "where": "Uber Eats / DoorDash dashboards", "target": "Hold steady while direct grows" },
+    { "layer": "Conversion", "metric": "Bookings, large-table enquiries, catering leads", "where": "DMs, phone log, Square", "target": "Log every one" },
+    { "layer": "Conversion", "metric": "Offer redemptions per event", "where": "Square discount codes / items", "target": "Set per event" },
+    { "layer": "Loyalty", "metric": "Returning-customer share", "where": "Square customer directory / Loyalty", "target": "Rising trend" },
+    { "layer": "Reputation", "metric": "New Google reviews; average rating of new reviews; response rate", "where": "GBP", "target": "15–25 reviews; ≥4.7★; 100% replied" }
+  ],
+  "monthlyLoop": [
+    "Pull numbers into the dashboard table (add a column per month).",
+    "Rank content: top 5 and bottom 5 posts by saves+shares and by Google/website clicks.",
+    "Keep, kill, test: double the formats in the top 5; drop the bottom 5 for a month; test one new format.",
+    "Check events: did each ritual beat its baseline? No lift after 6 weeks → change the offer or the night.",
+    "Read reviews: new themes, new complaints, fixes to announce.",
+    "Set next month: theme weeks, one event, one creator or community collaboration, posting quotas."
+  ],
+  "plan": {
+    "from": "2026-11-02",
+    "to": "2026-12-01",
+    "weeks": [
+      { "week": 1, "dates": "2–8 Nov", "theme": "BBQ Week", "goal": "Establish the grill as the hero; launch Chapli Kebab Day" },
+      { "week": 2, "dates": "9–15 Nov", "theme": "Karahi Week", "goal": "Launch Karahi Night; first giveaway" },
+      { "week": 3, "dates": "16–22 Nov", "theme": "Student Deals Week", "goal": "Exam-season student deal; TikTok push" },
+      { "week": 4, "dates": "23–29 Nov", "theme": "Family Week", "goal": "Family platters ahead of school holidays and Christmas break" },
+      { "week": 5, "dates": "30 Nov–1 Dec", "theme": "Wrap-up", "goal": "Thank-you post, monthly review roundup, December teaser" }
+    ],
+    "days": [
+      { "date": "2026-11-02", "format": "R", "idea": "\"Meet the grill\" — 15s montage of tikka, seekh, chapli on the fire; text: \"Fresh off the grill, Auburn\"", "booster": "Story poll: Tikka or Seekh?", "dish": "Chicken Tikka", "template": "from-the-fire", "sets": ["bbq"] },
+      { "date": "2026-11-03", "format": "C", "idea": "\"Our grill menu, explained\" — 6 slides, one item each, price on slide", "booster": "Question box: \"What should we grill next?\"", "dish": null, "template": "chapli-education", "sets": ["bbq"] },
+      { "date": "2026-11-04", "format": "R", "idea": "ASMR: seekh kebab sizzle, no music", "booster": "Story quiz: How long do we marinate tikka?", "dish": "Seekh Kebab", "template": "from-the-fire", "sets": ["bbq"] },
+      { "date": "2026-11-05", "format": "R + S", "idea": "Teaser: \"Tomorrow is Chapli Kebab Day\" — mince being pressed by hand", "booster": "Story countdown sticker", "dish": "Chapli Kebab", "template": "chapli-from-the-fire", "sets": ["bbq"] },
+      { "date": "2026-11-06", "format": "R + G", "idea": "Chapli Kebab Day #1 — chapli cracking open, deal on screen", "booster": "Tag a friend who's never had chapli", "dish": "Chapli Kebab", "template": "chapli-from-the-fire", "sets": ["bbq"], "event": "Chapli Kebab Day" },
+      { "date": "2026-11-07", "format": "P", "idea": "Hero shot: mixed BBQ platter, top-down", "booster": "Stories: customer reposts from the night", "dish": "Mixed BBQ Platter", "template": "bbq-feast", "sets": ["bbq", "family"] },
+      { "date": "2026-11-08", "format": "R", "idea": "Owner on camera: \"Why we cook everything to order\" (30–45s)", "booster": "Comment prompt: \"Best kebab you've ever had — where?\"", "dish": null, "template": "behind-fuadijan", "sets": ["bbq"] },
+      { "date": "2026-11-09", "format": "R", "idea": "\"How karahi is made\" — tomatoes, ginger, wok toss, 20s", "booster": "Story poll: Chicken or Lamb karahi?", "dish": "Chicken Karahi", "template": "art-of-karahi", "sets": ["karahi"] },
+      { "date": "2026-11-10", "format": "C", "idea": "\"Chicken vs Lamb Karahi\" comparison card + price per serve", "booster": "Giveaway opens: family karahi for 4 — follow, like, tag 2 friends (ends Sunday)", "dish": "Chicken Karahi", "template": "audience-poll", "sets": ["karahi"] },
+      { "date": "2026-11-11", "format": "R + G", "idea": "Karahi Night #1 launch — live-ish footage of the wok service", "booster": "Story: \"Karahi Night tonight\" + location sticker", "dish": "Chicken Karahi", "template": "from-the-karahi", "sets": ["karahi"], "event": "Karahi Night" },
+      { "date": "2026-11-12", "format": "R", "idea": "Review Reel: a 5★ karahi review read aloud over the dish", "booster": "Question box: \"Describe our karahi in one word\"", "dish": "Chicken Karahi", "template": "customer-review", "sets": ["karahi"] },
+      { "date": "2026-11-13", "format": "P", "idea": "Steam shot: karahi with fresh naan, hands tearing", "booster": "Story: giveaway reminder", "dish": "Chicken Karahi", "template": "from-the-karahi", "sets": ["karahi"] },
+      { "date": "2026-11-14", "format": "R", "idea": "POV: \"You brought your parents for karahi\"", "booster": "Comment prompt: \"Tag who you'd bring\"", "dish": "Lamb Karahi", "template": "family-table", "sets": ["karahi", "family"] },
+      { "date": "2026-11-15", "format": "S + P", "idea": "Giveaway winner announced; behind-the-scenes spice prep", "booster": "Thank-you Story to entrants with Karahi Night reminder", "dish": null, "template": "behind-fuadijan", "sets": ["karahi"] },
+      { "date": "2026-11-16", "format": "R", "idea": "\"Exam fuel\" — student deal reveal (burger or karahi + naan + drink)", "booster": "Story poll: Burger or karahi after an exam?", "dish": "Burgers", "template": "snack-pack", "sets": ["student"], "event": "Student Night" },
+      { "date": "2026-11-17", "format": "R", "idea": "TikTok: \"Feeding a broke uni student for $X in Sydney\"", "booster": "Duet/stitch prompt", "dish": "Burgers", "template": "snack-pack", "sets": ["student"] },
+      { "date": "2026-11-18", "format": "R + G", "idea": "Karahi Night #2 — \"bring your study group, share a large karahi\"", "booster": "Story: group-table photo repost", "dish": "Chicken Karahi", "template": "from-the-karahi", "sets": ["karahi", "student"], "event": "Karahi Night" },
+      { "date": "2026-11-19", "format": "C", "idea": "\"5 cheap eats that actually fill you up\" — all Fuadijan items", "booster": "Save prompt: \"Save for exam week\"", "dish": null, "template": "audience-poll", "sets": ["student"] },
+      { "date": "2026-11-20", "format": "R", "idea": "Street-interview style: students rate the burger 1–10", "booster": "Comment: \"What would you rate it?\"", "dish": "Burgers", "template": "modern-fuadijan", "sets": ["student"] },
+      { "date": "2026-11-21", "format": "P", "idea": "Burger hero shot — cross-section, melting cheese", "booster": "Story poll: add a new burger? which flavour", "dish": "Burgers", "template": "modern-fuadijan", "sets": ["student"] },
+      { "date": "2026-11-22", "format": "R", "idea": "\"Late-night karahi with the boys\" — group vibe", "booster": "Tag your study group", "dish": "Chicken Karahi", "template": "from-the-karahi", "sets": ["karahi", "student"] },
+      { "date": "2026-11-23", "format": "R", "idea": "Family platter build — time-lapse of the platter being assembled", "booster": "Story poll: How many people does this feed?", "dish": "Family Feast", "template": "family-feast", "sets": ["family"] },
+      { "date": "2026-11-24", "format": "C", "idea": "\"Family feast menu\" — sizes, prices, what's included; parking map on last slide", "booster": "Save + share prompt", "dish": "Family Feast", "template": "chapli-education", "sets": ["family", "local"] },
+      { "date": "2026-11-25", "format": "R + G", "idea": "Karahi Night #3 — families at the table (with permission)", "booster": "Story: \"Booking a big table? DM us\"", "dish": "Chicken Karahi", "template": "from-the-karahi", "sets": ["karahi", "family"], "event": "Karahi Night" },
+      { "date": "2026-11-26", "format": "R", "idea": "Kid-test: kids try chicken tikka and burgers", "booster": "Comment: \"What does your kid always order?\"", "dish": "Chicken Tikka", "template": "family-table", "sets": ["family"] },
+      { "date": "2026-11-27", "format": "P + G", "idea": "\"Easy parking, big tables\" photo of the space + car park", "booster": "Story: catering enquiry link", "dish": null, "template": "auburn-community", "sets": ["local", "family"] },
+      { "date": "2026-11-28", "format": "R", "idea": "Weekend rush behind the scenes — the kitchen at full speed", "booster": "Story: Saturday special", "dish": null, "template": "behind-fuadijan", "sets": ["bbq"] },
+      { "date": "2026-11-29", "format": "R", "idea": "\"Grandma approved\" — elder family member tries the karahi", "booster": "Comment prompt: family food memories", "dish": "Chicken Karahi", "template": "rooted-in-tradition", "sets": ["karahi", "family"] },
+      { "date": "2026-11-30", "format": "C", "idea": "\"Your top 5 reviews this month\" carousel", "booster": "Thank-you post + review link: \"Enjoyed it? A Google review helps a small family business\" (no incentive)", "dish": null, "template": "you-said-it", "sets": ["local"] },
+      { "date": "2026-12-01", "format": "R", "idea": "December teaser: \"This summer at Fuadijan…\" + Chapli Kebab Day #2 reminder (Fri 4 Dec)", "booster": "Story poll: what should our summer special be?", "dish": "Chapli Kebab", "template": "new-product-teaser", "sets": ["bbq"] }
+    ]
+  }
+}

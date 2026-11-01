@@ -286,6 +286,18 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(messenger.sent.some((m) => /^Got it — .*Day 3/.test(m.text ?? ''))).toBe(true);
   });
 
+  it('seeds the strategy wordings into the bank once, however often it runs', async () => {
+    const { seedStrategyWordings, strategyWordings, loadStrategy } = await import('../src/strategy.js');
+    const before = Number((await pool.query("select count(*)::int n from slogans where source = 'strategy'")).rows[0]!.n);
+    expect(before).toBe(0);
+    await seedStrategyWordings(pool);
+    await seedStrategyWordings(pool);
+    const rows = (await pool.query<{ item: string; item_key: string; headline: string; line: string | null }>("select item, item_key, headline, line from slogans where source = 'strategy'")).rows;
+    expect(rows).toHaveLength(strategyWordings(loadStrategy()).length);
+    expect(rows.find((r) => r.item_key === 'karahi night' && r.headline === 'Karahi\nNight')?.line).toMatch(/Every Wednesday/);
+    expect(rows.filter((r) => r.item_key === 'all')).toHaveLength(4);
+  });
+
   it('understands "posted 2" and "skip 3"', async () => {
     messenger.sent.length = 0;
     await handleFreeText(ctx, 'posted 2');

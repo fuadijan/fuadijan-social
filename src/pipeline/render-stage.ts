@@ -21,6 +21,7 @@ import { STYLES, feasibleStyle } from '../render/styles.js';
 import { allSettings } from '../settings.js';
 import { CRITIQUE_FIX_BELOW, applyOwnerNote, critiqueDesign, directDesign, mergeFixes, withLegibility, type DesignRun } from './design.js';
 import { customNote } from './custom.js';
+import { designBrief, strategyIfAny } from '../strategy.js';
 import type { Asset, StageContext } from './stages.js';
 
 let remover: BackgroundRemover | null | undefined;
@@ -140,6 +141,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   const designInput = {
     stats, read, cutoutAvailable: Boolean(cut.cutout), cutoutCoverage: cut.coverage, headline: copy.headline, line: copy.line,
     note, designNotes: s.design_notes ?? '', templateStyle: entry.style ?? null,
+    strategy: strategyIfAny() ? designBrief(strategyIfAny()!) : null,
   };
   const directed = await directDesign(ctx, designInput, await thumbnail(heroPhoto, 512), ctx.job.id);
   let { spec } = applyOwnerNote(directed.spec, note);

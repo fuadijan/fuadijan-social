@@ -17,6 +17,7 @@ import { Worker } from './pipeline/worker.js';
 import { assertAllMapped } from './render/registry.js';
 import { scheduleReminders } from './reminders/index.js';
 import { buildServer } from './server.js';
+import { loadStrategy, seedStrategyWordings } from './strategy.js';
 
 async function main(): Promise<void> {
   const log = consoleLogger;
@@ -27,6 +28,13 @@ async function main(): Promise<void> {
   }
   const pool = createPool(config.databaseUrl);
   await migrate(pool, (m) => log.info(m));
+
+  // The strategy's taglines, poster concepts and ready captions are kept in the wording bank (source "strategy").
+  try {
+    log.info(`Strategy "${loadStrategy().name}": ${await seedStrategyWordings(pool)} wordings in the bank.`);
+  } catch (e) {
+    log.warn(`Strategy not loaded: ${e instanceof Error ? e.message : e}`);
+  }
 
   const templates = (await pool.query<{ template: string }>('select distinct template from calendar_rows')).rows.map((r) => r.template);
   assertAllMapped(templates);

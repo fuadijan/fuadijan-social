@@ -20,6 +20,7 @@ import { heroTemplates } from '../render/registry.js';
 import { STYLE_KEYS, STYLES } from '../render/styles.js';
 import { allSettings } from '../settings.js';
 import { addSlogan, itemKey, listSlogans, removeSlogan, updateSlogan, type Slogan } from '../slogans.js';
+import { eventsOn, loadStrategy, ritualsOn } from '../strategy.js';
 import { addDays, sydneyDate } from '../time.js';
 
 function viewJson(v: RowView, extra: Record<string, unknown> = {}) {
@@ -239,6 +240,19 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       }
     }
     return { ok: true, dayNo: row.day_no, date: row.date, plan: row.plan };
+  });
+
+  /** The marketing strategy (brand/strategy.json) with today's rituals and running events picked out. */
+  app.get('/api/strategy', async (_req, reply) => {
+    let strategy;
+    try {
+      strategy = loadStrategy();
+    } catch (e) {
+      return reply.code(404).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    const today = sydneyDate(ctx.now());
+    const wordings = (await listSlogans(ctx.pool)).filter((s) => s.source === 'strategy').length;
+    return { today, strategy, todayRituals: ritualsOn(strategy, today).map((r) => r.name), runningEvents: eventsOn(strategy, today).map((e) => e.name), wordingsInBank: wordings };
   });
 
   // ─── the wording bank (slogans): one product, many wordings ───────────────────────────────────────────

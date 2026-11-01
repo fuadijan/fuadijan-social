@@ -252,3 +252,42 @@ export interface CreateRequest {
 }
 
 export interface CreateResponse { ok: true; dayNo: number; date: string; plan: string }
+
+// ─── the marketing strategy (brand/strategy.json) ──────────────────────────────────────────────────────────
+
+export interface StrategyPoster { headline: string; line: string; visual: string }
+
+export interface Strategy {
+  name: string;
+  version: number;
+  source?: string;
+  positioning: string;
+  descriptor: string;
+  oneIdea: string;
+  knownFor: { primary: string; secondary: string; trust: string };
+  taglines: { text: string; use: string }[];
+  voice: { do: string[]; dont: string[] };
+  signatureDishes: { dish: string; role: string; why: string }[];
+  segments: { segment: string; want: string; message: string; channels: string }[];
+  platforms: { platform: string; job: string; cadence: string; share: string }[];
+  captionTemplates: Record<string, string>;
+  hashtagSets: Record<string, { when: string; tags: string[] }>;
+  rituals: { name: string; item: string; when: string; weekday: number | null; rule?: string; offer: string; measure: string }[];
+  events: { name: string; item: string; from: string; to: string; approximate?: boolean; quarterly?: boolean; offers: string; poster: StrategyPoster }[];
+  posters: (StrategyPoster & { name: string; item: string })[];
+  captions: { name: string; item: string; headline: string; line: string; caption: string; hashtags: string }[];
+  photoPrompts: string[];
+  photoRules: string[];
+  reelIdeas: { concept: string; hook: string; shots: string; length: string }[];
+  visual: { palette: string; rules: string[] };
+  kpis: { layer: string; metric: string; where: string; target: string }[];
+  monthlyLoop: string[];
+  plan: {
+    from: string;
+    to: string;
+    weeks: { week: number; dates: string; theme: string; goal: string }[];
+    days: { date: string; format: string; idea: string; booster: string; dish: string | null; template: string; sets: string[]; event?: string }[];
+  };
+}
+
+export interface StrategyResponse { today: string; strategy: Strategy; todayRituals: string[]; runningEvents: string[]; wordingsInBank: number }

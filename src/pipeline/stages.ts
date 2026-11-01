@@ -20,6 +20,7 @@ import { summarise, type DesignRun, type DesignSummary } from './design.js';
 import { addCustomOption, applyOption, latestCopyOptions, markChosen, storeCopyOptions } from './wording.js';
 import { applyCustomWording, customResolveNote, keepFormats } from './custom.js';
 import { slogansFor } from '../slogans.js';
+import { copyBrief, strategyIfAny } from '../strategy.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
 import { answeredQuestions, askQuestion, openQuestions, setQuestionMessageId } from './questions.js';
@@ -303,6 +304,7 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
     row, menu, answers, note, dishCanonical: read?.dish_canonical ?? null,
     label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'), facts,
     slogans: slogans.map((s) => `${s.item}: ${s.headline.replace(/\n/g, ' / ')}${s.line ? ` — ${s.line}` : ''}`),
+    strategy: strategyIfAny() ? copyBrief(strategyIfAny()!, row) : null,
   });
   const written = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
   const copy = applyCustomWording(written, row.custom);
