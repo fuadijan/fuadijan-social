@@ -83,7 +83,7 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       if (!row) return;
       const note = rest.slice(1).join(' ').trim() || null;
       await redoRow(pool, row.id, note);
-      return void say(`Re-running Day ${row.day_no}${note ? ` with "${note}"` : ''}.`);
+      return void say(`Re-running Day ${row.day_no}${note ? ` with "${note}"` : ''}.${row.custom?.wording ? ' The wordings come first this time: your original and new ones to pick from.' : ''}`);
     }
     case '/edit': {
       const row = await needRow(app, dayNo);

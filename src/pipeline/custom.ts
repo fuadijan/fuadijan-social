@@ -190,7 +190,30 @@ export function customNote(spec: CustomSpec | null | undefined, note: string | n
 }
 
 /** What the resolve prompt is told about a custom post. */
-export function customResolveNote(spec: CustomSpec): string {
+export interface RedoContext {
+  redo: true;
+  /** Fields the owner changed on the row after making the post, as `field: "value"` lines. */
+  ownerEdits: string[];
+}
+
+/**
+ * Fields the owner edited on the row after it was made (dish, theme, objective, creative instructions), newest
+ * value per field, as `field: "value"` lines for the writer.
+ */
+export async function ownerEditsSince(db: Db, row: CalendarRow): Promise<string[]> {
+  const { rows } = await db.query<{ field: string; new_value: string | null }>(
+    `select distinct on (field) field, new_value from calendar_edits
+     where row_id = $1 and source like 'owner%' and field in ('dish', 'theme', 'objective', 'creative_instructions', 'on_screen_text')
+     order by field, created_at desc`, [row.id]);
+  return rows.filter((r) => r.new_value?.trim()).map((r) => `${r.field}: "${r.new_value!.trim()}"`);
+}
+
+export function customResolveNote(spec: CustomSpec, redo?: RedoContext): string {
+  if (spec.wording && redo) {
+    const w = spec.wording;
+    const edits = redo.ownerEdits.length ? ` Since then the owner changed ${redo.ownerEdits.join(', ')}; write around the new values.` : '';
+    return `This is a one-off custom post about ${spec.product}. When it was made the owner composed its wording (headline: "${w.headline.replace(/\n/g, ' / ')}"${w.line ? `; line: "${w.line}"` : ''}${w.caption ? `; caption: "${w.caption}"` : ''}). The owner now asks for it to be done again.${edits} If the owner's note, or a changed dish or theme, calls for different words (a new title, headline, wording, theme or tone), write a new headline and line in the brand's voice; otherwise keep the owner's words as the main headline and line. Offer two alternatives as variants either way. Ask nothing: leave unresolved empty.`;
+  }
   if (spec.wording) {
     const w = spec.wording;
     return `This is a one-off custom post about ${spec.product}, composed by the owner. The headline and the line are the owner's own words and are used exactly as given (headline: "${w.headline.replace(/\n/g, ' / ')}"${w.line ? `; line: "${w.line}"` : ''}${w.caption ? `; caption: "${w.caption}"` : ''}). Write the ${w.caption ? 'alternative captions' : 'caption'}, CTA, hashtags, alt text and story text around them. Ask nothing: leave unresolved empty.`;

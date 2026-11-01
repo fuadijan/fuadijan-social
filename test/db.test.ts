@@ -248,6 +248,30 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect((await recentPhotos(pool)).filter((p) => p.thumb === chapli.thumb)).toHaveLength(1);
   });
 
+  it("a /redo of a custom post asks which wording, with the owner's original offered beside the new ones", async () => {
+    const { latestCopyOptions } = await import('../src/pipeline/wording.js');
+    messenger.sent.length = 0;
+    const row = (await rowByDay(pool, 101))!;
+    await handleCommand(ctx, '/redo 101 new title about the smoke');
+    expect(messenger.sent.at(-1)!.text).toMatch(/Re-running Day 101/);
+    await new Worker(ctx, 1000).drain();
+    // The first run took the owner's words without asking; the redo asks like any post.
+    const open = (await openQuestions(pool, row.id)).filter((q) => q.field === 'wording');
+    expect(open).toHaveLength(1);
+    const set = (await latestCopyOptions(pool, row.id))!;
+    expect(set.options[0]).toMatchObject({ name: 'Calendar wording', headline: 'Fuadijan\nAuburn' });
+    expect(set.options.find((o) => o.name === 'Your original wording')).toMatchObject({ headline: 'Chapli\nFirst', line: 'Problems later.' });
+    expect(open[0]!.options.some((o) => /Your original wording/.test(o.label))).toBe(true);
+    // Picking the new wording renders with it.
+    await applyAnswer(ctx, open[0]!.id, '1', 'dry-run');
+    await new Worker(ctx, 1000).drain();
+    const job = (await pool.query<{ state: { copy: { headline: string }; wordingChosen: number } }>(
+      "select state from jobs where calendar_row_id = $1 and state ? 'redo' order by id desc limit 1", [row.id])).rows[0]!;
+    expect(job.state.copy.headline).toBe('Fuadijan\nAuburn');
+    expect(job.state.wordingChosen).toBe(0);
+    expect((await openQuestions(pool, row.id))).toHaveLength(0);
+  });
+
   it('makes a custom post from /custom in Telegram, offering the product\'s earlier photo as a button', async () => {
     messenger.sent.length = 0;
     await handleCommand(ctx, '/custom Chapli Kebab flat story 2026-11-12 7pm -- Hot. / Fresh. | Tonight only.');

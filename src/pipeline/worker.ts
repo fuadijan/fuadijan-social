@@ -39,7 +39,7 @@ export async function redoRow(db: pg.Pool, rowId: number, note: string | null): 
     ?? (await db.query<Asset>('select * from assets where calendar_row_id = $1 order by created_at desc limit 1', [rowId])).rows[0];
   const job = (await db.query<Job>(
     "insert into jobs (asset_id, calendar_row_id, stage, status, state) values ($1, $2, 'resolve', 'queued', $3) returning *",
-    [asset?.id ?? null, rowId, JSON.stringify({ note })])).rows[0]!;
+    [asset?.id ?? null, rowId, JSON.stringify({ note, redo: true })])).rows[0]!;
   return job;
 }
 

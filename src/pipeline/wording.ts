@@ -25,7 +25,7 @@ export const MAIN_NAME = 'Calendar wording';
  * The calendar wording first, then Claude's alternatives, then the owner's slogans for the item (a slogan without
  * its own line or caption borrows the calendar's). Duplicates are dropped.
  */
-export function optionsFrom(copy: ResolvedCopy, slogans: Slogan[] = []): WordingOption[] {
+export function optionsFrom(copy: ResolvedCopy, slogans: Slogan[] = [], extra: WordingOption[] = []): WordingOption[] {
   const main: WordingOption = { name: MAIN_NAME, headline: copy.headline, line: copy.line, caption: copy.caption };
   const seen = new Set([key(main)]);
   const out = [main];
@@ -35,14 +35,15 @@ export function optionsFrom(copy: ResolvedCopy, slogans: Slogan[] = []): Wording
     out.push(o);
   };
   for (const v of copy.variants) push({ name: v.name || `Option ${out.length + 1}`, headline: v.headline, line: v.line, caption: v.caption });
+  for (const e of extra) push(e);
   for (const s of slogans) push({ name: `Slogan · ${s.item_key === 'all' ? 'house' : s.item}`, headline: s.headline, line: s.line ?? copy.line, caption: s.caption ?? copy.caption });
   return out;
 }
 
 const key = (o: WordingOption) => `${o.headline}\u0000${o.line}\u0000${o.caption}`.toLowerCase();
 
-export async function storeCopyOptions(db: Db, rowId: number, jobId: number | null, copy: ResolvedCopy, slogans: Slogan[] = []): Promise<CopyOptions> {
-  const options = optionsFrom(copy, slogans);
+export async function storeCopyOptions(db: Db, rowId: number, jobId: number | null, copy: ResolvedCopy, slogans: Slogan[] = [], extra: WordingOption[] = []): Promise<CopyOptions> {
+  const options = optionsFrom(copy, slogans, extra);
   const { rows } = await db.query<CopyOptions>(
     'insert into copy_options (calendar_row_id, job_id, options) values ($1, $2, $3) returning *',
     [rowId, jobId, JSON.stringify(options)]);

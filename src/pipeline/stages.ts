@@ -18,7 +18,7 @@ import { templateEntry } from '../render/registry.js';
 import { allSettings, dishFactsFor, getSetting } from '../settings.js';
 import { summarise, type DesignRun, type DesignSummary } from './design.js';
 import { addCustomOption, applyOption, latestCopyOptions, markChosen, storeCopyOptions } from './wording.js';
-import { applyCustomWording, customResolveNote, keepFormats } from './custom.js';
+import { applyCustomWording, customResolveNote, keepFormats, ownerEditsSince } from './custom.js';
 import { slogansFor } from '../slogans.js';
 import { copyBrief, strategyIfAny } from '../strategy.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
@@ -56,6 +56,8 @@ export interface JobState {
   unscheduled?: boolean;
   copy?: ResolvedCopy;
   note?: string | null;
+  /** Set on a job started by /redo or the Day page: the owner wants the copy or the design thought over again. */
+  redo?: boolean;
   packId?: number;
   packFolder?: string;
   isSetFollower?: boolean;
@@ -299,7 +301,8 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   const facts = await dishFactsFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical]);
   const slogans = await slogansFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical, seriesLabel(row), row.theme]);
   // A custom post tells the writer what is the owner's and fixed, and what is left to write.
-  const note = [ctx.job.state.note ?? cap.note, row.custom ? customResolveNote(row.custom) : null].filter(Boolean).join('\n') || null;
+  const redo = Boolean(ctx.job.state.redo);
+  const note = [ctx.job.state.note ?? cap.note, row.custom ? customResolveNote(row.custom, redo ? { redo: true, ownerEdits: await ownerEditsSince(ctx.pool, row) } : undefined) : null].filter(Boolean).join('\n') || null;
   const prompt = resolvePrompt({
     row, menu, answers, note, dishCanonical: read?.dish_canonical ?? null,
     label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'), facts,
@@ -307,7 +310,8 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
     strategy: strategyIfAny() ? copyBrief(strategyIfAny()!, row) : null,
   });
   const written = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
-  const copy = applyCustomWording(written, row.custom);
+  // The first run of a custom post uses the owner's words as given; a redo lets the note change them.
+  const copy = redo ? written : applyCustomWording(written, row.custom);
 
   // Everything the menu can't settle goes to the owner, one message per question (so each has its buttons).
   const unresolved = copy.unresolved.filter((u) => !answers.some((a) => a.question === u.question));
@@ -322,7 +326,8 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
     return { kind: 'wait', questionId: first!, state: { copy } };
   }
   // The main copy and Claude's alternative wordings are kept; the render stage asks which to use.
-  await storeCopyOptions(ctx.pool, row.id, ctx.job.id, copy, slogans);
+  const original = redo && row.custom?.wording ? [{ name: 'Your original wording', headline: row.custom.wording.headline, line: row.custom.wording.line, caption: row.custom.wording.caption || copy.caption }] : [];
+  await storeCopyOptions(ctx.pool, row.id, ctx.job.id, copy, slogans, original);
   return { kind: 'advance', stage: 'render', state: { copy } };
 }
 
@@ -334,8 +339,8 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
 async function chooseWording(ctx: StageContext, row: CalendarRow): Promise<Outcome | null> {
   const copy = ctx.job.state.copy!;
   if (ctx.job.state.wordingChosen !== undefined || ctx.job.state.isSetFollower) return null;
-  // The owner composed the wording in the Create flow: nothing to ask.
-  if (row.custom?.wording) {
+  // The owner composed the wording in the Create flow: nothing to ask on the first run. A redo asks like any post.
+  if (row.custom?.wording && !ctx.job.state.redo) {
     ctx.job.state.wordingChosen = 0;
     return null;
   }
