@@ -7,6 +7,8 @@ import { useApi } from './useApi';
 import { Day } from './screens/Day';
 import { Month } from './screens/Month';
 import { Week } from './screens/Week';
+import { Create } from './screens/Create';
+import { Wordings } from './screens/Wordings';
 
 /** The kit's link, backed by react-router so in-app navigation stays client-side. */
 const Link: FjLink = ({ href, children, ...rest }) => (
@@ -22,6 +24,13 @@ const NAV: FjNavSection[] = [
       { href: '/', label: 'This week', shortLabel: 'Week', icon: '☀️', exact: true },
       { href: '/month', label: 'Month', icon: '🗓️' },
       { href: '/day', label: 'Day', icon: '📄' },
+    ],
+  },
+  {
+    label: 'Create',
+    items: [
+      { href: '/create', label: 'New design', shortLabel: 'Create', icon: '✨' },
+      { href: '/wordings', label: 'Wordings', icon: '✍️' },
     ],
   },
 ];
@@ -51,6 +60,8 @@ export function App() {
         <Route path="/month" element={<Month />} />
         <Route path="/day" element={<DayRedirect />} />
         <Route path="/day/:dayNo" element={<Day />} />
+        <Route path="/create" element={<Create />} />
+        <Route path="/wordings" element={<Wordings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppFrame>

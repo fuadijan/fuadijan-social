@@ -172,6 +172,17 @@ also shapes the story (invite's story is the band story).
 The pack's `design.json` and the Telegram line "🎨 Layout B · text bottom-left · type ×1.10 · …" say what was
 decided and why. `DESIGN_CRITIQUE=0` turns the critic off.
 
+**Custom designs** (web app, Create → New design): a one-off post outside the monthly plan. The flow asks for the
+product (the menu plus every item in the wording bank), the series (the hero-photo templates: label and footer),
+the title and writing (the product's wordings from the bank, the house ones, your own words, or let the agent
+write it), the style (the art director's choice or one of the five, locked), feed and/or story with the date and
+time, and the photo (a new upload or one already received, which keeps its crops and cut-out). It becomes a
+calendar row in the running plan numbered from 101 (`type` custom, `custom` jsonb, `src/pipeline/custom.ts`), so
+the ordinary pipeline, Day page, reminders, `/redo 101 …` and the Telegram pack all apply; the owner's wording is
+used as given with no wording question, and only the formats asked for are kept. **Wordings** (Create → Wordings)
+maintains the bank the Slogans sheet and `/slogan` feed: one product, many wordings (two headline lines, a line, a
+caption), offered on every post about that product and in the Create flow.
+
 `npm run render-samples` writes every template with the owner's real photos to `samples/out/`, next to the
 matching reference, for approval. Snapshot tests (`test/render.test.ts`, `test/__snapshots__/*.png`) compare a
 perceptual hash; delete a snapshot to re-record it after an intended change.
@@ -196,13 +207,13 @@ src/
   render/     brand.ts templates.ts (satori) text.ts (fit) compose.ts (sharp) index.ts registry.ts
   menu/       source.ts menu-screens.ts index.ts (file, pos)
   brain/      client.ts (Claude + fixtures + claude_calls) prompts.ts schemas.ts
-  pipeline/   stages.ts render-stage.ts worker.ts questions.ts packs.ts
+  pipeline/   stages.ts render-stage.ts worker.ts questions.ts packs.ts wording.ts design.ts custom.ts
   messaging/  telegram.ts commands.ts formats.ts messenger.ts email.ts (smtp2go + fallback)
   reminders/  index.ts brief.ts
   auth/       hubSession.ts
   api/        routes.ts
   server.ts main.ts dry-run.ts
-web/          Vite + React: screens/Week.tsx Month.tsx Day.tsx, vendored frame kit (components/fj)
+web/          Vite + React: screens/Week.tsx Month.tsx Day.tsx Create.tsx Wordings.tsx, vendored frame kit (components/fj)
 test/         vitest; fixtures/claude/*.json, fixtures/menu-screens.json
 ```
 

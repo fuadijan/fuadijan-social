@@ -20,6 +20,7 @@ import { templateEntry } from '../render/registry.js';
 import { STYLES, feasibleStyle } from '../render/styles.js';
 import { allSettings } from '../settings.js';
 import { CRITIQUE_FIX_BELOW, applyOwnerNote, critiqueDesign, directDesign, mergeFixes, withLegibility, type DesignRun } from './design.js';
+import { customNote } from './custom.js';
 import type { Asset, StageContext } from './stages.js';
 
 let remover: BackgroundRemover | null | undefined;
@@ -92,7 +93,8 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   // The photo read lives on the asset too, so a /redo (a fresh job with no state) still knows the composition.
   const read: MatchResult | null = ctx.job.state.match ?? hero?.match ?? null;
   const composition = read?.composition;
-  const note = ctx.job.state.note ?? null;
+  // A custom post's chosen style reads like a note ("poster style"), unless this run's note names another.
+  const note = customNote(row.custom, ctx.job.state.note ?? null);
   const { spec: noteSpec, locked } = applyOwnerNote(blankSpec(), note);
   const forceB = locked.includes('layout') && noteSpec.layout === 'B';
   const forceA = locked.includes('layout') && noteSpec.layout === 'A';

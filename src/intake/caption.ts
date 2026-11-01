@@ -24,7 +24,7 @@ export function parseCaption(raw: string | null | undefined): ParsedCaption {
   let dayNo: number | null = null;
   const withoutTags = text.replace(/(^|\s)#([\w-]+)/g, (_m, _s, t: string) => {
     const tag = t.toLowerCase();
-    const day = tag.match(/^day(\d{1,2})$/);
+    const day = tag.match(/^day(\d{1,3})$/); // custom posts are numbered from 101
     if (day) dayNo = Number(day[1]);
     tags.push(tag);
     return ' ';

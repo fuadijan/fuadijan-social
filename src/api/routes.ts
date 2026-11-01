@@ -1,6 +1,7 @@
 /**
  * The JSON API the web app reads: week, month, day, questions, status, files, packs; and the few writes Cut 1
- * allows (answer a question, mark posted, skip, push). Cut 2 adds edit and upload.
+ * allows (answer a question, mark posted, skip, push). Cut 2 adds edit and upload; then the Create flow (a
+ * custom design from a product, a series, a wording, a style and a photo) and the wording bank it draws on.
  */
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
@@ -13,8 +14,12 @@ import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
 import { allCopyOptions, copyOptionsById, markChosen, rerenderWithWording } from '../pipeline/wording.js';
+import { adoptAsset, createCustomPost, parseCustomInput, recentPhotos } from '../pipeline/custom.js';
 import { rowViews, type RowView } from '../reminders/brief.js';
+import { heroTemplates } from '../render/registry.js';
+import { STYLE_KEYS, STYLES } from '../render/styles.js';
 import { allSettings } from '../settings.js';
+import { addSlogan, itemKey, listSlogans, removeSlogan, updateSlogan, type Slogan } from '../slogans.js';
 import { addDays, sydneyDate } from '../time.js';
 
 function viewJson(v: RowView, extra: Record<string, unknown> = {}) {
@@ -177,6 +182,112 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
   });
 
   app.get('/api/status', async () => ({ text: await statusText(ctx) }));
+
+  // ─── the Create flow: a custom design ──────────────────────────────────────────────────────────────────
+
+  /** Menu items plus every item in the wording bank, with how many wordings each has. */
+  async function products(): Promise<{ name: string; category: string | null; wordings: number }[]> {
+    let menu: { name: string; category: string | null }[] = [];
+    try {
+      menu = (await ctx.menu.get()).items.filter((i) => !i.soldOut).map((i) => ({ name: i.name, category: i.category }));
+    } catch {
+      menu = [];
+    }
+    const counts = new Map<string, number>();
+    const names = new Map<string, string>();
+    for (const s of await listSlogans(ctx.pool)) {
+      if (s.item_key === 'all') continue;
+      counts.set(s.item_key, (counts.get(s.item_key) ?? 0) + 1);
+      names.set(s.item_key, s.item);
+    }
+    const out = new Map<string, { name: string; category: string | null; wordings: number }>();
+    for (const m of menu) out.set(itemKey(m.name), { name: m.name, category: m.category, wordings: counts.get(itemKey(m.name)) ?? 0 });
+    for (const [k, name] of names) if (!out.has(k)) out.set(k, { name, category: null, wordings: counts.get(k) ?? 0 });
+    return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  app.get('/api/create/options', async () => {
+    const settings = await allSettings(ctx.pool);
+    return {
+      today: sydneyDate(ctx.now()),
+      postTimeDefault: settings.post_time_default ?? '18:00',
+      products: await products(),
+      templates: heroTemplates(),
+      styles: STYLE_KEYS.map((k) => ({ key: k, name: STYLES[k].name, blurb: STYLES[k].blurb, needsCutout: STYLES[k].needsCutout, story: STYLES[k].story })),
+      photos: await recentPhotos(ctx.pool),
+    };
+  });
+
+  /**
+   * Makes the custom post's row. With `assetId` a photo already received is filed for it and the pipeline starts
+   * at resolve; otherwise the web app uploads the photo next (POST /api/rows/:dayNo/upload) and intake takes it.
+   */
+  app.post<{ Body: Record<string, unknown> }>('/api/create', async (req, reply) => {
+    let input;
+    try {
+      input = parseCustomInput(req.body);
+    } catch (e) {
+      return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    const row = await createCustomPost(ctx.pool, input, sydneyDate(ctx.now()));
+    const assetId = Number(req.body?.assetId);
+    if (Number.isInteger(assetId) && assetId > 0) {
+      try {
+        await adoptAsset(ctx.pool, row, assetId);
+      } catch (e) {
+        return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e), dayNo: row.day_no });
+      }
+    }
+    return { ok: true, dayNo: row.day_no, date: row.date, plan: row.plan };
+  });
+
+  // ─── the wording bank (slogans): one product, many wordings ───────────────────────────────────────────
+
+  const wordingJson = (s: Slogan) => ({ id: s.id, item: s.item, itemKey: s.item_key, headline: s.headline, line: s.line, caption: s.caption, source: s.source });
+
+  app.get('/api/wordings', async () => {
+    const groups = new Map<string, { item: string; itemKey: string; wordings: ReturnType<typeof wordingJson>[] }>();
+    for (const s of await listSlogans(ctx.pool)) {
+      const g = groups.get(s.item_key) ?? { item: s.item_key === 'all' ? 'Every post' : s.item, itemKey: s.item_key, wordings: [] };
+      g.wordings.push(wordingJson(s));
+      groups.set(s.item_key, g);
+    }
+    // The house wordings first, then the products by name.
+    const list = [...groups.values()].sort((a, b) => (a.itemKey === 'all' ? -1 : b.itemKey === 'all' ? 1 : a.item.localeCompare(b.item)));
+    return { groups: list, products: (await products()).map((p) => p.name) };
+  });
+
+  function wordingBody(body: Record<string, unknown> | undefined): { headline: string; line: string | null; caption: string | null } {
+    const headline = String(body?.headline ?? '').replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 2).join('\n').slice(0, 60);
+    if (!headline) throw new Error('A wording needs a headline.');
+    return { headline, line: String(body?.line ?? '').trim().slice(0, 140) || null, caption: String(body?.caption ?? '').trim().slice(0, 2200) || null };
+  }
+
+  app.post<{ Body: Record<string, unknown> }>('/api/wordings', async (req, reply) => {
+    const item = String(req.body?.item ?? '').trim().slice(0, 60);
+    if (!item) return reply.code(400).send({ ok: false, error: 'Which product is this wording for?' });
+    try {
+      const s = await addSlogan(ctx.pool, { item, ...wordingBody(req.body), source: 'owner-web' });
+      return { ok: true, wording: wordingJson(s) };
+    } catch (e) {
+      return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/wordings/:id', async (req, reply) => {
+    try {
+      const s = await updateSlogan(ctx.pool, Number(req.params.id), wordingBody(req.body));
+      if (!s) return reply.code(404).send({ ok: false, error: 'No such wording' });
+      return { ok: true, wording: wordingJson(s) };
+    } catch (e) {
+      return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/wordings/:id', async (req, reply) => {
+    if (!(await removeSlogan(ctx.pool, Number(req.params.id)))) return reply.code(404).send({ ok: false, error: 'No such wording' });
+    return { ok: true };
+  });
 
   app.get<{ Params: { id: string } }>('/api/files/:id', async (req, reply) => {
     if (!/^[0-9a-f]{64}$/.test(req.params.id)) return reply.code(404).send();

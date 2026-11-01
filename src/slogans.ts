@@ -27,6 +27,14 @@ export async function addSlogan(db: Db, s: { item: string; headline: string; lin
   return rows[0]!;
 }
 
+/** Changes one wording's text in place (the item stays); null when there is no such wording. */
+export async function updateSlogan(db: Db, id: number, s: { headline: string; line?: string | null; caption?: string | null }): Promise<Slogan | null> {
+  const { rows } = await db.query<Slogan>(
+    'update slogans set headline = $2, line = $3, caption = $4 where id = $1 returning *',
+    [id, s.headline.trim(), s.line?.trim() || null, s.caption?.trim() || null]);
+  return rows[0] ?? null;
+}
+
 export async function removeSlogan(db: Db, id: number): Promise<boolean> {
   return ((await db.query('delete from slogans where id = $1', [id])).rowCount ?? 0) > 0;
 }

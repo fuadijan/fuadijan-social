@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, useLocation, useParams } from 'react-router';
 import { fileUrl, getDay, markPosted, packTextUrl, pushDay, skipDay } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { CopyButton } from '../components/CopyButton';
@@ -79,6 +79,15 @@ function HeadSection({ d, reload }: { d: DayResponse; reload: Reload }) {
         <dl className="sa-kv">
           <dt>Type</dt><dd>{d.type}</dd>
           <dt>Template</dt><dd>{d.template}</dd>
+          {row.custom ? (
+            <>
+              <dt>Custom</dt>
+              <dd>
+                {row.custom.style === 'auto' ? 'style by the art director' : `${row.custom.style} style`} · {row.custom.formats.map((f) => (f === 'feed' ? 'feed' : 'story')).join(' + ')}
+                {row.custom.wording ? ' · your wording' : ' · wording by the agent'}
+              </dd>
+            </>
+          ) : null}
         </dl>
       </div>
     </Card>
@@ -346,16 +355,48 @@ function HistorySection({ d }: { d: DayResponse }) {
   );
 }
 
+const GENERATE_POLL_MS = 4_000;
+const GENERATE_FOR_MS = 150_000;
+
+/**
+ * Arriving from the Create flow (`state.generating`): the page refetches every few seconds until the designs are
+ * there, the pipeline has a question, or a couple of minutes have passed.
+ */
+function useGenerating(data: DayResponse | null, reload: Reload): 'working' | 'slow' | null {
+  const { state } = useLocation();
+  const [phase, setPhase] = useState<'working' | 'slow' | null>(() => ((state as { generating?: boolean } | null)?.generating ? 'working' : null));
+  useEffect(() => {
+    if (phase !== 'working') return;
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      if (Date.now() - started > GENERATE_FOR_MS) setPhase('slow');
+      else void reload();
+    }, GENERATE_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [phase, reload]);
+  useEffect(() => {
+    if (phase === 'working' && data && (data.renders.length > 0 || data.questions.length > 0 || data.status === 'ready')) setPhase(null);
+  }, [data, phase]);
+  return phase;
+}
+
 export function Day() {
   const params = useParams<{ dayNo: string }>();
   const dayNo = Number(params.dayNo);
   const valid = Number.isInteger(dayNo) && dayNo >= FIRST_DAY;
   const { data, error, loading, reload } = useApi(() => getDay(dayNo), dayNo);
+  const generating = useGenerating(data, reload);
 
-  const nav = (
+  // Custom posts are numbered from 101 and sit outside the month's run, so they get no previous / next links.
+  const inPlan = dayNo <= LAST_DAY;
+  const nav = inPlan ? (
     <div className="sa-daynav">
       {dayNo > FIRST_DAY ? <Link className={buttonClass('secondary', 'sm')} to={`/day/${dayNo - 1}`} aria-label="Previous day">‹ Day {dayNo - 1}</Link> : null}
       {dayNo < LAST_DAY ? <Link className={buttonClass('secondary', 'sm')} to={`/day/${dayNo + 1}`} aria-label="Next day">Day {dayNo + 1} ›</Link> : null}
+    </div>
+  ) : (
+    <div className="sa-daynav">
+      <Link className={buttonClass('secondary', 'sm')} to="/create">✨ Another design</Link>
     </div>
   );
 
@@ -382,6 +423,17 @@ export function Day() {
       {data ? (
         <div className="sa-stack">
           {error ? <ErrorCard message={error} onRetry={() => void reload()} /> : null}
+          {generating === 'working' ? (
+            <div className="sa-generating" role="status">
+              <span className="sa-spinner" aria-hidden="true" />
+              <span>Making the design: reading the photo, directing and checking the layout, writing the caption. About a minute. It arrives here and in Telegram.</span>
+            </div>
+          ) : generating === 'slow' ? (
+            <div className="sa-generating" role="status">
+              <span>Still working. Pull to refresh in a moment, or watch Telegram. If the pipeline needed something, its question shows under Confirm.</span>
+              <Button variant="secondary" size="sm" onClick={() => void reload()}>Refresh</Button>
+            </div>
+          ) : null}
           <HeadSection d={data} reload={reload} />
           <div className="sa-two">
             <ShootSection d={data} reload={reload} />

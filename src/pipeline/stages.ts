@@ -18,6 +18,7 @@ import { templateEntry } from '../render/registry.js';
 import { allSettings, dishFactsFor, getSetting } from '../settings.js';
 import { summarise, type DesignRun, type DesignSummary } from './design.js';
 import { addCustomOption, applyOption, latestCopyOptions, markChosen, storeCopyOptions } from './wording.js';
+import { applyCustomWording, customResolveNote, keepFormats } from './custom.js';
 import { slogansFor } from '../slogans.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
@@ -289,12 +290,15 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   const read = ctx.job.state.match ?? ctx.asset?.match ?? null;
   const facts = await dishFactsFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical]);
   const slogans = await slogansFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical, seriesLabel(row), row.theme]);
+  // A custom post tells the writer what is the owner's and fixed, and what is left to write.
+  const note = [ctx.job.state.note ?? cap.note, row.custom ? customResolveNote(row.custom) : null].filter(Boolean).join('\n') || null;
   const prompt = resolvePrompt({
-    row, menu, answers, note: ctx.job.state.note ?? cap.note, dishCanonical: read?.dish_canonical ?? null,
+    row, menu, answers, note, dishCanonical: read?.dish_canonical ?? null,
     label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'), facts,
     slogans: slogans.map((s) => `${s.item}: ${s.headline.replace(/\n/g, ' / ')}${s.line ? ` — ${s.line}` : ''}`),
   });
-  const copy = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
+  const written = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
+  const copy = applyCustomWording(written, row.custom);
 
   // Everything the menu can't settle goes to the owner, one message per question (so each has its buttons).
   const unresolved = copy.unresolved.filter((u) => !answers.some((a) => a.question === u.question));
@@ -321,6 +325,11 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
 async function chooseWording(ctx: StageContext, row: CalendarRow): Promise<Outcome | null> {
   const copy = ctx.job.state.copy!;
   if (ctx.job.state.wordingChosen !== undefined || ctx.job.state.isSetFollower) return null;
+  // The owner composed the wording in the Create flow: nothing to ask.
+  if (row.custom?.wording) {
+    ctx.job.state.wordingChosen = 0;
+    return null;
+  }
   const set = await latestCopyOptions(ctx.pool, row.id);
   const mode = (await getSetting(ctx.pool, 'wording_choice')) || 'ask';
   if (!set || set.options.length < 2 || mode === 'off') {
@@ -372,7 +381,9 @@ export async function render(ctx: StageContext): Promise<Outcome> {
   if (!ctx.job.state.copy) throw new Error('render needs resolved copy');
   const choice = await chooseWording(ctx, row);
   if (choice) return choice;
-  const { outputs, design } = await renderForRow(ctx, row);
+  const rendered = await renderForRow(ctx, row);
+  const { design } = rendered;
+  const outputs = keepFormats(rendered.outputs, row.custom);
   await ctx.pool.query('delete from renders where calendar_row_id = $1', [row.id]);
   for (const o of outputs) {
     const fileId = await putFile(ctx.pool, o.png, 'image/png');

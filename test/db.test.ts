@@ -44,7 +44,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -216,6 +216,35 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect((await between(pool, '2026-12-01', '2026-12-05')).map((r) => `${r.plan}:${r.day_no}`)).toContain('2026-12:1');
     // Re-loading December changes nothing.
     expect(await seedRows(pool, december)).toMatchObject({ plan: '2026-12', inserted: 0, updated: 0 });
+  });
+
+  it("makes a custom post from the Create flow: an adopted photo, the owner's wording, a locked style, feed only", async () => {
+    const { adoptAsset, createCustomPost, recentPhotos } = await import('../src/pipeline/custom.js');
+    messenger.sent.length = 0;
+    const photos = await recentPhotos(pool);
+    const chapli = photos.find((p) => p.dayNo === 2)!;
+    expect(chapli).toBeTruthy();
+    const row = await createCustomPost(pool, {
+      product: 'Chapli Kebab', template: 'from-the-fire', style: 'split', formats: ['feed'],
+      wording: { headline: 'Chapli\nFirst', line: 'Problems later.', caption: '' }, sloganId: null, date: '2026-11-10', postTime: '19:00',
+    }, '2026-11-04');
+    expect(row).toMatchObject({ plan: '2026-11', day_no: 101, date: '2026-11-10', slot: 'feed', type: 'custom', dish: 'Chapli Kebab', template: 'from-the-fire', post_time: '19:00', status: 'planned' });
+    expect(row.custom).toMatchObject({ style: 'split', formats: ['feed'], wording: { headline: 'Chapli\nFirst' } });
+    expect(await rowByDay(pool, 101)).toMatchObject({ id: row.id });
+    const job = await adoptAsset(pool, row, chapli.assetId);
+    expect(job).toMatchObject({ calendar_row_id: row.id, stage: 'resolve', status: 'queued' });
+    const worker = new Worker(ctx, 1000);
+    await worker.drain();
+    // No wording question: the owner's words are used as given; the design is split, and only the feed is kept.
+    expect((await openQuestions(pool, row.id))).toHaveLength(0);
+    expect((await pool.query('select stage, status, state from jobs where id = $1', [job.id])).rows[0]).toMatchObject({ stage: 'done', status: 'done', state: expect.objectContaining({ copy: expect.objectContaining({ headline: 'Chapli\nFirst', line: 'Problems later.' }), wordingChosen: 0 }) });
+    expect((await pool.query('select format from renders where calendar_row_id = $1', [row.id])).rows).toEqual([{ format: 'feed' }]);
+    expect((await rowByDay(pool, 101))!.status).toBe('ready');
+    const pack = (await pool.query<{ sources: { design: { style: string; source: string } | null } }>('select sources from packs where calendar_row_id = $1', [row.id])).rows[0]!;
+    expect(pack.sources.design).toMatchObject({ style: 'split', source: 'owner' });
+    expect(messenger.sent.some((m) => m.text?.startsWith('🎨 Split style'))).toBe(true);
+    // The adopted photo is listed once, under its new day too.
+    expect((await recentPhotos(pool)).filter((p) => p.thumb === chapli.thumb)).toHaveLength(1);
   });
 
   it('understands "posted 2" and "skip 3"', async () => {

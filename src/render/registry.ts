@@ -54,6 +54,20 @@ export function knownTemplates(): string[] {
   return Object.keys(REGISTRY);
 }
 
+/** The photo-post series (hero-photo templates) a custom design can use, one per label + footer + style. */
+export function heroTemplates(): { template: string; label: string; footer: Footer; style: Style | null }[] {
+  const seen = new Set<string>();
+  const out: { template: string; label: string; footer: Footer; style: Style | null }[] = [];
+  for (const [template, e] of Object.entries(REGISTRY)) {
+    if (e.key !== 'hero-photo') continue;
+    const k = `${e.label}|${e.footer}|${e.style ?? ''}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ template, label: e.label, footer: e.footer, style: e.style ?? null });
+  }
+  return out;
+}
+
 /** Boot check: every template value in the table has a mapping. */
 export function assertAllMapped(values: string[]): void {
   const missing = values.filter((v) => !REGISTRY[v]);

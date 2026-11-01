@@ -72,6 +72,8 @@ export interface Row {
   hashtags: string | null; // space separated
   story_ideas: string | null;
   confirmation_notes: string | null;
+  /** Set on a one-off post made in the Create flow. */
+  custom: CustomSpec | null;
   posted_at: string | null;
   updated_at: string;
 }
@@ -189,3 +191,64 @@ export interface DayResponse extends DayView {
 export interface StatusResponse {
   text: string;
 }
+
+// ─── the Create flow (custom designs) and the wording bank ──────────────────────────────────────────────
+
+export type StyleKey = 'band' | 'split' | 'poster' | 'flat' | 'invite';
+export type CustomFormat = 'feed' | 'story';
+
+/** What the owner chose for a one-off post; stored on the row (`row.custom`). */
+export interface CustomSpec {
+  product: string;
+  style: StyleKey | 'auto';
+  formats: CustomFormat[];
+  wording: { headline: string; line: string; caption: string } | null;
+  sloganId: number | null;
+}
+
+export interface Wording {
+  id: number;
+  item: string;
+  /** Lower-case key; `all` = every post. */
+  itemKey: string;
+  headline: string;
+  line: string | null;
+  caption: string | null;
+  source: string;
+}
+
+export interface WordingGroup { item: string; itemKey: string; wordings: Wording[] }
+export interface WordingsResponse { groups: WordingGroup[]; products: string[] }
+export interface WordingInput { headline: string; line: string; caption: string }
+
+export interface RecentPhoto {
+  assetId: number;
+  thumb: string | null; // file id
+  caption: string | null;
+  dayNo: number | null;
+  dish: string | null;
+  createdAt: string;
+}
+
+export interface CreateOptions {
+  today: string;
+  postTimeDefault: string;
+  products: { name: string; category: string | null; wordings: number }[];
+  templates: { template: string; label: string; footer: 'brand' | 'address'; style: StyleKey | null }[];
+  styles: { key: StyleKey; name: string; blurb: string; needsCutout: boolean; story: boolean }[];
+  photos: RecentPhoto[];
+}
+
+export interface CreateRequest {
+  product: string;
+  template: string;
+  style: StyleKey | 'auto';
+  formats: CustomFormat[];
+  wording: WordingInput | null;
+  sloganId: number | null;
+  date: string;
+  postTime: string | null;
+  assetId: number | null;
+}
+
+export interface CreateResponse { ok: true; dayNo: number; date: string; plan: string }

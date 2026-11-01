@@ -2,7 +2,7 @@
  * Same-origin JSON client. A 401 means no hub session: the page goes to the hub's login and comes back here.
  * A 403 carrying `hub` means signed in but not granted Social: the page goes to the hub.
  */
-import type { DayResponse, EditableField, Me, MonthResponse, StatusResponse, UploadResponse, WeekResponse } from './types';
+import type { CreateOptions, CreateRequest, CreateResponse, DayResponse, EditableField, Me, MonthResponse, StatusResponse, UploadResponse, WeekResponse, Wording, WordingInput, WordingsResponse } from './types';
 
 export const DEFAULT_HUB = 'https://apps.nutrimeals.au';
 
@@ -99,3 +99,12 @@ export function uploadToDay(dayNo: number, files: File[], caption: string): Prom
 export const fileUrl = (fileId: string) => `/api/files/${fileId}`;
 /** The pack's text files. */
 export const packTextUrl = (dayNo: number, name: 'caption.txt' | 'canva-brief.txt' | 'reel-pack.txt') => `/api/packs/${dayNo}/${name}`;
+
+// ─── the Create flow and the wording bank ───────────────────────────────────────────────────────────────
+export const getCreateOptions = () => apiFetch<CreateOptions>('/api/create/options');
+/** Makes the custom post's row (and files an existing photo for it when `assetId` is set). */
+export const createCustom = (req: CreateRequest) => post<CreateResponse>('/api/create', req);
+export const getWordings = () => apiFetch<WordingsResponse>('/api/wordings');
+export const addWording = (item: string, w: WordingInput) => post<{ ok: true; wording: Wording }>('/api/wordings', { item, ...w });
+export const updateWording = (id: number, w: WordingInput) => apiFetch<{ ok: true; wording: Wording }>(`/api/wordings/${id}`, { method: 'PATCH', body: JSON.stringify(w) });
+export const deleteWording = (id: number) => apiFetch<{ ok: true }>(`/api/wordings/${id}`, { method: 'DELETE' });

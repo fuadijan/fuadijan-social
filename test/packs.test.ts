@@ -9,7 +9,7 @@ const row = (over: Partial<CalendarRow> = {}): CalendarRow => ({
   template: 'from-the-fire', status: 'planned', asset: null, objective: null,
   creative_instructions: 'Reel shot list: 1) Charcoal catching; 2) flame and smoke; 3) Chapli Kebab on the grill; 4) finished spread. Use quick cuts.',
   on_screen_text: '“THIS IS FUADIJAN” → “FROM THE FIRE” → “SMOKED. GRILLED. ROOTED IN TRADITION.”',
-  caption: null, cta: null, hashtags: null, story_ideas: null, confirmation_notes: null, posted_at: null, updated_at: new Date(), ...over,
+  caption: null, cta: null, hashtags: null, story_ideas: null, confirmation_notes: null, custom: null, posted_at: null, updated_at: new Date(), ...over,
 });
 const copy = ResolvedCopy.parse(JSON.parse(readFileSync('test/fixtures/claude/resolve-copy-day2.json', 'utf8')));
 const settings = { storeAddress: '129 Parramatta Road, Auburn NSW 2144', openHours: '5PM – 10PM', websiteUrl: 'https://fjtv.nutrimeals.au', instagramHandle: '@fuadijan' };
