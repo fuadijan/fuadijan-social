@@ -11,6 +11,7 @@ import { resendPack } from '../pipeline/stages.js';
 import { CUSTOM_USAGE, adoptAsset, createCustomPost, defaultTemplate, parseCustomCommand, parseCustomInput, photosOf, recentPhotos } from '../pipeline/custom.js';
 import { findItem } from '../menu/source.js';
 import { redoRow } from '../pipeline/worker.js';
+import { parseDayRef, rowByDishWords } from './dayref.js';
 import { allCopyOptions, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
 import { addSlogan, listSlogans, removeSlogan, slogansByItem } from '../slogans.js';
 import { SET_ALIASES, allDishFacts, getSetting, removeDishFact, setDishFact, setSetting } from '../settings.js';
@@ -20,7 +21,7 @@ import { weekLines } from '../reminders/brief.js';
 export const HELP = [
   '/today · /week · /status · /ask',
   '/pack N — resend Day N\'s pack · /brief N — resend the Canva brief',
-  '/redo N <note> — re-run the copy and design with a note ("shorter caption", "poster", "split", "flat", "invite", "band style", "layout B", "text on the right", "text at the top", "bigger text", "accent")',
+  '/redo N <note> (or /redo <dish> <note>) — re-run the copy and design with a note ("shorter caption", "poster", "split", "flat", "invite", "band style", "layout B", "text on the right", "text at the top", "bigger text", "accent")',
   '/wording N — show the wordings written for Day N · /wording N k — use wording k (rebuilds the designs and the pack)',
   '/edit N <field> <text> — fields: dish, caption, cta, hashtags, story_ideas, post_time',
   '/push N <days> — move Day N · skip N — move it to the next free date',
@@ -33,8 +34,11 @@ export const HELP = [
 ].join('\n');
 
 export async function handleCommand(app: AppContext, text: string): Promise<void> {
-  const [cmdRaw = '', ...rest] = text.split(/\s+/);
+  const [cmdRaw = '', ...restRaw] = text.split(/\s+/);
   const cmd = cmdRaw.replace(/@\w+$/, '').toLowerCase();
+  // "#day 101", "#day101" and "day 101" name a day like a leading "101" does.
+  const ref = parseDayRef(restRaw);
+  const rest = ref.dayNo != null ? [String(ref.dayNo), ...ref.rest] : restRaw;
   const arg = rest.join(' ').trim();
   const dayNo = Number(rest[0]);
   const say = (t: string) => app.messenger.sendText(t);
@@ -80,11 +84,21 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       return void say(p?.canva_brief ?? `Day ${row.day_no} has no Canva brief yet — it comes with the pack.`);
     }
     case '/redo': {
-      const row = await needRow(app, dayNo);
-      if (!row) return;
-      const note = rest.slice(1).join(' ').trim() || null;
+      // By number, or by the dish's name: "/redo Beef Seekh shorter caption".
+      let row;
+      let note: string | null;
+      if (Number.isInteger(dayNo) && dayNo >= 1) {
+        row = await rowByDay(pool, dayNo);
+        if (!row) return void say(`There is no Day ${dayNo}.`);
+        note = rest.slice(1).join(' ').trim() || null;
+      } else {
+        const found = rowByDishWords(await allRows(pool), rest, sydneyDate(app.now()));
+        if (!found) return void say(`Which day? /redo 101 <note>, /redo #day 101 <note>, or /redo <dish> <note>${arg ? ` — no day has the dish "${arg}"` : ''}.`);
+        row = found.row;
+        note = found.rest.join(' ').trim() || null;
+      }
       await redoRow(pool, row.id, note);
-      return void say(`Re-running Day ${row.day_no}${note ? ` with "${note}"` : ''}.${row.custom?.wording ? ' The wordings come first this time: your original and new ones to pick from.' : ''}`);
+      return void say(`Re-running Day ${row.day_no} (${row.dish ?? row.theme ?? row.type})${note ? ` with "${note}"` : ''}.${row.custom?.wording ? ' The wordings come first this time: your original and new ones to pick from.' : ''}`);
     }
     case '/edit': {
       const row = await needRow(app, dayNo);
@@ -277,6 +291,9 @@ export async function handleFreeText(app: AppContext, text: string): Promise<voi
     return void say(`Review from ${initials} saved for Day ${target.day_no} (${formatDay(target.date)}). It will be quoted exactly as sent.`);
   }
 
+  // A command typed without its slash ("redo 101 shorter") is still a command, not an answer.
+  if (/^(redo|pack|brief|edit|wording|push|custom|today|week|status|help|fact|slogan|set)\b/i.test(t)) return handleCommand(app, `/${t}`);
+
   // Everything else answers the latest open question.
   const q = await latestOpenQuestion(pool);
   if (!q) return void say(/^ok$/i.test(t) ? 'Nothing was waiting on an answer.' : `Noted, but nothing was waiting on an answer. ${HELP.split('\n')[0]}`);
@@ -296,6 +313,12 @@ export async function applyAnswer(app: AppContext, questionId: number, keyOrText
   if (!existing) return 'That question is gone.';
   if (existing.answered_at) return 'Already answered.';
   const value = resolveAnswer(existing, keyOrText);
+  if (existing.field === 'quality' && value !== 'use' && value !== 'resend') {
+    // Anything else is not an answer to it; the photo waits.
+    const hint = `That photo is still waiting: reply ok to use it as it is, or send it again as a File (📎 → File).`;
+    if (via !== 'web') await app.messenger.sendText(hint);
+    return hint;
+  }
   const q = await answerQuestion(pool, questionId, value, via);
   if (!q) return 'Already answered.';
 

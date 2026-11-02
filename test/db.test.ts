@@ -252,8 +252,8 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const { latestCopyOptions } = await import('../src/pipeline/wording.js');
     messenger.sent.length = 0;
     const row = (await rowByDay(pool, 101))!;
-    await handleCommand(ctx, '/redo 101 new title about the smoke');
-    expect(messenger.sent.at(-1)!.text).toMatch(/Re-running Day 101/);
+    await handleCommand(ctx, '/redo Chapli Kebab #day 101 new title about the smoke');
+    expect(messenger.sent.at(-1)!.text).toMatch(/Re-running Day 101 \(Chapli Kebab\) with "Chapli Kebab new title about the smoke"/);
     await new Worker(ctx, 1000).drain();
     // The first run took the owner's words without asking; the redo asks like any post.
     const open = (await openQuestions(pool, row.id)).filter((q) => q.field === 'wording');
