@@ -12,7 +12,7 @@ import { CUSTOM_USAGE, adoptAsset, createCustomPost, defaultTemplate, parseCusto
 import { findItem } from '../menu/source.js';
 import { redoRow } from '../pipeline/worker.js';
 import { parseDayRef, rowByDishWords } from './dayref.js';
-import { allCopyOptions, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
+import { addCustomOption, allCopyOptions, asLine, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
 import { addSlogan, listSlogans, removeSlogan, slogansByItem } from '../slogans.js';
 import { SET_ALIASES, allDishFacts, getSetting, removeDishFact, setDishFact, setSetting } from '../settings.js';
 import { formatDay, sydneyDate, sydneyTime, addDays } from '../time.js';
@@ -22,7 +22,7 @@ export const HELP = [
   '/today · /week · /status · /ask',
   '/pack N — resend Day N\'s pack · /brief N — resend the Canva brief',
   '/redo N <note> (or /redo <dish> <note>) — re-run the copy and design with a note ("shorter caption", "poster", "split", "flat", "invite", "band style", "layout B", "text on the right", "text at the top", "bigger text", "accent")',
-  '/wording N — show the wordings written for Day N · /wording N k — use wording k (rebuilds the designs and the pack)',
+  '/wording N — show the wordings written for Day N · /wording N k — use wording k · /wording N -- <headline> | <line> | <caption> — use your own words (either rebuilds the designs and the pack)',
   '/edit N <field> <text> — fields: dish, caption, cta, hashtags, story_ideas, post_time',
   '/push N <days> — move Day N · skip N — move it to the next free date',
   '/set address|hours|website <text> · /set design <standing notes for the art director> · /set wording ask|off · /pause · /resume',
@@ -136,6 +136,23 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       const k = Number(rest[1]);
       const sets = await allCopyOptions(pool, row.id);
       if (!sets.length) return void say(`No wordings for Day ${row.day_no} yet — they appear once a photo has been matched and the copy resolved.`);
+      // "/wording 101 -- Beef Seekh | Hand formed, special spices": the owner's own words, used as written.
+      const own = arg.match(/^\d+\s*(?:--|—)\s*([\s\S]+)$/);
+      if (own) {
+        const [headline = '', line = '', caption = ''] = own[1]!.split('|').map((x) => x.trim());
+        if (!headline) return void say(`/wording ${row.day_no} -- <headline> | <line> | <caption>`);
+        const latest = sets[0]!;
+        const added = await addCustomOption(pool, latest, headline.replace(/\s*\/\s*/g, '\n'), { line, caption });
+        // A custom post remembers them as its wording, so a later /redo starts from these words.
+        if (row.custom?.wording) await pool.query("update calendar_rows set custom = jsonb_set(custom, '{wording}', $2::jsonb), updated_at = now() where id = $1", [row.id, JSON.stringify({ headline: added.set.options[added.index]!.headline, line: line || row.custom.wording.line, caption: caption || row.custom.wording.caption })]);
+        const openQ = (await openQuestions(pool, row.id)).find((q) => q.field === 'wording');
+        if (openQ) {
+          await applyAnswer(app, openQ.id, String(added.index + 1), 'telegram');
+          return;
+        }
+        const job = await rerenderWithWording(pool, row.id, added.set, added.index);
+        return void say(job ? `Your words for Day ${row.day_no}: "${headline}"${line ? ` — ${line}` : ''}. Rebuilding the designs and the pack.` : `Noted for Day ${row.day_no}; they are used when it is rendered.`);
+      }
       if (!rest[1]) {
         const latest = sets[0]!;
         return void say(`${fmt.wordingOptions(row, latest.options)}${latest.chosen != null ? `\n\nIn use: ${latest.chosen + 1}.` : ''}${sets.length > 1 ? `\n${sets.length - 1} earlier set${sets.length > 2 ? 's' : ''} on the Day page.` : ''}\nUse one: /wording ${row.day_no} <number>`);
@@ -197,25 +214,30 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       } catch (e) {
         return void say(e instanceof Error ? e.message : String(e));
       }
-      let wording = cmd.wording;
+      // The title is the product's name as the menu spells it; the owner's words (or a bank wording) go on the line.
+      let menuName: string | null = null;
+      let category: string | null = null;
+      try {
+        const item = findItem(await app.menu.get(), cmd.product);
+        menuName = item?.name ?? null;
+        category = item?.category ?? null;
+      } catch {
+        // No menu right now: the name as typed decides.
+      }
+      const title = menuName ?? cmd.product;
+      let wording = cmd.wording ? { ...cmd.wording, headline: cmd.wording.headline || title } : null;
       let sloganId: number | null = null;
-      let wordingWords = wording ? `your wording "${wording.headline.replace(/\n/g, ' / ')}"` : 'the agent writes the wording';
+      let wordingWords = wording ? `title "${wording.headline.replace(/\n/g, ' / ')}"${wording.line ? `, line "${wording.line}"` : ''}` : 'the agent writes the wording';
       if (cmd.sloganIndex != null) {
         const list = await listSlogans(pool, cmd.product);
         const s = list[cmd.sloganIndex - 1];
         if (!s) return void say(list.length ? `${cmd.product} has ${list.length} wording${list.length === 1 ? '' : 's'} — /slogan ${cmd.product} shows them.` : `No wordings for ${cmd.product} yet. Write it after --, or add one with /slogan ${cmd.product} -- <headline> | <line> | <caption>.`);
-        wording = { headline: s.headline, line: s.line ?? '', caption: s.caption ?? '' };
+        wording = { headline: title, line: asLine(s.headline, s.line), caption: s.caption ?? '' };
         sloganId = s.id;
-        wordingWords = `wording ${cmd.sloganIndex} "${s.headline.replace(/\n/g, ' / ')}"`;
+        wordingWords = `title "${title}", wording ${cmd.sloganIndex} "${asLine(s.headline, s.line)}" on the line`;
       }
       let input;
       try {
-        let category: string | null = null;
-        try {
-          category = findItem(await app.menu.get(), cmd.product)?.category ?? null;
-        } catch {
-          // No menu right now: the product's name decides the series.
-        }
         input = parseCustomInput({ ...cmd, template: defaultTemplate(cmd.product, category), wording, sloganId, postTime: cmd.postTime ?? (await getSetting(pool, 'post_time_default')) ?? '18:00' });
       } catch (e) {
         return void say(e instanceof Error ? e.message : String(e));

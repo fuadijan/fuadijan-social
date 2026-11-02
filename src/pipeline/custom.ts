@@ -98,8 +98,9 @@ export interface CustomCommand {
 }
 
 export const CUSTOM_USAGE = [
-  '/custom <product> [band|split|poster|flat|invite] [feed|story] [date] [time] [-- <headline> | <line> | <caption>]',
-  'e.g. /custom chapli kebab poster story tomorrow 7pm -- Hand-formed. / Fire-finished. | Grilled every evening.',
+  '/custom <product> [band|split|poster|flat|invite] [feed|story] [date] [time] [-- <line> | <caption>]',
+  'e.g. /custom chapli kebab poster story tomorrow 7pm -- Hand-formed, fire-finished. | Grilled every evening.',
+  'The title is the product\'s name; your words go on the line under it. A different title: -- title: Smoke signals | <line> | <caption>.',
   'Leave the style out and the art director picks; leave feed/story out for both; "-- 2" uses wording 2 from /slogan chapli kebab; no "--" and the agent writes it.',
 ].join('\n');
 
@@ -133,9 +134,14 @@ export function parseCustomCommand(arg: string, today: IsoDate): CustomCommand {
   let sloganIndex: number | null = null;
   if (/^\d{1,2}$/.test(body)) sloganIndex = Number(body);
   else if (body) {
-    const [headline = '', line = '', caption = ''] = body.split('|').map((p) => p.trim());
-    if (!headline) throw new Error('The wording needs a headline: -- <headline> | <line> | <caption>');
-    wording = { headline: headline.replace(/\s*\/\s*/g, '\n'), line, caption };
+    // "-- <line> | <caption>": the title is the product's name (filled in by the caller, which knows the menu's
+    // spelling); "-- title: <words> | <line> | <caption>" names the title itself.
+    const parts = body.split('|').map((p) => p.trim());
+    const titled = parts[0]?.match(/^title\s*:\s*(.+)$/i);
+    const headline = titled ? titled[1]!.trim().replace(/\s*\/\s*/g, '\n') : '';
+    const [line = '', caption = ''] = titled ? parts.slice(1) : parts;
+    if (!headline && !line) throw new Error('The wording needs words: -- <line> | <caption>, or -- title: <title> | <line> | <caption>');
+    wording = { headline, line, caption };
   }
   return { product: product.join(' '), style, formats: formats.length ? [...new Set(formats)] : ['feed', 'story'], date: date ?? today, postTime, wording, sloganIndex };
 }

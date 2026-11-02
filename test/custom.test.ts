@@ -5,18 +5,21 @@ import { parseCaption } from '../src/intake/caption.js';
 
 describe('/custom from Telegram', () => {
   it('reads the product and the choices from one line', () => {
-    const c = parseCustomCommand('chapli kebab poster story tomorrow 7pm -- Hand-formed. / Fire-finished. | Grilled every evening. | Come hungry.', '2026-11-04');
+    const c = parseCustomCommand('chapli kebab poster story tomorrow 7pm -- Hand-formed, fire-finished. | Come hungry.', '2026-11-04');
     expect(c).toEqual({
       product: 'chapli kebab', style: 'poster', formats: ['story'], date: '2026-11-05', postTime: '19:00',
-      wording: { headline: 'Hand-formed.\nFire-finished.', line: 'Grilled every evening.', caption: 'Come hungry.' }, sloganIndex: null,
+      // The title is left for the caller to fill with the product's name as the menu spells it.
+      wording: { headline: '', line: 'Hand-formed, fire-finished.', caption: 'Come hungry.' }, sloganIndex: null,
     });
+    expect(parseCustomCommand('chapli kebab -- title: Smoke / signals | Grilled every evening. | Come hungry.', '2026-11-04').wording)
+      .toEqual({ headline: 'Smoke\nsignals', line: 'Grilled every evening.', caption: 'Come hungry.' });
   });
 
   it('defaults to both formats, today, the art director and the agent’s wording', () => {
     expect(parseCustomCommand('Beef Seekh', '2026-11-04')).toEqual({ product: 'Beef Seekh', style: 'auto', formats: ['feed', 'story'], date: '2026-11-04', postTime: null, wording: null, sloganIndex: null });
     expect(parseCustomCommand('beef seekh both 2026-11-20 18:30 -- 2', '2026-11-04')).toMatchObject({ formats: ['feed', 'story'], date: '2026-11-20', postTime: '18:30', sloganIndex: 2, wording: null });
     expect(() => parseCustomCommand('poster story', '2026-11-04')).toThrow(/Which product/);
-    expect(() => parseCustomCommand('chapli -- | only a line', '2026-11-04')).toThrow(/headline/);
+    expect(() => parseCustomCommand('chapli -- | only a caption', '2026-11-04')).toThrow(/words/);
   });
 
   it('picks the karahi series for a karahi and matches a product to its earlier photos', () => {

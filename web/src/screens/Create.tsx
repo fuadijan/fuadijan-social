@@ -75,7 +75,8 @@ function SeriesStep({ opts, value, suggested, onChange }: { opts: CreateOptions;
 function WordingStep({ product, bank, value, onChange }: { product: string; bank: Wording[]; value: WordingChoice | null; onChange: (v: WordingChoice) => void }) {
   const mine = bank.filter((w) => w.itemKey !== 'all' && (key(w.item) === key(product) || key(product).includes(w.itemKey) || w.itemKey.includes(key(product))));
   const house = bank.filter((w) => w.itemKey === 'all');
-  const own: WordingInput = value?.kind === 'own' ? value.w : { headline: '', line: '', caption: '' };
+  // The title starts as the product's name; the owner's words are the line under it (the title can still be changed).
+  const own: WordingInput = value?.kind === 'own' ? value.w : { headline: product.trim(), line: '', caption: '' };
   const setOwn = (patch: Partial<WordingInput>) => onChange({ kind: 'own', w: { ...own, ...patch } });
   const ids = { h: useId(), l: useId(), c: useId() };
   const card = (w: Wording) => (
@@ -99,7 +100,7 @@ function WordingStep({ product, bank, value, onChange }: { product: string; bank
         </>
       ) : null}
       <ul className="sa-options">
-        <Option on={value?.kind === 'own'} onPick={() => onChange({ kind: 'own', w: own })} title="Write my own" sub="Your headline and line go on the design as typed." />
+        <Option on={value?.kind === 'own'} onPick={() => onChange({ kind: 'own', w: own })} title="Write my own" sub="The title is the product's name unless you change it; your line goes under it as typed." />
         <Option on={value?.kind === 'agent'} onPick={() => onChange({ kind: 'agent' })} title="Let the agent write it" sub="It drafts the headline, line and caption from the menu; you pick a wording before the design, as usual." />
       </ul>
       {value?.kind === 'own' ? (
@@ -258,7 +259,9 @@ export function Create() {
     setError(null);
     setBusy('Making the post…');
     try {
-      const w: WordingInput | null = wording?.kind === 'bank' ? { headline: wording.w.headline, line: wording.w.line ?? '', caption: wording.w.caption ?? '' } : wording?.kind === 'own' ? wording.w : null;
+      // A bank wording goes on the line under the product's name (its own line follows); own words go as typed.
+      const bankLine = (w: Wording) => { const flat = w.headline.replace(/\s*\n\s*/g, ' ').trim(); const extra = (w.line ?? '').trim(); return extra && !flat.toLowerCase().includes(extra.toLowerCase()) ? `${flat} ${extra}`.slice(0, 140) : flat; };
+      const w: WordingInput | null = wording?.kind === 'bank' ? { headline: product.trim(), line: bankLine(wording.w), caption: wording.w.caption ?? '' } : wording?.kind === 'own' ? wording.w : null;
       const r = await createCustom({
         product: product.trim(), template, style, formats, wording: w, sloganId: wording?.kind === 'bank' ? wording.w.id : null,
         date: theDate, postTime: time || null, assetId: photo.kind === 'asset' ? photo.assetId : null,
@@ -301,7 +304,7 @@ export function Create() {
               <dl className="sa-summary">
                 <dt>Product</dt><dd>{product}</dd>
                 <dt>Series</dt><dd>{seriesLabel}</dd>
-                <dt>Wording</dt><dd>{wording?.kind === 'agent' ? 'the agent writes it; you pick before the design' : wording ? wording.w.headline.replace('\n', ' / ') : '—'}</dd>
+                <dt>Wording</dt><dd>{wording?.kind === 'agent' ? 'the agent writes it; you pick before the design' : wording?.kind === 'bank' ? `${product.trim()} — ${wording.w.headline.replace('\n', ' ')}` : wording ? `${wording.w.headline.replace('\n', ' / ')}${wording.w.line ? ` — ${wording.w.line}` : ''}` : '—'}</dd>
                 <dt>Style</dt><dd>{styleName}</dd>
                 <dt>Make</dt><dd>{formats.map((f) => (f === 'feed' ? 'Feed 4:5' : 'Story 9:16')).join(' + ')} · {fmtDate(theDate)}{time ? ` at ${time}` : ''}</dd>
                 <dt>Photo</dt><dd>{photo?.kind === 'files' ? photo.files.map((f) => f.name).join(', ') : photo?.kind === 'asset' ? `already received · ${photo.label}` : '—'}</dd>

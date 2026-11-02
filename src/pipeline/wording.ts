@@ -36,11 +36,19 @@ export function optionsFrom(copy: ResolvedCopy, slogans: Slogan[] = [], extra: W
   };
   for (const v of copy.variants) push({ name: v.name || `Option ${out.length + 1}`, headline: v.headline, line: v.line, caption: v.caption });
   for (const e of extra) push(e);
-  for (const s of slogans) push({ name: `Slogan · ${s.item_key === 'all' ? 'house' : s.item}`, headline: s.headline, line: s.line ?? copy.line, caption: s.caption ?? copy.caption });
+  // A bank wording goes on the line under the product's name; its own line, if any, follows.
+  for (const s of slogans) push({ name: `Slogan · ${s.item_key === 'all' ? 'house' : s.item}`, headline: copy.headline, line: asLine(s.headline, s.line), caption: s.caption ?? copy.caption });
   return out;
 }
 
 const key = (o: WordingOption) => `${o.headline}\u0000${o.line}\u0000${o.caption}`.toLowerCase();
+
+/** A two-line headline and its line as one supporting line: "Fresh off the grill. Halal, always." */
+export function asLine(headline: string, line?: string | null): string {
+  const flat = headline.replace(/\s*\n\s*/g, ' ').trim();
+  const extra = line?.trim();
+  return extra && !flat.toLowerCase().includes(extra.toLowerCase()) ? `${flat} ${extra}`.slice(0, 140) : flat;
+}
 
 export async function storeCopyOptions(db: Db, rowId: number, jobId: number | null, copy: ResolvedCopy, slogans: Slogan[] = [], extra: WordingOption[] = []): Promise<CopyOptions> {
   const options = optionsFrom(copy, slogans, extra);
@@ -66,10 +74,10 @@ export async function markChosen(db: Db, id: number, index: number): Promise<voi
   await db.query('update copy_options set chosen = $2 where id = $1', [id, index]);
 }
 
-/** Appends the owner's typed headline as an option and marks it chosen; returns the new index. */
-export async function addCustomOption(db: Db, set: CopyOptions, text: string): Promise<{ set: CopyOptions; index: number }> {
+/** Appends the owner's typed headline (and, when given, line and caption) as an option and marks it chosen; returns the new index. */
+export async function addCustomOption(db: Db, set: CopyOptions, text: string, more: { line?: string | null; caption?: string | null } = {}): Promise<{ set: CopyOptions; index: number }> {
   const base = set.options[set.chosen ?? 0] ?? set.options[0]!;
-  const custom: WordingOption = { name: 'Your words', headline: text.trim().slice(0, 60), line: base.line, caption: base.caption };
+  const custom: WordingOption = { name: 'Your words', headline: text.trim().slice(0, 60), line: more.line?.trim() || base.line, caption: more.caption?.trim() || base.caption };
   const options = [...set.options, custom];
   const index = options.length - 1;
   await db.query('update copy_options set options = $2, chosen = $3 where id = $1', [set.id, JSON.stringify(options), index]);

@@ -195,7 +195,8 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const copy = { label: 'L', headline: 'Chapli\nKebab', line: 'l', caption: 'c', cta: 'x', hashtags: ['#a', '#b', '#c'], alt_text: 'a', story_text: 's', facebook_caption: 'c x', on_screen_text: [], unresolved: [], variants: [] };
     const options = optionsFrom(copy, forChapli);
     expect(options.map((o) => o.name)).toEqual(['Calendar wording', 'Slogan · Chapli Kebab', 'Slogan · Chapli Kebab', 'Slogan · house']);
-    expect(options[1]).toMatchObject({ headline: 'Hand-formed.\nFire-finished.', line: 'Grilled over charcoal every evening.', caption: 'c' });
+    // The product stays the title; the bank wording and its line become the line.
+    expect(options[1]).toMatchObject({ headline: 'Chapli\nKebab', line: 'Hand-formed. Fire-finished. Grilled over charcoal every evening.', caption: 'c' });
     await handleCommand(ctx, '/slogan chapli kebab -- Big flavour. / Small plate. | Comes with roti, raita and salad.');
     expect((await listSlogans(pool, 'chapli kebab')).at(-1)).toMatchObject({ headline: 'Big flavour.\nSmall plate.', line: 'Comes with roti, raita and salad.', source: 'owner' });
     await handleCommand(ctx, '/slogan chapli kebab -- remove 3');
@@ -271,15 +272,27 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(job.state.wordingChosen).toBe(0);
     // The redo designs from the intake's upright JPEG, not the raw original.
     expect(job.state.jpegFileId).toBeTruthy();
+
+    // The owner's own words, typed after the pack: a new option, the custom post's wording, and a re-render with them.
+    messenger.sent.length = 0;
+    await handleCommand(ctx, '/wording 101 -- Chapli Kebab | Hand formed, special spices');
+    expect(messenger.sent.at(-1)!.text).toMatch(/Your words for Day 101: "Chapli Kebab" — Hand formed, special spices/);
+    await new Worker(ctx, 1000).drain();
+    const own = (await latestCopyOptions(pool, row.id))!;
+    expect(own.options[own.chosen!]).toMatchObject({ name: 'Your words', headline: 'Chapli Kebab', line: 'Hand formed, special spices' });
+    expect((await rowByDay(pool, 101))!.custom).toMatchObject({ wording: { headline: 'Chapli Kebab', line: 'Hand formed, special spices' } });
+    const rerun = (await pool.query<{ state: { copy: { headline: string; line: string } } }>("select state from jobs where calendar_row_id = $1 order by id desc limit 1", [row.id])).rows[0]!;
+    expect(rerun.state.copy).toMatchObject({ headline: 'Chapli Kebab', line: 'Hand formed, special spices' });
     expect((await openQuestions(pool, row.id))).toHaveLength(0);
   });
 
   it('makes a custom post from /custom in Telegram, offering the product\'s earlier photo as a button', async () => {
     messenger.sent.length = 0;
-    await handleCommand(ctx, '/custom Chapli Kebab flat story 2026-11-12 7pm -- Hot. / Fresh. | Tonight only.');
+    await handleCommand(ctx, '/custom Chapli Kebab flat story 2026-11-12 7pm -- Hot and fresh. | Tonight only.');
     const row = (await rowByDay(pool, 102))!;
     expect(row).toMatchObject({ type: 'custom', dish: 'Chapli Kebab', date: '2026-11-12', post_time: '19:00', template: 'from-the-fire' });
-    expect(row.custom).toMatchObject({ style: 'flat', formats: ['story'], wording: { headline: 'Hot.\nFresh.', line: 'Tonight only.' } });
+    // The title is the product's name as the menu spells it; the owner's words are the line.
+    expect(row.custom).toMatchObject({ style: 'flat', formats: ['story'], wording: { headline: 'Chapli Kebab', line: 'Hot and fresh.', caption: 'Tonight only.' } });
     expect(messenger.sent[0]!.text).toMatch(/^🆕 Day 102 — Chapli Kebab \(custom\)/);
     const q = (await openQuestions(pool, row.id)).find((x) => x.field === 'photo')!;
     // Day 101 adopted the same photo; it is offered once, under the day it was first sent for.

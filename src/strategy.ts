@@ -121,7 +121,14 @@ export function strategyWordings(s: Strategy): { item: string; headline: string;
   for (const p of s.posters) out.push({ item: p.item, headline: p.headline, line: p.line, caption: null });
   for (const c of s.captions) out.push({ item: c.item, headline: c.headline, line: c.line, caption: `${c.caption}\n${c.hashtags}` });
   for (const e of s.events) if (!s.posters.some((p) => p.headline === e.poster.headline)) out.push({ item: e.item, headline: e.poster.headline, line: e.poster.line, caption: null });
-  return out;
+  // The bank keeps one wording per item and headline (a poster and a caption may share one): merge them the same way.
+  const merged = new Map<string, (typeof out)[number]>();
+  for (const w of out) {
+    const k = `${w.item.trim().toLowerCase()}\u0000${w.headline}`;
+    const prev = merged.get(k);
+    merged.set(k, prev ? { ...prev, line: w.line ?? prev.line, caption: w.caption ?? prev.caption } : w);
+  }
+  return [...merged.values()];
 }
 
 /** Upserts the strategy's wordings into the bank (source "strategy"); the same item + headline updates in place. */

@@ -180,8 +180,11 @@ write it), the style (the art director's choice or one of the five, locked), fee
 time, and the photo (a new upload or one already received, which keeps its crops and cut-out). It becomes a
 calendar row in the running plan numbered from 101 (`type` custom, `custom` jsonb, `src/pipeline/custom.ts`), so
 the ordinary pipeline, Day page, reminders, `/redo 101 …` and the Telegram pack all apply; the owner's wording is
-used as given with no wording question, and only the formats asked for are kept. From Telegram the same post is one
-line: `/custom chapli kebab poster story tomorrow 7pm -- Hand-formed. / Fire-finished. | Grilled every evening.`
+used as given with no wording question, and only the formats asked for are kept. The title of a design is the
+product's name by default and the wording (the owner's words, or a bank wording) is the line under it; the owner can
+name a different title. From Telegram the same post is one line:
+`/custom chapli kebab poster story tomorrow 7pm -- Hand-formed, fire-finished. | Grilled every evening.` A redo asks
+which wording to use, and `/wording 101 -- Beef Seekh | Hand formed, special spices` sets the words directly.
 (style, feed/story, date and time all optional; `-- 2` takes wording 2 from the bank; no `--` and the agent writes
 it); the bot then offers the product's earlier photos as buttons or waits for a new one captioned `#day101`.
 **Wordings** (Create → Wordings)
