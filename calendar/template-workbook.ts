@@ -111,8 +111,8 @@ export function templateRows(): Cell[][] {
 export function campaignRows(): Cell[][] {
   return [
     header([...CAMPAIGN_COLUMNS]),
-    wrapped(['CAMP001', 'Charcoal Seafood Launch', 'Product launch', 'Grow seafood sales', 'FROM THE CHARCOAL SEA', '2026-12-01', '2026-12-21', 'planned', 'high']),
-    wrapped(['CAMP002', 'Juice Bar Launch', 'Launch', 'Build the beverage category', 'FRESH POUR', '2026-12-08', '2026-12-31', 'planned', 'medium']),
+    wrapped(['CAMP001', 'Charcoal Seafood Launch', 'Product launch', 'Grow seafood sales', 'Seafood units sold', 'FROM THE CHARCOAL SEA', '2026-12-01', '2026-12-21', 'planned', 'high']),
+    wrapped(['CAMP002', 'Juice Bar Launch', 'Launch', 'Build the beverage category', 'Drinks sold with a meal', 'FRESH POUR', '2026-12-08', '2026-12-31', 'planned', 'medium']),
   ];
 }
 
@@ -168,7 +168,7 @@ export async function buildTemplateWorkbook(path = TEMPLATE_PATH): Promise<{ she
   const types = await read('[Content_Types].xml');
   const sheetNames = [...workbook.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]!);
   const wanted: { name: string; rows: Cell[][]; widths: number[]; validations: string }[] = [
-    { name: 'Campaigns', rows: campaignRows(), widths: [14, 32, 18, 30, 26, 14, 14, 12, 12], validations: `<dataValidations count="2">${listValidation('H2:H200', ['planned', 'active', 'done'])}${listValidation('I2:I200', ['high', 'medium', 'low'])}</dataValidations>` },
+    { name: 'Campaigns', rows: campaignRows(), widths: [14, 32, 18, 30, 26, 26, 14, 14, 12, 12], validations: `<dataValidations count="2">${listValidation('I2:I200', ['planned', 'active', 'done'])}${listValidation('J2:J200', ['high', 'medium', 'low'])}</dataValidations>` },
     { name: 'Products', rows: productRows(), widths: [12, 32, 18, 16, 26], validations: `<dataValidations count="1">${listValidation('D2:D200', ['active', 'coming soon', 'planned', 'retired'])}</dataValidations>` },
     { name: 'Benefits', rows: benefitRows(), widths: [12, 60], validations: '' },
   ];

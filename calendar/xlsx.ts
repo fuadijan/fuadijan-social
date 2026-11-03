@@ -35,14 +35,25 @@ export type WorkbookSource = string | Buffer;
 /** How a source is named in an error: the path, or "the uploaded workbook". */
 export const sourceName = (source: WorkbookSource): string => (typeof source === 'string' ? source : 'the uploaded workbook');
 
+async function openWorkbook(source: WorkbookSource): Promise<JSZip> {
+  try {
+    return await JSZip.loadAsync(typeof source === 'string' ? readFileSync(source) : source);
+  } catch {
+    throw new Error(`${sourceName(source)} is not an .xlsx workbook.`);
+  }
+}
+
+/** The names of a workbook's sheets, in order. */
+export async function sheetNames(source: WorkbookSource): Promise<string[]> {
+  const file = (await openWorkbook(source)).file('xl/workbook.xml');
+  if (!file) return [];
+  const xml = unprefix(await file.async('string'));
+  return [...xml.matchAll(/<sheet\s([^>]*)\/?>/g)].map((m) => decodeEntities(m[1]!.match(/name="([^"]*)"/)?.[1] ?? '')).filter(Boolean);
+}
+
 export async function readSheetRows(source: WorkbookSource, sheetName: string): Promise<Cell[][]> {
   const path = sourceName(source);
-  let zip;
-  try {
-    zip = await JSZip.loadAsync(typeof source === 'string' ? readFileSync(source) : source);
-  } catch {
-    throw new Error(`${path} is not an .xlsx workbook.`);
-  }
+  const zip = await openWorkbook(source);
   const get = async (name: string) => {
     const f = zip.file(name.replace(/^\//, ''));
     return f ? unprefix(await f.async('string')) : null;

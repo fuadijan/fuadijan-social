@@ -24,6 +24,7 @@ import { eventsOn, loadStrategy, ritualsOn } from '../strategy.js';
 import { campaignProgress } from '../campaigns.js';
 import { platformVersions, platformsTxt, type PlatformVersions } from '../calendar/record.js';
 import { listProducts } from '../products.js';
+import { listReference } from '../reference.js';
 import { addDays, sydneyDate } from '../time.js';
 
 function viewJson(v: RowView, extra: Record<string, unknown> = {}) {
@@ -318,13 +319,16 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     if (!file) return reply.code(400).send({ ok: false, error: 'No workbook was sent.' });
     const { loadWorkbook } = await import('../../calendar/seed.js');
     try {
-      const { sheetRows: _rows, readMe: _readMe, ...result } = await loadWorkbook(ctx.pool, file.bytes, { keepStarted: true, start });
+      const { sheetRows: _rows, readMe: _readMe, ...result } = await loadWorkbook(ctx.pool, file.bytes, { keepStarted: true, start, sourceName: file.filename });
       ctx.log.info('Workbook loaded from the web app.', { file: file.filename, plan: result.plan, inserted: result.inserted, updated: result.updated, campaigns: result.campaigns, products: result.products, benefits: result.benefits, slogans: result.slogans.loaded });
       return { ok: true, ...result };
     } catch (e) {
       return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
   });
+
+  /** The planning documents that are not posts: the strategic direction, the roadmap and the libraries. */
+  app.get('/api/planning', async () => ({ sheets: await listReference(ctx.pool) }));
 
   /** Every campaign with how far its posts have got; several may run at once. */
   app.get('/api/campaigns', async () => ({ campaigns: await campaignProgress(ctx.pool) }));

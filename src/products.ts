@@ -21,6 +21,10 @@ export interface Product {
   status: ProductStatus;
   series: string | null;
   template: string | null;
+  /** When it goes on sale, in the owner's words ("2026-12-15", "Current menu"). */
+  launch: string | null;
+  hero: boolean;
+  notes: string | null;
 }
 
 export interface ProductInput {
@@ -30,19 +34,22 @@ export interface ProductInput {
   status?: ProductStatus;
   series?: string | null;
   template?: string | null;
+  launch?: string | null;
+  hero?: boolean;
+  notes?: string | null;
 }
 
 /** "Coming Soon" / "coming-soon" / "soon" → coming-soon; unknown words throw, so a sheet typo is caught at import. */
 export function productStatus(s: string | null | undefined): ProductStatus {
   const k = (s ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
-  if (!k || k === 'active' || k === 'live' || k === 'on-menu') return 'active';
-  if (k === 'coming-soon' || k === 'soon' || k === 'coming') return 'coming-soon';
+  if (!k || k === 'live' || k === 'on-menu' || k.startsWith('active') || k.startsWith('current') || k === 'growth') return 'active';
+  if (k === 'coming-soon' || k === 'soon' || k === 'coming' || k === 'upcoming') return 'coming-soon';
   if (k === 'planned' || k === 'idea' || k === 'future') return 'planned';
   if (k === 'retired' || k === 'gone' || k === 'off-menu' || k === 'discontinued') return 'retired';
   throw new Error(`Product status "${s}" is not one of active, coming soon, planned, retired.`);
 }
 
-const COLS = 'id, key, name, name_key, category, status, series, template';
+const COLS = 'id, key, name, name_key, category, status, series, template, launch, hero, notes';
 
 /** Insert or update by name (the sheet's ProductID, when given, is kept as the key). */
 export async function upsertProduct(db: Db, p: ProductInput): Promise<Product> {
@@ -50,16 +57,30 @@ export async function upsertProduct(db: Db, p: ProductInput): Promise<Product> {
   const nameKey = itemKey(name);
   const key = (p.key ?? '').trim().toLowerCase() || nameKey;
   const { rows } = await db.query<Product>(
-    `insert into products (key, name, name_key, category, status, series, template) values ($1, $2, $3, $4, $5, $6, $7)
+    `insert into products (key, name, name_key, category, status, series, template, launch, hero, notes) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      on conflict (name_key) do update set key = excluded.key, name = excluded.name, category = coalesce(excluded.category, products.category),
-       status = excluded.status, series = coalesce(excluded.series, products.series), template = coalesce(excluded.template, products.template), updated_at = now()
+       status = excluded.status, series = coalesce(excluded.series, products.series), template = coalesce(excluded.template, products.template),
+       launch = coalesce(excluded.launch, products.launch), hero = excluded.hero, notes = coalesce(excluded.notes, products.notes), updated_at = now()
      returning ${COLS}`,
-    [key, name, nameKey, p.category ?? null, p.status ?? 'active', p.series ?? null, p.template ?? null]);
+    [key, name, nameKey, p.category ?? null, p.status ?? 'active', p.series ?? null, p.template ?? null, p.launch ?? null, p.hero ?? false, p.notes ?? null]);
   return rows[0]!;
 }
 
 export async function listProducts(db: Db): Promise<Product[]> {
   return (await db.query<Product>(`select ${COLS} from products order by name`)).rows;
+}
+
+/**
+ * What the writer must know about a product on a given date: an upcoming one is not on sale before its launch, and
+ * the owner's notes hold. Null when there is nothing to say.
+ */
+export function productFact(p: Product, date: string): string | null {
+  const launch = p.launch?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
+  const upcoming = p.status === 'coming-soon' || p.status === 'planned';
+  const parts: string[] = [];
+  if (upcoming && (!launch || date < launch)) parts.push(`${p.name} is not on sale on ${date}${p.launch ? `; it launches ${p.launch}` : ''}. Never present it as available yet.`);
+  if (p.notes) parts.push(`${p.name}: ${p.notes}`);
+  return parts.length ? parts.join(' ') : null;
 }
 
 /** A product by its sheet id (P004) or its name, exactly or by a loose prefix / contains match as the menu lookup does. */

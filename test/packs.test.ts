@@ -49,7 +49,7 @@ describe('canva brief', () => {
     const txt = canvaBriefTxt(row(), copy, settings, 'A', { feed: 'crop-4x5.jpg', story: 'crop-9x16.jpg' });
     expect(txt).toContain('Template: hero-photo (sheet: from-the-fire) · Layout A');
     expect(txt).toContain('  Chapli\n  Kebab');
-    expect(txt).toContain('SMOKED. GRILLED. ROOTED IN TRADITION.');
+    expect(txt).toContain('GRILLED. ROOTED IN TRADITION.');
     expect(txt).toContain('crop-4x5.jpg');
     expect(txt).toContain('#F2B544');
   });

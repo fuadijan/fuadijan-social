@@ -22,7 +22,7 @@ const COLUMN_NAMES = {
   time: ['Time', 'Post Time', 'PostTime'],
   campaign: ['CampaignID', 'Campaign'],
   product: ['ProductID', 'Product', 'Dish'],
-  benefit: ['BenefitID', 'Benefit'],
+  benefit: ['BenefitID', 'Benefit', 'Customer Benefit'],
   series: ['Series'],
   format: ['Format', 'Slot'],
   status: ['Status'],
@@ -37,6 +37,8 @@ const COLUMN_NAMES = {
   notes: ['Confirmation Notes', 'Notes'],
 } as const;
 
+const SHOT = /^shot\d+$/;
+const STORY = /^story\d(text|sticker|stickeroptions|visual)$/;
 const KNOWN = new Set<string>([...Object.values(COLUMN_NAMES).flat(), ...Object.values(RECORD_COLUMNS).flat()].map(headerKey));
 
 /** True when the header is not the classic 18 columns but names a post by its campaign, product, series or format. */
@@ -49,7 +51,7 @@ export function isCampaignLayout(header: string[]): boolean {
 
 /** The header's columns the layout does not read, so a misspelt column is reported rather than lost. */
 export function unreadColumns(header: string[]): string[] {
-  return header.filter((h) => h.trim() && !KNOWN.has(headerKey(h)));
+  return header.filter((h) => h.trim() && !KNOWN.has(headerKey(h)) && !SHOT.test(headerKey(h)) && !STORY.test(headerKey(h)));
 }
 
 /** The record's fields a row fills; a blank cell is left out. */
@@ -80,7 +82,8 @@ const statusOf = (s: string | null): SheetRow['status'] => {
   const k = (s ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
   if (!k || k === 'planned' || k === 'draft' || k === 'scheduled') return 'planned';
   if (k === 'photo-needed' || k === 'needs-photo') return 'photo-needed';
-  if (k === 'ready' || k === 'done') return 'ready';
+  if (k === 'ready' || k === 'done' || k === 'designed' || k === 'scheduled') return 'ready';
+  if (k === 'filmed') return 'planned';
   if (k === 'posted' || k === 'published') return 'posted';
   throw new Error(`status "${s}" is not one of planned, photo-needed, ready, posted`);
 };
@@ -171,6 +174,18 @@ export function campaignLayoutRows(sheet: Cell[][], opts: LayoutOptions = {}): R
       throw new Error(`${where}: ${e instanceof Error ? e.message : String(e)}`);
     }
     const content = readRecord(header, r);
+    // Shots and story frames may come one column each: Shot 1, Shot 2 … and Story 1 Text, Story 1 Sticker …
+    const shots = header.flatMap((h, c) => (SHOT.test(headerKey(h)) ? [cellText(r[c])] : [])).filter(Boolean);
+    if (shots.length && !content.shot_list) content.shot_list = shots.join('\n');
+    const frames: string[] = [];
+    for (let n = 1; n <= 9; n++) {
+      const words = at(r, [`Story ${n} Text`]);
+      const sticker = at(r, [`Story ${n} Sticker`]);
+      const options = at(r, [`Story ${n} Sticker Options`]);
+      const visual = at(r, [`Story ${n} Visual`]);
+      if (words || sticker || visual) frames.push(`Story ${n}: ${[words, sticker ? `Sticker: ${sticker}${options ? ` (${options})` : ''}` : null, visual ? `Visual: ${visual}` : null].filter(Boolean).join(' · ')}`);
+    }
+    if (frames.length && !content.story_sequence) content.story_sequence = frames.join('\n');
     const timeCol = col(...COLUMN_NAMES.time);
     out.push({
       day: dayNumber,

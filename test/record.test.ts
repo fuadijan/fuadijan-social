@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ResolvedCopy } from '../src/brain/schemas.js';
 import { applyRecord, listLines, platformVersions, platformsTxt, shotsAsInstructions } from '../src/calendar/record.js';
-import { shotList } from '../src/pipeline/packs.js';
+import { brandLineOn, shotList } from '../src/pipeline/packs.js';
 import { readWorkbook } from '../calendar/seed.js';
 import { sheetDate } from '../calendar/layouts.js';
 import { stripAddressLine } from '../calendar/calendar.schema.js';
@@ -60,12 +60,21 @@ describe('the post record', () => {
   it('turns a shot list cell into the instructions the shoot section reads', () => {
     expect(listLines('Shot 1\nWhole fish on bench\nShot 2: Marinade\n3) Smoke rising\n- Serving shot')).toEqual(['Whole fish on bench', 'Marinade', 'Smoke rising', 'Serving shot']);
     expect(shotList(shotsAsInstructions('Whole fish on bench\nFish hitting grill\nSmoke rising'))).toEqual(['Whole fish on bench', 'Fish hitting grill', 'Smoke rising']);
+    expect(shotList(shotsAsInstructions('Real Barramundi preparation; grill; turn; finished serving'))).toEqual(['Real Barramundi preparation', 'grill', 'turn', 'finished serving']);
     expect(shotsAsInstructions(null)).toBeNull();
   });
 
   it('takes the address out of a caption wherever it sits, because the pack adds it', () => {
     expect(stripAddressLine('Fire.\n\n📍 Auburn\n\n🔥 Smoked.')).toBe('Fire.\n\n🔥 Smoked.');
     expect(stripAddressLine('Fire.\n📍 123 Parramatta Rd')).toBe('Fire.');
+  });
+});
+
+describe('the brand line', () => {
+  it('says smoked only from the day charcoal arrives', () => {
+    expect(brandLineOn('2026-12-14')).toBe('GRILLED. ROOTED IN TRADITION.');
+    expect(brandLineOn('2026-12-15')).toBe('SMOKED. GRILLED. ROOTED IN TRADITION.');
+    expect(brandLineOn(null)).toBe('SMOKED. GRILLED. ROOTED IN TRADITION.');
   });
 });
 
@@ -105,6 +114,28 @@ describe('dates and weekdays in the sheet', () => {
     expect(rows.map((r) => [r.day_no, r.date, r.dish])).toEqual([[1, '2026-11-18', 'Chicken Karahi'], [2, '2026-11-19', 'Chapli Kebab']]);
     await writeWorkbook(path, [{ name: 'Calendar', rows: [head, ['18-Nov', 'Thursday', 'BBQ Barramundi', 'FROM THE CHARCOAL SEA', 'Reel']] }]);
     await expect(readWorkbook(path, { start: '2026-11-01' })).rejects.toThrow(/Calendar row 2: 2026-11-18 is a Wednesday, but the sheet says Thursday/);
+  });
+
+  it('reads a Content Records sheet: serial dates, one column per shot and per story frame', async () => {
+    const path = join(dir, 'records.xlsx');
+    await writeWorkbook(path, [{ name: 'Content Records', rows: [
+      ['PostID', 'Date', 'Day', 'ProductID', 'Series', 'Format', 'Status', 'Instagram Caption', 'Shot 1', 'Shot 2', 'Story 1 Text', 'Story 1 Sticker', 'Story 1 Sticker Options', 'Story 1 Visual', 'TikTok Caption', 'AI Photo Edit Prompt'],
+      ['POST-1', 46330, 'Wednesday', 'Chapli Kebab', 'FROM THE FIRE', 'Reel', 'Filmed', 'Hot off the grill.', 'Text card', 'Juice poured', 'Juice Bar opens', 'Countdown', 'Sun 15 Nov', 'A glass', 'Fresh.', 'Keep the real plating.'],
+    ] }]);
+    const wb = await readWorkbook(path);
+    expect(wb.unread).toEqual([]);
+    const r = wb.rows[0]!;
+    expect(r).toMatchObject({ date: '2026-11-04', status: 'planned', by_date: true, caption: 'Hot off the grill.' });
+    expect(shotList(r.creative_instructions)).toEqual(['Text card', 'Juice poured']);
+    expect(r.story_ideas).toBe('Story 1: Juice Bar opens · Sticker: Countdown (Sun 15 Nov) · Visual: A glass');
+    expect(r.content).toMatchObject({ content_id: 'POST-1', tiktok_caption: 'Fresh.', photo_edit_prompt: 'Keep the real plating.' });
+  });
+
+  it("uses a finished caption word for word, and leaves a bracketed one to the writer", () => {
+    const clean = applyRecord(written, { content: {}, hashtags: null, caption: 'Owner caption.', cta: 'Owner CTA.' });
+    expect(clean).toMatchObject({ caption: 'Owner caption.', cta: 'Owner CTA.' });
+    expect(applyRecord(written, { content: {}, hashtags: null, caption: 'Owner [confirm].', cta: null }).caption).toBe(written.caption);
+    expect(applyRecord(written, { content: {}, hashtags: null, caption: 'Owner caption.', cta: null }, true).caption).toBe(written.caption);
   });
 
   it('reports a column nothing reads', async () => {

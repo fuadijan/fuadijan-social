@@ -2,6 +2,7 @@
  * renderPost: template key + copy + photo (and maybe a cutout) → PNGs. Feed 1080×1350, story 1080×1920, one PNG
  * per carousel page, reel cover 1080×1920. The pipeline's render stage and `npm run render-samples` both come here.
  */
+import { brandLineOn } from '../pipeline/packs.js';
 import type { z } from 'zod';
 import type { DesignSpec } from '../brain/schemas.js';
 import { loadBrand, type Brand } from './brand.js';
@@ -68,7 +69,8 @@ export function styleFor(input: Pick<RenderInput, 'photo' | 'cutout' | 'design'>
 
 export interface RenderOutput { format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; png: Buffer }
 
-export async function renderPost(input: RenderInput, brand: Brand = loadBrand()): Promise<RenderOutput[]> {
+export async function renderPost(input: RenderInput, baseBrand: Brand = loadBrand()): Promise<RenderOutput[]> {
+  const brand: Brand = { ...baseBrand, brandLine: brandLineOn(input.date, baseBrand.brandLine) };
   const key = templateKeyFor(input.sheetTemplate);
   const entry = templateEntry(input.sheetTemplate);
   const [fw, fh] = brand.canvas.feed;

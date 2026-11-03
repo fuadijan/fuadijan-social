@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { getCampaigns, getStrategy, importCalendar, seedStrategyPlan } from '../api';
+import { getCampaigns, getPlanning, getStrategy, importCalendar, seedStrategyPlan } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { ErrorCard, Loading } from '../components/States';
 import type { CampaignProgress, ImportCalendarResponse, SeedPlanResponse, Strategy as StrategyData } from '../types';
@@ -97,7 +97,7 @@ function Campaigns({ refreshKey }: { refreshKey: number }) {
         <Table
           head={['Campaign', 'Dates', 'Series', 'Status', 'Posts']}
           rows={list.map((c: CampaignProgress) => [
-            <span key={c.key}><strong>{c.name}</strong>{c.category || c.objective || c.priority ? <><br /><span className="sa-note">{[c.category, c.objective, c.priority ? `${c.priority} priority` : null].filter(Boolean).join(' · ')}</span></> : null}</span>,
+            <span key={c.key}><strong>{c.name}</strong>{c.category || c.objective || c.priority ? <><br /><span className="sa-note">{[c.category, c.objective, c.success_metric ? `measured by ${c.success_metric}` : null, c.priority ? `${c.priority} priority` : null].filter(Boolean).join(' · ')}</span></> : null}</span>,
             c.start_date ? `${fmtDay(c.start_date)}${c.end_date && c.end_date !== c.start_date ? ` – ${fmtDay(c.end_date)}` : ''}` : '—',
             c.series ?? '—',
             STATUS_WORD[c.status] ?? c.status,
@@ -107,6 +107,23 @@ function Campaigns({ refreshKey }: { refreshKey: number }) {
       ) : (
         <div className="sa-note">No campaigns yet. A Campaigns sheet in the month's workbook adds them, and a row's campaign column puts a post under one.</div>
       )}
+    </Card>
+  );
+}
+
+/** The planning documents that are not posts, each sheet folded until opened. */
+function PlanningDocs({ refreshKey }: { refreshKey: number }) {
+  const { data } = useApi(getPlanning, `planning-${refreshKey}`);
+  if (!data?.sheets.length) return null;
+  return (
+    <Card title="Planning documents">
+      <div className="sa-note" style={{ marginBottom: 8 }}>What the agent reads with every post: the positioning, the series' purpose, the working rules and the hooks. Loading a workbook again replaces its sheets.</div>
+      {data.sheets.map((s) => (
+        <details key={s.name} style={{ marginBottom: 8 }}>
+          <summary><strong>{s.name}</strong> <span className="sa-note">{s.rows.length} row{s.rows.length === 1 ? '' : 's'}{s.source ? ` · ${s.source}` : ''}</span></summary>
+          <Table head={s.header} rows={s.rows} />
+        </details>
+      ))}
     </Card>
   );
 }
@@ -172,7 +189,9 @@ function LoadWorkbook({ onLoaded }: { onLoaded: () => void }) {
             {result.slogans.loaded ? `${result.slogans.loaded} slogan${result.slogans.loaded === 1 ? '' : 's'} for ${result.slogans.items} item${result.slogans.items === 1 ? '' : 's'} joined the wording bank.` : 'No Slogans sheet.'}
             {result.plan ? <>{' '}<Link to={`/month?plan=${encodeURIComponent(result.plan)}`}>See {fmtMonth(result.plan)}</Link></> : null}
           </div>
+          {result.reference.length ? <div className="sa-note" style={{ marginTop: 8 }}>Planning documents kept: {result.reference.join(', ')}.</div> : null}
           {result.unread.length ? <div className="sa-result sa-result--error" style={{ marginTop: 8 }}>These columns were not read: {result.unread.join(', ')}. Check the spelling if they should have been.</div> : null}
+          {result.unreadSheets.length ? <div className="sa-note" style={{ marginTop: 8 }}>The app has no place yet for these sheets, so they were left out: {result.unreadSheets.join(', ')}.</div> : null}
           {result.placeholders.length ? (
             <div style={{ marginTop: 8 }}>
               <div className="sa-eyebrow">You will be asked about</div>
@@ -256,6 +275,8 @@ export function Strategy() {
       <Plan s={s} today={data.today} />
 
       <Campaigns refreshKey={loads} />
+
+      <PlanningDocs refreshKey={loads} />
 
       <LoadWorkbook onLoaded={() => setLoads((n) => n + 1)} />
 

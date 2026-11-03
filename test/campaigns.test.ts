@@ -10,7 +10,7 @@ import { readWorkbook } from '../calendar/seed.js';
 import { TEMPLATE_PATH } from '../calendar/template-workbook.js';
 import { writeWorkbook, type OutCell } from '../calendar/xlsx-write.js';
 import { seriesLabel } from '../src/calendar/rows.js';
-import { productStatus } from '../src/products.js';
+import { productFact, productStatus, type Product } from '../src/products.js';
 import { suggestedTemplate, templateForSeries } from '../src/render/registry.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'fj-campaigns-'));
@@ -29,7 +29,9 @@ describe('the seafood series', () => {
     expect(seriesLabel({ template: 'you-said-it', theme: null, type: 'social-proof' })).toBe('YOU SAID IT');
     expect(templateForSeries('WHAT WE ATE TODAY')).toBe('what-we-ate-today');
     expect(templateForSeries('FOR OUR CUSTOMERS')).toBe('for-our-customers');
-    expect(templateForSeries('YOU SAID IT')).toBe('you-said-it');
+    // A sheet's YOU SAID IT is a photo design; the review design needs a real quote, and is chosen by its own name.
+    expect(templateForSeries('YOU SAID IT')).toBe('you-said-it-photo');
+    expect(templateForSeries('you-said-it')).toBe('you-said-it');
     expect(templateForSeries('FROM THE CHARCOAL SEA')).toBe('from-the-charcoal-sea');
     expect(templateForSeries('from the charcoal sea')).toBe('from-the-charcoal-sea');
     expect(templateForSeries('fresh-pour')).toBe('fresh-pour');
@@ -45,8 +47,8 @@ describe('the Campaigns and Products sheets', () => {
     await writeWorkbook(path, [{ name: 'Campaigns', rows: [head, ['CAMP001', 'Charcoal Seafood Launch', 'Product launch', 'FROM THE CHARCOAL SEA', '2026-12-01', '2026-12-21', 'Active', 'High'], ['CAMP002', 'Juice Bar Launch', null, 'fresh-pour', null, null, null, null]] }]);
     const rows = await readCampaignsSheet(path);
     expect(rows).toEqual([
-      { key: 'CAMP001', name: 'Charcoal Seafood Launch', category: 'Product launch', objective: null, series: 'FROM THE CHARCOAL SEA', template: 'from-the-charcoal-sea', start_date: '2026-12-01', end_date: '2026-12-21', status: 'active', priority: 'high' },
-      { key: 'CAMP002', name: 'Juice Bar Launch', category: null, objective: null, series: 'FRESH POUR', template: 'fresh-pour', start_date: null, end_date: null, status: 'planned', priority: null },
+      { key: 'CAMP001', name: 'Charcoal Seafood Launch', category: 'Product launch', objective: null, success_metric: null, series: 'FROM THE CHARCOAL SEA', template: 'from-the-charcoal-sea', start_date: '2026-12-01', end_date: '2026-12-21', status: 'active', priority: 'high' },
+      { key: 'CAMP002', name: 'Juice Bar Launch', category: null, objective: null, success_metric: null, series: 'FRESH POUR', template: 'fresh-pour', start_date: null, end_date: null, status: 'planned', priority: null },
     ]);
     // The planning document's own header: CampaignID | CampaignName | Objective, nothing else.
     await writeWorkbook(path, [{ name: 'Campaigns', rows: [['CampaignID', 'CampaignName', 'Objective'], ['CAMP001', 'Better Food Initiative', 'Food quality perception'], ['CAMP007', 'Community & Trust', 'Reviews and loyalty']] }]);
@@ -55,6 +57,8 @@ describe('the Campaigns and Products sheets', () => {
     await expect(readCampaignsSheet(path)).rejects.toThrow(/Campaigns row 2: series "FROM THE MOON"/);
     await writeWorkbook(path, [{ name: 'Campaigns', rows: [head, ['CAMP001', 'One', null, null, '2026-12-21', '2026-12-01', 'planned', null]] }]);
     await expect(readCampaignsSheet(path)).rejects.toThrow(/End Date is before Start Date/);
+    await writeWorkbook(path, [{ name: 'Campaigns', rows: [head, ['CMP-01', 'One', null, null, 46336, 46418, 'Pre-launch', 1], ['CMP-02', 'Two', null, null, null, null, 'Ready to launch', 2]] }]);
+    expect((await readCampaignsSheet(path)).map((c) => [c.key, c.start_date, c.status, c.priority])).toEqual([['CMP-01', '2026-11-10', 'planned', 'high'], ['CMP-02', null, 'planned', 'medium']]);
     await writeWorkbook(path, [{ name: 'Campaigns', rows: [head, ['CAMP001', 'One', null, null, null, null, 'maybe', null]] }]);
     await expect(readCampaignsSheet(path)).rejects.toThrow(/status "maybe"/);
     await writeWorkbook(path, [{ name: 'Calendar', rows: [[...CALENDAR_COLUMNS]] }]);
@@ -66,10 +70,15 @@ describe('the Campaigns and Products sheets', () => {
     const head = ['ProductID', 'Product Name', 'Category', 'Status', 'Series'];
     await writeWorkbook(path, [{ name: 'Products', rows: [head, ['P001', 'Chapli Kebab', 'BBQ', 'Active', 'FROM THE FIRE'], ['P002', 'BBQ Prawns', 'Seafood', 'Coming Soon', null], [null, 'Stir Fry', 'Main Meal', 'Planned', 'MODERN FUADIJAN']] }]);
     expect(await readProductsSheet(path)).toEqual([
-      { key: 'P001', name: 'Chapli Kebab', category: 'BBQ', status: 'active', series: 'FROM THE FIRE', template: 'from-the-fire' },
-      { key: 'P002', name: 'BBQ Prawns', category: 'Seafood', status: 'coming-soon', series: null, template: null },
-      { key: null, name: 'Stir Fry', category: 'Main Meal', status: 'planned', series: 'MODERN FUADIJAN', template: 'modern-fuadijan' },
+      { key: 'P001', name: 'Chapli Kebab', category: 'BBQ', status: 'active', series: 'FROM THE FIRE', template: 'from-the-fire', launch: null, hero: false, notes: null },
+      { key: 'P002', name: 'BBQ Prawns', category: 'Seafood', status: 'coming-soon', series: null, template: null, launch: null, hero: false, notes: null },
+      { key: null, name: 'Stir Fry', category: 'Main Meal', status: 'planned', series: 'MODERN FUADIJAN', template: 'modern-fuadijan', launch: null, hero: false, notes: null },
     ]);
+    expect(['Current Hero', 'Current Menu', 'Active Growth', 'Upcoming'].map(productStatus)).toEqual(['active', 'active', 'active', 'coming-soon']);
+    expect(productFact({ name: 'BBQ Prawns', status: 'coming-soon', launch: '2026-12-15', notes: null } as Product, '2026-12-03')).toMatch(/not on sale on 2026-12-03; it launches 2026-12-15/);
+    expect(productFact({ name: 'BBQ Prawns', status: 'coming-soon', launch: '2026-12-15', notes: null } as Product, '2026-12-15')).toBeNull();
+    expect(productFact({ name: 'Carrot Juice', status: 'active', launch: 'Current menu', notes: 'A pairing item.' } as Product, '2026-12-15')).toBe('Carrot Juice: A pairing item.');
+    expect(productStatus('Growth')).toBe('active');
     expect(productStatus('coming_soon')).toBe('coming-soon');
     expect(productStatus(null)).toBe('active');
     expect(() => productStatus('sold')).toThrow(/not one of/);
@@ -80,7 +89,9 @@ describe('the Campaigns and Products sheets', () => {
   it('reads the Benefits sheet, under either name', async () => {
     const path = join(dir, 'benefits.xlsx');
     await writeWorkbook(path, [{ name: 'Customer Benefits', rows: [['BenefitID', 'Benefit'], ['BEN001', 'Plenty of Parking Available'], ['BEN002', 'Fully Air Conditioned Dining'], [null, null]] }]);
-    expect(await readBenefitsSheet(path)).toEqual([{ key: 'BEN001', benefit: 'Plenty of Parking Available' }, { key: 'BEN002', benefit: 'Fully Air Conditioned Dining' }]);
+    expect((await readBenefitsSheet(path)).map((b) => [b.key, b.benefit])).toEqual([['BEN001', 'Plenty of Parking Available'], ['BEN002', 'Fully Air Conditioned Dining']]);
+    await writeWorkbook(path, [{ name: 'Customer Benefits', rows: [['BenefitID', 'Benefit Name', 'Category', 'Message', 'Status', 'Series'], ['BEN-02', 'Air-conditioned dining', 'Comfort', 'Enjoy it from 24 December.', 'Available 2026-12-24', 'FOR OUR CUSTOMERS']] }]);
+    expect(await readBenefitsSheet(path)).toEqual([{ key: 'BEN-02', benefit: 'Air-conditioned dining', category: 'Comfort', message: 'Enjoy it from 24 December.', status: 'Available 2026-12-24', series: 'FOR OUR CUSTOMERS' }]);
     await writeWorkbook(path, [{ name: 'Benefits', rows: [['BenefitID', 'Benefit'], ['BEN001', 'One'], ['BEN001', 'Two']] }]);
     await expect(readBenefitsSheet(path)).rejects.toThrow(/Benefits row 3: BenefitID BEN001 is used twice/);
     await writeWorkbook(path, [{ name: 'Products', rows: [['ProductID', 'ProductName'], ['P001', 'Chapli Kebab']] }]);

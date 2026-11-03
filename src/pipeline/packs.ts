@@ -16,6 +16,12 @@ export interface PackSettings {
 
 export const BRAND_LINE = 'SMOKED. GRILLED. ROOTED IN TRADITION.';
 
+/** Charcoal arrives on this date, and only then is "smoked" literally true: until it, the line starts at "Grilled". */
+export const SMOKED_FROM = '2026-12-15';
+export function brandLineOn(date: string | null | undefined, line: string = BRAND_LINE): string {
+  return date && date < SMOKED_FROM ? line.replace(/^\s*smoked\.\s*/i, '') : line;
+}
+
 export function postTimeFor(row: CalendarRow, defaults: { post: string; story: string }): string {
   return (row.post_time ?? defaults.post).slice(0, 5);
 }
@@ -90,7 +96,7 @@ export function canvaBriefTxt(row: CalendarRow, copy: ResolvedCopy, s: PackSetti
   const key = templateKeyFor(row.template);
   const entry = templateEntry(row.template);
   const footer = entry.footer === 'brand'
-    ? `thin Sand rule with ✻ · ${BRAND_LINE}`
+    ? `thin Sand rule with ✻ · ${brandLineOn(row.date)}`
     : `${s.storeAddress.toUpperCase()}\n  OPEN ${s.openHours.toUpperCase()}`;
   return [
     `CANVA BRIEF — Day ${row.day_no} · ${formatDay(row.date)} · ${row.slot}`,

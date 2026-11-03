@@ -6,12 +6,12 @@
 import type pg from 'pg';
 import { productStatus, upsertProduct, type ProductInput, type ProductStatus } from '../src/products.js';
 import { templateEntry, templateForSeries } from '../src/render/registry.js';
-import { cellText, headerIndex } from './calendar.schema.js';
+import { cellDate, cellText, headerIndex } from './calendar.schema.js';
 import { readSheetRows, sourceName, type WorkbookSource } from './xlsx.js';
 
-export const PRODUCT_COLUMNS = ['ProductID', 'Product Name', 'Category', 'Status', 'Series'] as const;
+export const PRODUCT_COLUMNS = ['ProductID', 'Product Name', 'Category', 'Status', 'Launch Date', 'Series', 'Hero Product', 'Notes'] as const;
 
-export interface ProductRow extends ProductInput { key: string | null; name: string; category: string | null; status: ProductStatus; series: string | null; template: string | null }
+export interface ProductRow extends ProductInput { key: string | null; name: string; category: string | null; status: ProductStatus; series: string | null; template: string | null; launch: string | null; hero: boolean; notes: string | null }
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/[\s_]+/g, ' ');
 
@@ -52,7 +52,7 @@ export async function readProductsSheet(source: WorkbookSource, sheetName = 'Pro
       template = templateForSeries(series);
       if (!template) throw new Error(`${where}: series "${series}" is not one on the Templates sheet.`);
     }
-    out.push({ key: key ? key.trim() : null, name: name.trim(), category: at(r, 'Category'), status, series: template ? templateEntry(template).label : null, template });
+    out.push({ key: key ? key.trim() : null, name: name.trim(), category: at(r, 'Category'), status, series: template ? templateEntry(template).label : null, template, launch: col('Launch Date', 'Launch') >= 0 ? cellDate(r[col('Launch Date', 'Launch')]) ?? cellText(r[col('Launch Date', 'Launch')]) : null, hero: /^(y|yes|true|1)$/i.test(at(r, 'Hero Product', 'Hero') ?? ''), notes: at(r, 'Notes') });
   });
   return out;
 }

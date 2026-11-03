@@ -24,6 +24,8 @@ import { copyBrief, strategyIfAny } from '../strategy.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
 import { applyRecord, platformVersions, platformsTxt } from '../calendar/record.js';
+import { findProduct, productFact } from '../products.js';
+import { planningBrief } from '../reference.js';
 import { answeredQuestions, askQuestion, openQuestions, setQuestionMessageId } from './questions.js';
 import { RENDER_FILENAMES, renderForRow } from './render-stage.js';
 
@@ -300,6 +302,9 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   const entry = templateEntry(row.template);
   const read = ctx.job.state.match ?? ctx.asset?.match ?? null;
   const facts = await dishFactsFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical]);
+  const rosterProduct = row.dish && !row.dish.startsWith('[') ? await findProduct(ctx.pool, row.dish.split(',')[0]!) : null;
+  const rosterFact = rosterProduct ? productFact(rosterProduct, row.date) : null;
+  if (rosterFact) facts.push(rosterFact);
   const slogans = await slogansFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical, seriesLabel(row), row.theme]);
   // A custom post tells the writer what is the owner's and fixed, and what is left to write.
   const redo = Boolean(ctx.job.state.redo);
@@ -308,7 +313,7 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
     row, menu, answers, note, dishCanonical: read?.dish_canonical ?? null,
     label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'), facts,
     slogans: slogans.map((s) => `${s.item}: ${s.headline.replace(/\n/g, ' / ')}${s.line ? ` — ${s.line}` : ''}`),
-    strategy: strategyIfAny() ? copyBrief(strategyIfAny()!, row) : null,
+    strategy: [strategyIfAny() ? copyBrief(strategyIfAny()!, row) : null, await planningBrief(ctx.pool, entry.label || seriesLabel(row))].filter(Boolean).join('\n\n') || null,
   });
   const written = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
   // The first run of a custom post uses the owner's words as given; a redo lets the note change them.

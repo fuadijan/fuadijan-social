@@ -161,7 +161,7 @@ function PlatformsSection({ d }: { d: DayResponse }) {
   // "All" or blank means every platform; otherwise only those the record names.
   const wanted = p.notes.platform.toLowerCase();
   const wants = (name: string) => !wanted || wanted === 'all' || wanted.includes(name);
-  const fb = [p.facebook.caption, p.facebook.cta].filter(Boolean).join('\n\n');
+  const fb = [p.facebook.caption, p.facebook.cta, p.facebook.hashtags.join(' ')].filter(Boolean).join('\n\n');
   const hasTikTok = p.tiktok.opening || p.tiktok.hook || p.tiktok.script;
   const n = p.notes;
   const hasNotes = n.goal || n.funnel || n.kpi || n.priority || n.objective || n.platform;
@@ -174,6 +174,7 @@ function PlatformsSection({ d }: { d: DayResponse }) {
           <Field label="TikTok opening text" value={p.tiktok.opening} copy />
           <Field label="TikTok hook" value={p.tiktok.hook} copy />
           <Field label="TikTok script" value={p.tiktok.script} copy />
+          {p.tiktok.caption ? <Field label="TikTok caption" value={p.tiktok.caption} copy /> : null}
           <Field label="TikTok CTA" value={p.tiktok.cta} copy />
           <Field label="TikTok hashtags" value={p.tiktok.hashtags.join(' ')} copy className="sa-hashtags" />
         </>
@@ -182,7 +183,8 @@ function PlatformsSection({ d }: { d: DayResponse }) {
       {p.reel_cover ? <Field label="Reel cover" value={p.reel_cover} copy /> : null}
       {p.canva.headline ? <Field label="Canva headline" value={p.canva.headline} copy /> : null}
       {p.canva.subheading ? <Field label="Canva subheading" value={p.canva.subheading} copy /> : null}
-      {p.image_prompt ? <Field label="Image prompt (a reference for the shoot or a mock-up, not a photo of the dish)" value={p.image_prompt} copy /> : null}
+      {p.photo_edit_prompt ? <Field label="Photo edit prompt (use with a real photo of the food)" value={p.photo_edit_prompt} copy /> : null}
+      {p.image_prompt ? <Field label="Image prompt (backgrounds, mock-ups and concepts only, never a dish you sell)" value={p.image_prompt} copy /> : null}
       {p.benefit || p.customer_message ? <Field label="Customer benefit" value={[p.benefit, p.customer_message].filter(Boolean).join('\n')} /> : null}
       {hasNotes ? (
         <Field label="Internal notes (never posted)" value={[n.platform && `Platform: ${n.platform}`, n.goal && `Goal: ${n.goal}`, n.funnel && `Funnel stage: ${n.funnel}`, n.objective && `Objective: ${n.objective}`, n.kpi && `KPI: ${n.kpi.replace(/\s*\n\s*/g, ', ')}`, n.priority && `Priority: ${n.priority}`].filter(Boolean).join('\n')} />

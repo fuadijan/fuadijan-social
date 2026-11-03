@@ -29,6 +29,7 @@ const REGISTRY: Record<string, Entry> = {
   'from-the-charcoal-sea': { key: 'hero-photo', footer: 'brand', label: 'FROM THE CHARCOAL SEA' },
   'what-we-ate-today': { key: 'hero-photo', footer: 'brand', label: 'WHAT WE ATE TODAY' },
   'for-our-customers': { key: 'hero-photo', footer: 'address', label: 'FOR OUR CUSTOMERS' },
+  'you-said-it-photo': { key: 'hero-photo', footer: 'address', label: 'YOU SAID IT' },
   'new-product-reveal': { key: 'hero-photo', footer: 'brand', label: 'FROM THE FIRE', style: 'invite' },
   'customer-review': { key: 'review', footer: 'address', label: 'CUSTOMER LOVE' },
   'you-said-it': { key: 'review', footer: 'address', label: 'YOU SAID IT' },
@@ -93,10 +94,11 @@ export function suggestedTemplate(product: string, category?: string | null): st
  */
 export function templateForSeries(ref: string): string | null {
   const k = ref.trim().toLowerCase().replace(/\s+/g, '-');
-  if (REGISTRY[k]) return k;
+  // A template's own name wins as written; words are a label first ("YOU SAID IT" is the photo series, "you-said-it" the review design).
+  if (REGISTRY[ref.trim()]) return ref.trim();
   const label = ref.trim().toUpperCase().replace(/[\s_-]+/g, ' ');
   // A photo series first (the one a design starts from), then any other template with that label (YOU SAID IT is a review).
-  return heroTemplates().find((t) => t.label === label)?.template ?? Object.entries(REGISTRY).find(([, e]) => e.label === label)?.[0] ?? null;
+  return heroTemplates().find((t) => t.label === label)?.template ?? Object.entries(REGISTRY).find(([, e]) => e.label === label)?.[0] ?? (REGISTRY[k] ? k : null);
 }
 
 /** The series label of a template the registry knows, else null. */

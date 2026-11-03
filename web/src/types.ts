@@ -183,12 +183,13 @@ export interface WordingSet { id: number; options: WordingOption[]; chosen: numb
 /** Every platform's version of one post, from one record. */
 export interface PlatformVersions {
   instagram: { caption: string; cta: string; hashtags: string[] };
-  facebook: { caption: string; cta: string };
-  tiktok: { opening: string; hook: string; script: string; cta: string; hashtags: string[] };
+  facebook: { caption: string; cta: string; hashtags: string[] };
+  tiktok: { opening: string; hook: string; script: string; caption: string; cta: string; hashtags: string[] };
   stories: string[];
   reel_cover: string;
   canva: { headline: string; subheading: string };
   image_prompt: string;
+  photo_edit_prompt: string;
   benefit: string;
   customer_message: string;
   notes: { platform: string; goal: string; funnel: string; kpi: string; priority: string; objective: string };
@@ -313,7 +314,7 @@ export interface Strategy {
 export interface SeedPlanResponse { ok: true; plan: string | null; inserted: number; updated: number; protectedFields: { day_no: number; field: string }[]; kept: number[] }
 
 /** A month's workbook loaded from the browser: the seed's result plus what was read. */
-export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string | null; to: string | null; campaigns: number; products: number; benefits: number; unread: string[]; slogans: { loaded: number; items: number }; placeholders: string[] }
+export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string | null; to: string | null; campaigns: number; products: number; benefits: number; unread: string[]; unreadSheets: string[]; reference: string[]; slogans: { loaded: number; items: number }; placeholders: string[] }
 
 export type CampaignStatus = 'planned' | 'active' | 'done';
 
@@ -324,6 +325,7 @@ export interface CampaignProgress {
   name: string;
   category: string | null;
   objective: string | null;
+  success_metric: string | null;
   series: string | null;
   template: string | null;
   start_date: string | null;
@@ -335,6 +337,10 @@ export interface CampaignProgress {
   posted: number;
   next: string | null;
 }
+
+/** A planning sheet kept whole: strategy, roadmap or a library. */
+export interface PlanningSheet { name: string; source: string | null; header: string[]; rows: string[][] }
+export interface PlanningResponse { sheets: PlanningSheet[] }
 
 export interface CampaignsResponse { campaigns: CampaignProgress[] }
 

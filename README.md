@@ -142,7 +142,12 @@ Goal, Funnel Stage, KPI, Priority). What the owner wrote is used as written, inc
 product's name and more than five hashtags; what is blank the writer drafts from the same facts when the photo
 arrives, with no new claims. The Day page shows the set under "Every platform" and the pack adds `platforms.txt`.
 `Day` may be a number or a weekday: a weekday is checked against the date, and a sheet with only dates finds each
-post by its date, so a partial sheet never lands on the wrong day. `calendar/Fuadijan-Post-Record-Example.xlsx` is
+post by its date, so a partial sheet never lands on the wrong day (an unstarted post on that date first).
+A sheet called `Operational Calendar` is read as the Calendar, ids may be hyphenated (`PRD-07`), and a product's
+launch date and notes reach the writer, so an upcoming dish is never written up as on sale. The planning
+sheets (Business Vision, Brand Positioning, Content Pillars, Annual Roadmap, 12-Week Roadmap, the hook, CTA, hashtag
+and caption-template libraries, Field Guide, a Topic | Working Rule Read Me) are kept whole in `reference_sheets`
+(`src/reference.ts`), shown on the Strategy page, and the parts that bear on a post reach the writer. `calendar/Fuadijan-Post-Record-Example.xlsx` is
 a full example.
 
 **The slogan bank.** Keep several slogans per menu item and they are offered among the wordings whenever a post is

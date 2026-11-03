@@ -11,15 +11,15 @@ import { templateEntry, templateForSeries } from '../src/render/registry.js';
 import { cellDate, cellText, headerIndex } from './calendar.schema.js';
 import { readSheetRows, sourceName, type WorkbookSource } from './xlsx.js';
 
-export const CAMPAIGN_COLUMNS = ['CampaignID', 'Campaign Name', 'Category', 'Objective', 'Series', 'Start Date', 'End Date', 'Status', 'Priority'] as const;
+export const CAMPAIGN_COLUMNS = ['CampaignID', 'Campaign Name', 'Category', 'Objective', 'Success Metric', 'Series', 'Start Date', 'End Date', 'Status', 'Priority'] as const;
 
-export type CampaignRow = Required<Pick<CampaignInput, 'key' | 'name' | 'category' | 'objective' | 'series' | 'template' | 'start_date' | 'end_date' | 'status' | 'priority'>>;
+export type CampaignRow = Required<Pick<CampaignInput, 'key' | 'name' | 'category' | 'objective' | 'success_metric' | 'series' | 'template' | 'start_date' | 'end_date' | 'status' | 'priority'>>;
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/[\s_]+/g, ' ');
 
 export function campaignStatus(s: string | null): CampaignStatus {
   const k = norm(s ?? '').replace(/\s+/g, '-');
-  if (!k || k === 'planned') return 'planned';
+  if (!k || k === 'planned' || k === 'pre-launch' || k === 'ready-to-launch' || k === 'upcoming') return 'planned';
   if (k === 'active' || k === 'running' || k === 'live') return 'active';
   if (k === 'done' || k === 'finished' || k === 'complete' || k === 'completed' || k === 'ended') return 'done';
   throw new Error(`status "${s}" is not one of ${CAMPAIGN_STATUSES.join(', ')}`);
@@ -68,9 +68,9 @@ export async function readCampaignsSheet(source: WorkbookSource, sheetName = 'Ca
       throw new Error(`${where}: ${e instanceof Error ? e.message : String(e)}`);
     }
     const priority = at(r, 'Priority');
-    const p = priority ? norm(priority) : null;
+    const p = priority ? ({ '1': 'high', '2': 'medium', '3': 'low' } as Record<string, string>)[norm(priority)] ?? norm(priority) : null;
     if (p && !['high', 'medium', 'low'].includes(p)) throw new Error(`${where}: Priority "${priority}" is not high, medium or low.`);
-    out.push({ key: key.trim(), name: name.trim(), category: at(r, 'Category'), objective: at(r, 'Objective', 'Goal', 'Purpose'), series: template ? templateEntry(template).label : null, template, start_date: startDate, end_date: endDate, status, priority: p });
+    out.push({ key: key.trim(), name: name.trim(), category: at(r, 'Category'), objective: at(r, 'Objective', 'Goal', 'Purpose'), success_metric: at(r, 'Success Metric', 'KPI'), series: template ? templateEntry(template).label : null, template, start_date: startDate, end_date: endDate, status, priority: p });
   });
   return out;
 }

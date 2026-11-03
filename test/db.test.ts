@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -310,6 +310,37 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect([april1.date, april1.content?.canva_headline, april1.slot]).toEqual(['2027-04-07', 'CHAPLI\nKEBAB', 'reel']);
     expect([april2.date, april2.content?.canva_headline, april2.template]).toEqual(['2027-04-08', 'WHOLE\nBARRAMUNDI', 'from-the-charcoal-sea']);
     expect([april3.date, april3.dish, april3.content?.priority]).toEqual(['2027-04-09', 'Mango Lassi', 'Low']);
+    // The knowledge base's own names: hyphenated ids, a sheet called Operational Calendar, status words, sheets with no home yet.
+    const kb = join(dir, 'kb.xlsx');
+    await writeWorkbook(kb, [
+      { name: 'Campaigns', rows: [['CampaignID', 'Campaign Name', 'Category', 'Start Date', 'End Date', 'Priority', 'Objective', 'Success Metric', 'Status'], ['CMP-03', 'Seafood Expansion', 'Seafood', '2026-11-04', '2027-10-31', 'High', 'Grow seafood.', 'Seafood units', 'Active']] },
+      { name: 'Products', rows: [['ProductID', 'Product Name', 'Category', 'Status', 'Launch Date', 'Series', 'Hero Product', 'Notes'], ['PRD-08', 'BBQ Prawns', 'Seafood', 'Upcoming', '2026-12-15', 'FROM THE CHARCOAL SEA', 'No', 'Launch date supplied by the business.']] },
+      { name: 'Customer Benefits', rows: [['BenefitID', 'Benefit Name', 'Message'], ['BEN-09', 'More choice', 'More choice across BBQ seafood.']] },
+      { name: 'Hooks Library', rows: [['HookID', 'Series', 'Hook'], ['HK-001', 'FROM THE FIRE', 'Hear the sizzle.'], ['HK-002', 'SAVE ROOM', 'Save room.']] },
+      { name: 'Scratch', rows: [['a'], ['b']] },
+    ]);
+    expect(await loadWorkbook(pool, kb, { sourceName: 'kb.xlsx' })).toMatchObject({ plan: null, campaigns: 1, products: 1, benefits: 1, reference: ['Hooks Library'], unreadSheets: ['Scratch'] });
+    // Planning documents alone are a load, and what bears on a post reaches the writer.
+    const { planningBrief, listReference } = await import('../src/reference.js');
+    const strategic = join(dir, 'strategic.xlsx');
+    await writeWorkbook(strategic, [
+      { name: 'Content Pillars', rows: [['Pillar', 'Purpose', 'Customer Message'], ['FROM THE FIRE', 'Make BBQ memorable.', 'Better flavour.']] },
+      { name: 'Read Me', rows: [['Topic', 'Working Rule'], ['Product timing', 'Before 15 Dec, BBQ is grilled, not charcoal.'], ['Status', 'Records start as Planned.']] },
+    ]);
+    expect(await loadWorkbook(pool, strategic)).toMatchObject({ plan: null, reference: ['Content Pillars', 'Working Rules'], unreadSheets: [] });
+    const brief = await planningBrief(pool, 'FROM THE FIRE');
+    expect(brief).toContain('Make BBQ memorable.');
+    expect(brief).toContain('Before 15 Dec, BBQ is grilled, not charcoal.');
+    expect(brief).toContain('Hear the sizzle.');
+    expect(brief).not.toContain('Save room.');
+    expect(brief).not.toContain('Records start as Planned.');
+    expect((await listReference(pool)).map((s) => s.name)).toEqual(['Content Pillars', 'Working Rules', 'Hooks Library']);
+    const ops = join(dir, 'ops.xlsx');
+    await writeWorkbook(ops, [{ name: 'Operational Calendar', rows: [['ContentID', 'Date', 'Day', 'CampaignID', 'Campaign', 'ProductID', 'Product', 'BenefitID', 'Customer Benefit', 'Series', 'Format', 'Hook', 'Facebook Hashtags'], ['C26', '2027-05-04', 'Tuesday', 'CMP-03', 'Seafood Expansion', 'PRD-08', 'BBQ Prawns', 'BEN-09', 'More choice', 'YOU SAID IT', 'Reel', 'Coming soon.', '#Fuadijan #Seafood']] }]);
+    expect(await loadWorkbook(pool, ops, { keepStarted: true })).toMatchObject({ plan: '2027-05', inserted: 1, unread: [] });
+    const c26 = (await rowByDay(pool, 1, '2027-05'))!;
+    expect([c26.dish, c26.benefit, c26.template, c26.content?.content_id, c26.content?.facebook_hashtags]).toEqual(['BBQ Prawns', 'More choice', 'you-said-it-photo', 'C26', '#Fuadijan #Seafood']);
+    expect(c26.campaign_id).toBe((await findCampaign(pool, 'CMP-03'))!.id);
     // A workbook with nothing the app reads is refused.
     const none = join(dir, 'none.xlsx');
     await writeWorkbook(none, [{ name: 'Notes', rows: [['hello']] }]);

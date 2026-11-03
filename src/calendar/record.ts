@@ -8,6 +8,7 @@ import type { ResolvedCopy } from '../brain/schemas.js';
 
 /** Each stored field and the column names a sheet may use for it (matched without case, spaces or punctuation). */
 export const RECORD_COLUMNS = {
+  content_id: ['PostID', 'Post ID', 'ContentID', 'Content ID'],
   platform: ['Platform', 'Platforms'],
   content_goal: ['Content Goal', 'Goal'],
   funnel_stage: ['Funnel Stage', 'Funnel'],
@@ -19,14 +20,17 @@ export const RECORD_COLUMNS = {
   hook: ['Hook'],
   facebook_caption: ['Facebook Version', 'Facebook Caption', 'Facebook'],
   facebook_cta: ['Facebook CTA'],
+  facebook_hashtags: ['Facebook Hashtags'],
   tiktok_opening: ['TikTok Opening Text', 'TikTok Opening'],
   tiktok_hook: ['TikTok Hook'],
   tiktok_script: ['TikTok Script', 'TikTok Version'],
+  tiktok_caption: ['TikTok Caption'],
   tiktok_cta: ['TikTok CTA'],
   tiktok_hashtags: ['TikTok Hashtags'],
   story_sequence: ['Story Sequence', 'Stories'],
   shot_list: ['Reel Shot List', 'Shot List', 'Shots'],
   image_prompt: ['AI Image Prompt', 'Image Prompt'],
+  photo_edit_prompt: ['AI Photo Edit Prompt', 'Photo Edit Prompt'],
   customer_message: ['Customer Message'],
 } as const;
 
@@ -35,7 +39,7 @@ export type PostRecord = Partial<Record<RecordField, string>>;
 
 /** The lines of a list cell, without "Shot 3:", "3)" or "- " in front, and without a line that is only "Shot 3". */
 export function listLines(text: string | null | undefined): string[] {
-  return (text ?? '').split(/\r?\n/)
+  return (text ?? '').split(/\r?\n|;\s*/)
     .map((l) => l.trim())
     .filter((l) => l && !/^(shot|story)\s*\d+\s*:?$/i.test(l))
     .map((l) => l.replace(/^(?:(?:shot|story)\s*\d+\s*[:.)-]\s*|\d+[.)]\s*|[-•]\s*)/i, '').trim())
@@ -51,17 +55,21 @@ export function shotsAsInstructions(text: string | null | undefined): string | n
 const tagsOf = (text: string | null | undefined): string[] => (text ?? '').split(/\s+/).filter((t) => t.startsWith('#'));
 
 /** What the owner wrote goes over the writer's answer. An owner's note on this run may change the wording, so it leaves the title and line to the writer. */
-export function applyRecord(copy: ResolvedCopy, row: { content: PostRecord | null; hashtags: string | null }, ownerNote = false): ResolvedCopy {
+export function applyRecord(copy: ResolvedCopy, row: { content: PostRecord | null; hashtags: string | null; caption?: string | null; cta?: string | null }, ownerNote = false): ResolvedCopy {
   const r = row.content;
   if (!r) return copy;
   const tags = row.hashtags?.includes('[') ? [] : tagsOf(row.hashtags);
   const headline = ownerNote ? null : r.canva_headline?.trim() || null;
+  // A caption with nothing left to confirm is the owner's, word for word; a bracket leaves it to the writer to settle.
+  const written = (s: string | null | undefined) => (!ownerNote && s?.trim() && !s.includes('[') ? s.trim() : null);
   const facebook = [r.facebook_caption?.trim(), r.facebook_cta?.trim()].filter(Boolean).join('\n\n');
   return {
     ...copy,
     label: r.canva_subheading?.trim() || copy.label,
     headline: headline ?? copy.headline,
     line: (ownerNote ? null : r.hook?.trim()) || copy.line,
+    caption: written(row.caption) ?? copy.caption,
+    cta: written(row.cta) ?? copy.cta,
     hashtags: tags.length ? tags : copy.hashtags,
     facebook_caption: r.facebook_caption?.trim() ? facebook : copy.facebook_caption,
     variants: headline ? copy.variants.map((v) => ({ ...v, headline })) : copy.variants,
@@ -70,12 +78,13 @@ export function applyRecord(copy: ResolvedCopy, row: { content: PostRecord | nul
 
 export interface PlatformVersions {
   instagram: { caption: string; cta: string; hashtags: string[] };
-  facebook: { caption: string; cta: string };
-  tiktok: { opening: string; hook: string; script: string; cta: string; hashtags: string[] };
+  facebook: { caption: string; cta: string; hashtags: string[] };
+  tiktok: { opening: string; hook: string; script: string; caption: string; cta: string; hashtags: string[] };
   stories: string[];
   reel_cover: string;
   canva: { headline: string; subheading: string };
   image_prompt: string;
+  photo_edit_prompt: string;
   benefit: string;
   customer_message: string;
   notes: { platform: string; goal: string; funnel: string; kpi: string; priority: string; objective: string };
@@ -88,11 +97,12 @@ export function platformVersions(row: { content: PostRecord | null; caption: str
   const text = (s: string | null | undefined) => s?.trim() ?? '';
   return {
     instagram: { caption: text(copy?.caption ?? row.caption), cta: text(copy?.cta ?? row.cta), hashtags: copy?.hashtags ?? tagsOf(row.hashtags) },
-    facebook: { caption: text(r.facebook_caption) || text(copy?.facebook_caption), cta: text(r.facebook_cta) },
+    facebook: { caption: text(r.facebook_caption) || text(copy?.facebook_caption), cta: text(r.facebook_cta), hashtags: tagsOf(r.facebook_hashtags) },
     tiktok: {
       opening: text(r.tiktok_opening) || text(v?.tiktok_opening),
       hook: text(r.tiktok_hook) || text(r.hook) || text(v?.tiktok_hook),
       script: text(r.tiktok_script) || text(v?.tiktok_script),
+      caption: text(r.tiktok_caption),
       cta: text(r.tiktok_cta) || text(v?.tiktok_cta),
       hashtags: tagsOf(r.tiktok_hashtags).length ? tagsOf(r.tiktok_hashtags) : v?.tiktok_hashtags ?? [],
     },
@@ -100,6 +110,7 @@ export function platformVersions(row: { content: PostRecord | null; caption: str
     reel_cover: text(r.reel_cover_text) || text(v?.reel_cover_text),
     canva: { headline: text(r.canva_headline) || text(copy?.headline), subheading: text(r.canva_subheading) || text(copy?.label) },
     image_prompt: text(r.image_prompt) || text(v?.image_prompt),
+    photo_edit_prompt: text(r.photo_edit_prompt),
     benefit: text(row.benefit),
     customer_message: text(r.customer_message),
     notes: { platform: text(r.platform), goal: text(r.content_goal), funnel: text(r.funnel_stage), kpi: text(r.kpi), priority: text(r.priority), objective: text(row.objective) },
@@ -115,12 +126,13 @@ export function platformsTxt(p: PlatformVersions): string {
   const named = (name: string, value: string) => (value ? `${name}: ${value}` : null);
   return [
     ...block('INSTAGRAM', p.instagram.caption, p.instagram.cta, p.instagram.hashtags.join(' ')),
-    ...block('FACEBOOK', p.facebook.caption, p.facebook.cta),
-    ...block('TIKTOK', named('Opening text', p.tiktok.opening), named('Hook', p.tiktok.hook), p.tiktok.script, named('CTA', p.tiktok.cta), p.tiktok.hashtags.join(' ')),
+    ...block('FACEBOOK', p.facebook.caption, p.facebook.cta, p.facebook.hashtags.join(' ')),
+    ...block('TIKTOK', named('Opening text', p.tiktok.opening), named('Hook', p.tiktok.hook), p.tiktok.script, named('Caption', p.tiktok.caption), named('CTA', p.tiktok.cta), p.tiktok.hashtags.join(' ')),
     ...block('STORY SEQUENCE', ...p.stories),
     ...block('REEL COVER', p.reel_cover),
     ...block('CANVA', named('Headline', p.canva.headline), named('Subheading', p.canva.subheading)),
-    ...block('IMAGE PROMPT (a reference for the shoot or a mock-up, not a photo of the dish)', p.image_prompt),
+    ...block('PHOTO EDIT PROMPT (use with a real photo of the food)', p.photo_edit_prompt),
+    ...block('IMAGE PROMPT (backgrounds, mock-ups and concepts only, never a dish you sell)', p.image_prompt),
     ...block('CUSTOMER BENEFIT', p.benefit, p.customer_message),
     ...block('INTERNAL NOTES (never posted)', named('Platform', p.notes.platform), named('Goal', p.notes.goal), named('Funnel stage', p.notes.funnel), named('Objective', p.notes.objective), named('KPI', p.notes.kpi), named('Priority', p.notes.priority)),
   ].join('\n');

@@ -10,7 +10,7 @@ import { describeStats } from '../images/analyze.js';
 import type { DesignSpec, MatchResult } from './schemas.js';
 import { STYLES, styleCards, type Style } from '../render/styles.js';
 
-const GUARDRAILS = `You work for Fuadijan, a halal Pakistani charcoal BBQ restaurant at Auburn, Sydney. Brand line: "Smoked. Grilled. Rooted in Tradition." Series labels: FROM THE FIRE, FROM THE KARAHI, FROM THE CHARCOAL SEA, FRESH POUR, SAVE ROOM, ROOTED IN TRADITION, MODERN FUADIJAN, WHAT WE ATE TODAY, YOU SAID IT, FOR OUR CUSTOMERS, BEHIND FUADIJAN.
+const GUARDRAILS = `You work for Fuadijan, a halal Pakistani BBQ and karahi restaurant at Auburn, Sydney. Brand line: "Smoked. Grilled. Rooted in Tradition." Series labels: FROM THE FIRE, FROM THE KARAHI, FROM THE CHARCOAL SEA, FRESH POUR, SAVE ROOM, ROOTED IN TRADITION, MODERN FUADIJAN, WHAT WE ATE TODAY, YOU SAID IT, FOR OUR CUSTOMERS, BEHIND FUADIJAN.
 Hard rules:
 - Never invent a menu item, side, price, availability, review, person's name or cooking claim. Menu facts come only from the menu list given to you.
 - A claim in [square brackets] or marked "confirm" is unverified: resolve it from the menu if the menu settles it, otherwise list it under unresolved with a question and suggested answers.
