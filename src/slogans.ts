@@ -21,7 +21,7 @@ export const itemKey = (item: string) => item.trim().toLowerCase().replace(/\s+/
 export async function addSlogan(db: Db, s: { item: string; headline: string; line?: string | null; caption?: string | null; source?: string }): Promise<Slogan> {
   const { rows } = await db.query<Slogan>(
     `insert into slogans (item, item_key, headline, line, caption, source) values ($1, $2, $3, $4, $5, $6)
-     on conflict (item_key, headline) do update set item = excluded.item, line = coalesce(excluded.line, slogans.line), caption = coalesce(excluded.caption, slogans.caption), source = excluded.source
+     on conflict (item_key, headline) do update set retired_at = null, item = excluded.item, line = coalesce(excluded.line, slogans.line), caption = coalesce(excluded.caption, slogans.caption), source = excluded.source
      returning *`,
     [s.item.trim(), itemKey(s.item), s.headline.trim(), s.line?.trim() || null, s.caption?.trim() || null, s.source ?? 'owner']);
   return rows[0]!;
@@ -42,14 +42,14 @@ export async function removeSlogan(db: Db, id: number): Promise<boolean> {
 /** All slogans, or those of one item, in the order they were added. */
 export async function listSlogans(db: Db, item?: string | null): Promise<Slogan[]> {
   const { rows } = item
-    ? await db.query<Slogan>('select * from slogans where item_key = $1 order by id', [itemKey(item)])
-    : await db.query<Slogan>('select * from slogans order by item_key, id');
+    ? await db.query<Slogan>('select * from slogans where item_key = $1 and retired_at is null order by id', [itemKey(item)])
+    : await db.query<Slogan>('select * from slogans where retired_at is null order by item_key, id');
   return rows;
 }
 
 /** Distinct items with a count, for the list view. */
 export async function slogansByItem(db: Db): Promise<{ item: string; n: number }[]> {
-  const { rows } = await db.query<{ item: string; n: string }>('select min(item) item, count(*) n from slogans group by item_key order by item_key');
+  const { rows } = await db.query<{ item: string; n: string }>('select min(item) item, count(*) n from slogans where retired_at is null group by item_key order by item_key');
   return rows.map((r) => ({ item: r.item, n: Number(r.n) }));
 }
 

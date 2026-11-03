@@ -17,7 +17,7 @@ import { Worker } from './pipeline/worker.js';
 import { assertAllMapped } from './render/registry.js';
 import { scheduleReminders } from './reminders/index.js';
 import { buildServer } from './server.js';
-import { loadStrategy, seedStrategyWordings } from './strategy.js';
+import { loadStrategy } from './strategy.js';
 
 async function main(): Promise<void> {
   const log = consoleLogger;
@@ -29,9 +29,9 @@ async function main(): Promise<void> {
   const pool = createPool(config.databaseUrl);
   await migrate(pool, (m) => log.info(m));
 
-  // The strategy's taglines, poster concepts and ready captions are kept in the wording bank (source "strategy").
+  // The planning documents are the strategy now; brand/strategy.json supplies only the voice rules.
   try {
-    log.info(`Strategy "${loadStrategy().name}": ${await seedStrategyWordings(pool)} wordings in the bank.`);
+    log.info(`Voice rules from "${loadStrategy().name}".`);
   } catch (e) {
     log.warn(`Strategy not loaded: ${e instanceof Error ? e.message : e}`);
   }

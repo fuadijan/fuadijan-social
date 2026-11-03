@@ -69,7 +69,7 @@ const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, typ
 /** Every plan with its first and last date, oldest first. */
 export async function plans(db: Db): Promise<{ plan: string; first: IsoDate; last: IsoDate; rows: number }[]> {
   const { rows } = await db.query<{ plan: string; first: IsoDate; last: IsoDate; rows: string }>(
-    "select plan, to_char(min(date), 'YYYY-MM-DD') first, to_char(max(date), 'YYYY-MM-DD') last, count(*) rows from calendar_rows group by plan order by min(date)");
+    "select plan, to_char(min(date), 'YYYY-MM-DD') first, to_char(max(date), 'YYYY-MM-DD') last, count(*) rows from calendar_rows where retired_at is null group by plan order by min(date)");
   return rows.map((r) => ({ ...r, rows: Number(r.rows) }));
 }
 
@@ -102,12 +102,12 @@ export async function rowById(db: Db, id: number): Promise<CalendarRow | null> {
 }
 
 export async function rowsOnDate(db: Db, date: IsoDate): Promise<CalendarRow[]> {
-  return (await db.query<CalendarRow>(`select ${COLS} from calendar_rows where date = $1 order by day_no`, [date])).rows;
+  return (await db.query<CalendarRow>(`select ${COLS} from calendar_rows where date = $1 and retired_at is null order by day_no`, [date])).rows;
 }
 
 /** Rows dated from..to inclusive. */
 export async function rowsBetween(db: Db, from: IsoDate, to: IsoDate): Promise<CalendarRow[]> {
-  return (await db.query<CalendarRow>(`select ${COLS} from calendar_rows where date between $1 and $2 order by date, day_no`, [from, to])).rows;
+  return (await db.query<CalendarRow>(`select ${COLS} from calendar_rows where date between $1 and $2 and retired_at is null order by date, day_no`, [from, to])).rows;
 }
 
 export async function recordEdit(db: Db, rowId: number, field: string, oldValue: string | null, newValue: string | null, source: EditSource): Promise<void> {
@@ -158,7 +158,7 @@ export async function skipRow(db: Db, row: CalendarRow, mode: 'push-all' | 'just
   }
   let candidate = addDays(row.date, 1);
   for (let i = 0; i < 60; i++) {
-    const taken = (await db.query('select 1 from calendar_rows where date = $1 and id <> $2', [candidate, row.id])).rowCount;
+    const taken = (await db.query('select 1 from calendar_rows where date = $1 and id <> $2 and retired_at is null', [candidate, row.id])).rowCount;
     if (!taken) break;
     candidate = addDays(candidate, 1);
   }

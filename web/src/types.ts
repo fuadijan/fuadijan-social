@@ -340,7 +340,11 @@ export interface CampaignProgress {
 
 /** A planning sheet kept whole: strategy, roadmap or a library. */
 export interface PlanningSheet { name: string; source: string | null; header: string[]; rows: string[][] }
-export interface PlanningResponse { sheets: PlanningSheet[] }
+export interface PlanningResponse {
+  sheets: PlanningSheet[];
+  products: { key: string; name: string; category: string | null; status: string; launch: string | null; series: string | null; notes: string | null }[];
+  benefits: { key: string; benefit: string; message: string | null; status: string | null; series: string | null }[];
+}
 
 export interface CampaignsResponse { campaigns: CampaignProgress[] }
 

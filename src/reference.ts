@@ -63,5 +63,13 @@ export async function planningBrief(db: Db, series: string): Promise<string | nu
     const lines = hooks.rows.filter((r) => r[iSeries]?.trim().toUpperCase() === series.trim().toUpperCase()).slice(0, 8).map((r) => `- ${r[iHook]}`);
     if (lines.length) parts.push(`Hooks the owner keeps for this series (a variant may build on one):\n${lines.join('\n')}`);
   }
+  const tags = sheets.get('Hashtag Library');
+  if (tags) {
+    const iGroup = column(tags, 'tag group');
+    const iPlatform = column(tags, 'platform');
+    const iTags = column(tags, 'hashtags');
+    const lines = tags.rows.filter((r) => [series.trim().toUpperCase(), 'CORE BRAND'].includes(r[iGroup]?.trim().toUpperCase() ?? '')).map((r) => `- ${r[iGroup]}, ${r[iPlatform]}: ${r[iTags]}`);
+    if (lines.length) parts.push(`Hashtags for a post that has none of its own:\n${lines.join('\n')}`);
+  }
   return parts.length ? `Planning documents.\n${parts.join('\n')}` : null;
 }

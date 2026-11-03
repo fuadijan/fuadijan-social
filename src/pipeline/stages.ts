@@ -20,7 +20,7 @@ import { summarise, type DesignRun, type DesignSummary } from './design.js';
 import { addCustomOption, applyOption, latestCopyOptions, markChosen, storeCopyOptions } from './wording.js';
 import { applyCustomWording, customResolveNote, keepFormats, ownerEditsSince } from './custom.js';
 import { slogansFor } from '../slogans.js';
-import { copyBrief, strategyIfAny } from '../strategy.js';
+import { copyBrief, voiceBrief, strategyIfAny } from '../strategy.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
 import { applyRecord, platformVersions, platformsTxt } from '../calendar/record.js';
@@ -309,11 +309,13 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   // A custom post tells the writer what is the owner's and fixed, and what is left to write.
   const redo = Boolean(ctx.job.state.redo);
   const note = [ctx.job.state.note ?? cap.note, row.custom ? customResolveNote(row.custom, redo ? { redo: true, ownerEdits: await ownerEditsSince(ctx.pool, row) } : undefined) : null].filter(Boolean).join('\n') || null;
+  const planning = await planningBrief(ctx.pool, entry.label || seriesLabel(row));
+  const oldStrategy = strategyIfAny();
   const prompt = resolvePrompt({
     row, menu, answers, note, dishCanonical: read?.dish_canonical ?? null,
     label: entry.label || seriesLabel(row), footer: entry.footer, priceAllowed: hasTag(cap, 'price') && !hasTag(cap, 'noprice'), facts,
     slogans: slogans.map((s) => `${s.item}: ${s.headline.replace(/\n/g, ' / ')}${s.line ? ` — ${s.line}` : ''}`),
-    strategy: [strategyIfAny() ? copyBrief(strategyIfAny()!, row) : null, await planningBrief(ctx.pool, entry.label || seriesLabel(row))].filter(Boolean).join('\n\n') || null,
+    strategy: planning ? [oldStrategy ? voiceBrief(oldStrategy) : null, planning].filter(Boolean).join('\n\n') : oldStrategy ? copyBrief(oldStrategy, row) : null,
   });
   const written = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
   // The first run of a custom post uses the owner's words as given; a redo lets the note change them.

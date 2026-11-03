@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -341,6 +341,22 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const c26 = (await rowByDay(pool, 1, '2027-05'))!;
     expect([c26.dish, c26.benefit, c26.template, c26.content?.content_id, c26.content?.facebook_hashtags]).toEqual(['BBQ Prawns', 'More choice', 'you-said-it-photo', 'C26', '#Fuadijan #Seafood']);
     expect(c26.campaign_id).toBe((await findCampaign(pool, 'CMP-03'))!.id);
+    // A retired post is gone from every list, its day number is free, and its plan is no longer a plan.
+    const { plans, rowsBetween: between, rowsOnDate } = await import('../src/calendar/rows.js');
+    await pool.query("update calendar_rows set retired_at = now(), plan = 'retired-' || plan where plan = '2027-04'");
+    expect((await plans(pool)).map((p) => p.plan)).not.toContain('retired-2027-04');
+    expect(await between(pool, '2027-04-01', '2027-04-30')).toEqual([]);
+    expect(await rowsOnDate(pool, '2027-04-07')).toEqual([]);
+    await april([['2027-04-07', 'Wednesday', 'Chapli Kebab', 'FROM THE FIRE', 'Reel', 'NEW\nCHAPLI', 'Fresh start.', 'High']]);
+    expect(await loadWorkbook(pool, rec, { keepStarted: true })).toMatchObject({ plan: '2027-04', inserted: 1, updated: 0 });
+    expect((await rowByDay(pool, 1, '2027-04'))!.content?.canva_headline).toBe('NEW\nCHAPLI');
+    // A retired wording leaves the bank, and adding the same one again brings it back on purpose.
+    const { addSlogan, listSlogans: bank } = await import('../src/slogans.js');
+    const retiredOne = await addSlogan(pool, { item: 'Retire Me', headline: 'Old line.', source: 'strategy' });
+    await pool.query('update slogans set retired_at = now() where id = $1', [retiredOne.id]);
+    expect(await bank(pool, 'Retire Me')).toEqual([]);
+    await addSlogan(pool, { item: 'Retire Me', headline: 'Old line.', source: 'owner' });
+    expect(await bank(pool, 'Retire Me')).toHaveLength(1);
     // A workbook with nothing the app reads is refused.
     const none = join(dir, 'none.xlsx');
     await writeWorkbook(none, [{ name: 'Notes', rows: [['hello']] }]);

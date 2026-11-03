@@ -150,6 +150,12 @@ and caption-template libraries, Field Guide, a Topic | Working Rule Read Me) are
 (`src/reference.ts`), shown on the Strategy page, and the parts that bear on a post reach the writer. `calendar/Fuadijan-Post-Record-Example.xlsx` is
 a full example.
 
+**Retiring the old plan.** `0011_retire_old_plan.sql` retired the first month's posts and the old strategy's wordings
+when the planning documents arrived: `retired_at` takes a post out of every list, reminder and command and frees its
+day number, and nothing is erased (rows, photos, designs and packs stay). The Strategy tab now reads only the planning
+documents, the old plan can no longer be re-applied, and `brand/strategy.json` supplies only the voice rules once
+they are loaded.
+
 **The slogan bank.** Keep several slogans per menu item and they are offered among the wordings whenever a post is
 about that item. Load them with the monthly plan: a sheet named `Slogans` in the plan workbook, or the separate
 `calendar/Fuadijan-Slogans.xlsx` (a template with a Read Me is in the repo), columns `Item | Slogan | Line | Caption`

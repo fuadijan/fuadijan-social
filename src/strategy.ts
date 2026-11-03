@@ -167,6 +167,15 @@ export function copyBrief(s: Strategy, row: { date: string; dish: string | null;
   ].filter(Boolean).join('\n');
 }
 
+/** With the planning documents loaded they are the strategy: from the old one only the voice rules and the rule on improvements still apply. */
+export function voiceBrief(s: Strategy): string {
+  return [
+    `Voice — do:\n${list(s.voice.do)}`,
+    `Voice — never:\n${list(s.voice.dont)}`,
+    s.customerBenefits ? `Improvements are always told as what the customer gets. Never write about: ${s.customerBenefits.never.join(', ')}. Say instead:\n${list(s.customerBenefits.translate.map((t) => `${t.change} → ${t.message}`))}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 /** What the art director is told beyond the kit: the strategy's visual rules and where deep green belongs. */
 export function designBrief(s: Strategy): string {
   return `Strategy for the look: ${s.visual.palette}\n${list(s.visual.rules)}`;
