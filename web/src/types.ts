@@ -180,11 +180,26 @@ export interface MonthResponse {
 export interface WordingOption { name: string; headline: string; line: string; caption: string }
 export interface WordingSet { id: number; options: WordingOption[]; chosen: number | null; createdAt: string }
 
+/** Every platform's version of one post, from one record. */
+export interface PlatformVersions {
+  instagram: { caption: string; cta: string; hashtags: string[] };
+  facebook: { caption: string; cta: string };
+  tiktok: { opening: string; hook: string; script: string; cta: string; hashtags: string[] };
+  stories: string[];
+  reel_cover: string;
+  canva: { headline: string; subheading: string };
+  image_prompt: string;
+  benefit: string;
+  customer_message: string;
+  notes: { platform: string; goal: string; funnel: string; kpi: string; priority: string; objective: string };
+}
+
 export interface DayResponse extends DayView {
   row: Row;
   questions: Question[];
   wording: WordingSet[];
   wordingWaiting: boolean;
+  platforms: PlatformVersions | null;
   assets: Asset[];
   pack: Pack | null;
   renders: Render[];
@@ -298,7 +313,7 @@ export interface Strategy {
 export interface SeedPlanResponse { ok: true; plan: string | null; inserted: number; updated: number; protectedFields: { day_no: number; field: string }[]; kept: number[] }
 
 /** A month's workbook loaded from the browser: the seed's result plus what was read. */
-export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string | null; to: string | null; campaigns: number; products: number; benefits: number; slogans: { loaded: number; items: number }; placeholders: string[] }
+export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string | null; to: string | null; campaigns: number; products: number; benefits: number; unread: string[]; slogans: { loaded: number; items: number }; placeholders: string[] }
 
 export type CampaignStatus = 'planned' | 'active' | 'done';
 

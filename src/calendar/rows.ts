@@ -5,6 +5,7 @@
 import type { Db } from '../db/pool.js';
 import { addDays, sydneyDate, type IsoDate } from '../time.js';
 import { seriesOfTemplate } from '../render/registry.js';
+import type { PostRecord } from './record.js';
 
 export type Slot = 'feed' | 'carousel' | 'reel';
 export type Status = 'planned' | 'photo-needed' | 'ready' | 'posted';
@@ -53,6 +54,8 @@ export interface CalendarRow {
   campaign_id: number | null;
   /** A customer benefit the post is about (resolved from the Benefits sheet), beside or instead of a dish. */
   benefit: string | null;
+  /** The post record (src/calendar/record.ts): every platform's text the sheet supplied; null for a classic row. */
+  content: PostRecord | null;
   posted_at: Date | null;
   updated_at: Date;
 }
@@ -61,7 +64,7 @@ export interface CalendarRow {
 export const EDITABLE_FIELDS = ['dish', 'caption', 'cta', 'hashtags', 'story_ideas', 'post_time', 'on_screen_text', 'creative_instructions', 'theme', 'objective', 'confirmation_notes'] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
-const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, posted_at, updated_at';
+const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, content, posted_at, updated_at';
 
 /** Every plan with its first and last date, oldest first. */
 export async function plans(db: Db): Promise<{ plan: string; first: IsoDate; last: IsoDate; rows: number }[]> {

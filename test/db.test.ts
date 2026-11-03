@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -192,7 +192,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const forChapli = await slogansFor(pool, ['Chapli Kebab', null]);
     expect(forChapli.map((s) => s.headline)).toEqual(['Hand-formed.\nFire-finished.', 'The kebab\nAuburn talks about', 'Smoked. Grilled.\nRooted in Tradition.']);
     expect((await slogansFor(pool, ['Lamb Karahi'])).map((s) => s.item)).toEqual(['all']);
-    const copy = { label: 'L', headline: 'Chapli\nKebab', line: 'l', caption: 'c', cta: 'x', hashtags: ['#a', '#b', '#c'], alt_text: 'a', story_text: 's', facebook_caption: 'c x', on_screen_text: [], unresolved: [], variants: [] };
+    const copy = { label: 'L', headline: 'Chapli\nKebab', line: 'l', caption: 'c', cta: 'x', hashtags: ['#a', '#b', '#c'], alt_text: 'a', story_text: 's', facebook_caption: 'c x', versions: null, on_screen_text: [], unresolved: [], variants: [] };
     const options = optionsFrom(copy, forChapli);
     expect(options.map((o) => o.name)).toEqual(['Calendar wording', 'Slogan · Chapli Kebab', 'Slogan · Chapli Kebab', 'Slogan · house']);
     // The product stays the title; the bank wording and its line become the line.
@@ -293,6 +293,23 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const d2 = (await rowByDay(pool, 2, '2027-03'))!;
     expect([d1.dish, d1.theme, d1.template, d1.slot, d1.campaign_id]).toEqual(['Mixed BBQ Plate', 'Still hungry?', 'from-the-fire', 'reel', (await findCampaign(pool, 'CAMP101'))!.id]);
     expect([d2.dish, d2.benefit, d2.template, d2.slot, d2.type]).toEqual([null, 'Plenty of Parking Available', 'for-our-customers', 'carousel', 'benefit']);
+    // Post records dated by weekday: each is found by its date, so a partial sheet never lands on the wrong day.
+    const rec = join(dir, 'record.xlsx');
+    const recHead = ['Date', 'Day', 'ProductID', 'Series', 'Format', 'Canva Headline', 'Hook', 'Priority'];
+    const april = (rows: string[][]) => writeWorkbook(rec, [{ name: 'Calendar', rows: [recHead, ...rows] }]);
+    await april([['2027-04-07', 'Wednesday', 'Chapli Kebab', 'FROM THE FIRE', 'Reel', 'CHAPLI\nKEBAB', 'Still hungry?', 'High'], ['2027-04-08', 'Thursday', 'BBQ Barramundi', 'FROM THE CHARCOAL SEA', 'Reel', 'WHOLE BBQ\nBARRAMUNDI', 'Not a kebab.', 'High']]);
+    expect(await loadWorkbook(pool, rec, { keepStarted: true })).toMatchObject({ plan: '2027-04', inserted: 2, unread: [] });
+    // The same sheet again changes nothing: the stored record compares equal however jsonb orders its keys.
+    expect(await loadWorkbook(pool, rec, { keepStarted: true })).toMatchObject({ inserted: 0, updated: 0 });
+    // Only the Thursday this time: it updates that day and leaves Wednesday, and a new date takes the next day.
+    await april([['2027-04-08', 'Thursday', 'BBQ Barramundi', 'FROM THE CHARCOAL SEA', 'Reel', 'WHOLE\nBARRAMUNDI', 'Not a kebab.', 'High'], ['2027-04-09', 'Friday', 'Mango Lassi', 'FRESH POUR', 'Photo', 'MANGO\nLASSI', 'Poured cold.', 'Low']]);
+    expect(await loadWorkbook(pool, rec, { keepStarted: true })).toMatchObject({ inserted: 1, updated: 1 });
+    const april1 = (await rowByDay(pool, 1, '2027-04'))!;
+    const april2 = (await rowByDay(pool, 2, '2027-04'))!;
+    const april3 = (await rowByDay(pool, 3, '2027-04'))!;
+    expect([april1.date, april1.content?.canva_headline, april1.slot]).toEqual(['2027-04-07', 'CHAPLI\nKEBAB', 'reel']);
+    expect([april2.date, april2.content?.canva_headline, april2.template]).toEqual(['2027-04-08', 'WHOLE\nBARRAMUNDI', 'from-the-charcoal-sea']);
+    expect([april3.date, april3.dish, april3.content?.priority]).toEqual(['2027-04-09', 'Mango Lassi', 'Low']);
     // A workbook with nothing the app reads is refused.
     const none = join(dir, 'none.xlsx');
     await writeWorkbook(none, [{ name: 'Notes', rows: [['hello']] }]);

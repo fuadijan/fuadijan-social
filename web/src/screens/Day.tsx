@@ -144,12 +144,50 @@ function CopySection({ d, reload }: { d: DayResponse; reload: Reload }) {
       {!c.draft ? (
         <>
           <Field label="Alt text" value={c.alt} copy />
-          <Field label="Facebook caption" value={c.facebook} copy />
+          {d.platforms ? null : <Field label="Facebook caption" value={c.facebook} copy />}
           <Field label="Story text" value={c.story} copy />
         </>
       ) : d.row.caption_hint ? (
         <Field label="Caption hint (from the sheet)" value={d.row.caption_hint} />
       ) : null}
+    </Card>
+  );
+}
+
+/** The other platforms' versions of this post. The Copy section above is Instagram. */
+function PlatformsSection({ d }: { d: DayResponse }) {
+  const p = d.platforms;
+  if (!p) return null;
+  // "All" or blank means every platform; otherwise only those the record names.
+  const wanted = p.notes.platform.toLowerCase();
+  const wants = (name: string) => !wanted || wanted === 'all' || wanted.includes(name);
+  const fb = [p.facebook.caption, p.facebook.cta].filter(Boolean).join('\n\n');
+  const hasTikTok = p.tiktok.opening || p.tiktok.hook || p.tiktok.script;
+  const n = p.notes;
+  const hasNotes = n.goal || n.funnel || n.kpi || n.priority || n.objective || n.platform;
+  return (
+    <Card title="Every platform">
+      {d.pack ? null : <span className="sa-draft">From the record. The writer fills the rest when the photo arrives.</span>}
+      {wants('facebook') && fb ? <Field label="Facebook" value={fb} copy /> : null}
+      {wants('tiktok') && hasTikTok ? (
+        <>
+          <Field label="TikTok opening text" value={p.tiktok.opening} copy />
+          <Field label="TikTok hook" value={p.tiktok.hook} copy />
+          <Field label="TikTok script" value={p.tiktok.script} copy />
+          <Field label="TikTok CTA" value={p.tiktok.cta} copy />
+          <Field label="TikTok hashtags" value={p.tiktok.hashtags.join(' ')} copy className="sa-hashtags" />
+        </>
+      ) : null}
+      {p.stories.length ? <Field label="Story sequence" value={p.stories.join('\n')} copy /> : null}
+      {p.reel_cover ? <Field label="Reel cover" value={p.reel_cover} copy /> : null}
+      {p.canva.headline ? <Field label="Canva headline" value={p.canva.headline} copy /> : null}
+      {p.canva.subheading ? <Field label="Canva subheading" value={p.canva.subheading} copy /> : null}
+      {p.image_prompt ? <Field label="Image prompt (a reference for the shoot or a mock-up, not a photo of the dish)" value={p.image_prompt} copy /> : null}
+      {p.benefit || p.customer_message ? <Field label="Customer benefit" value={[p.benefit, p.customer_message].filter(Boolean).join('\n')} /> : null}
+      {hasNotes ? (
+        <Field label="Internal notes (never posted)" value={[n.platform && `Platform: ${n.platform}`, n.goal && `Goal: ${n.goal}`, n.funnel && `Funnel stage: ${n.funnel}`, n.objective && `Objective: ${n.objective}`, n.kpi && `KPI: ${n.kpi.replace(/\s*\n\s*/g, ', ')}`, n.priority && `Priority: ${n.priority}`].filter(Boolean).join('\n')} />
+      ) : null}
+      {d.pack ? <a className={buttonClass('secondary', 'sm')} href={packTextUrl(d.dayNo, 'platforms.txt')} download>platforms.txt</a> : null}
     </Card>
   );
 }
@@ -439,6 +477,7 @@ export function Day() {
             <ShootSection d={data} reload={reload} />
             <CopySection d={data} reload={reload} />
           </div>
+          <PlatformsSection d={data} />
           <WordingSection d={data} reload={reload} />
           <ConfirmSection d={data} reload={reload} />
           <ImagesSection d={data} reload={reload} />

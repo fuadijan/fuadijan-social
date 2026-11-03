@@ -22,6 +22,7 @@ import { allSettings } from '../settings.js';
 import { addSlogan, itemKey, listSlogans, removeSlogan, updateSlogan, type Slogan } from '../slogans.js';
 import { eventsOn, loadStrategy, ritualsOn } from '../strategy.js';
 import { campaignProgress } from '../campaigns.js';
+import { platformVersions, platformsTxt, type PlatformVersions } from '../calendar/record.js';
 import { listProducts } from '../products.js';
 import { addDays, sydneyDate } from '../time.js';
 
@@ -71,7 +72,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const assets = (await ctx.pool.query<{ id: number; kind: string; caption_raw: string | null; prepped: Record<string, string> | null; original_file_id: string | null; created_at: Date; quality: unknown }>(
       'select id, kind, caption_raw, prepped, original_file_id, created_at, quality from assets where calendar_row_id = $1 order by created_at', [row.id])).rows;
     const pack = (await ctx.pool.query<{ id: number; caption: string; cta: string | null; hashtags: string[]; alt_text: string | null; story_text: string | null; facebook_caption: string | null; reel_pack_txt: string | null; canva_brief: string; caption_txt: string; folder: string; sources: { crops?: Record<string, string> }; created_at: Date }>(
-      'select id, caption, cta, hashtags, alt_text, story_text, facebook_caption, reel_pack_txt, canva_brief, caption_txt, folder, sources, created_at from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0] ?? null;
+      'select id, caption, cta, hashtags, alt_text, story_text, facebook_caption, reel_pack_txt, canva_brief, caption_txt, folder, sources, platforms, created_at from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0] ?? null;
     const renders = (await ctx.pool.query<{ id: number; format: string; page: number | null; file_id: string }>('select id, format, page, file_id from renders where calendar_row_id = $1 order by format, page', [row.id])).rows;
     const edits = (await ctx.pool.query<{ field: string; old_value: string | null; new_value: string | null; source: string; created_at: Date }>('select field, old_value, new_value, source, created_at from calendar_edits where row_id = $1 and source <> \'seed\' order by created_at desc limit 30', [row.id])).rows;
     const settings = await allSettings(ctx.pool);
@@ -82,6 +83,8 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       questions: qs.map(qJson),
       wording,
       wordingWaiting: qs.some((q) => q.field === 'wording'),
+      // The finished set once a pack exists; before that, what the record already says.
+      platforms: (pack as { platforms?: PlatformVersions | null } | undefined)?.platforms ?? (row.content ? platformVersions(row, null) : null),
       assets: assets.map((a) => ({ id: a.id, kind: a.kind, caption: a.caption_raw, thumb: a.prepped?.thumb ?? a.prepped?.['1x1'] ?? a.original_file_id, crops: a.prepped, createdAt: a.created_at, quality: a.quality })),
       pack: pack && { ...pack, crops: pack.sources.crops ?? {} },
       renders,
@@ -385,9 +388,9 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
   app.get<{ Params: { dayNo: string; name: string } }>('/api/packs/:dayNo/:name', async (req, reply) => {
     const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
     if (!row) return reply.code(404).send();
-    const p = (await ctx.pool.query<{ caption_txt: string; canva_brief: string; reel_pack_txt: string | null }>('select caption_txt, canva_brief, reel_pack_txt from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
+    const p = (await ctx.pool.query<{ caption_txt: string; canva_brief: string; reel_pack_txt: string | null; platforms: PlatformVersions | null }>('select caption_txt, canva_brief, reel_pack_txt, platforms from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0];
     if (!p) return reply.code(404).send();
-    const text = { 'caption.txt': p.caption_txt, 'canva-brief.txt': p.canva_brief, 'reel-pack.txt': p.reel_pack_txt }[req.params.name];
+    const text = { 'caption.txt': p.caption_txt, 'canva-brief.txt': p.canva_brief, 'reel-pack.txt': p.reel_pack_txt, 'platforms.txt': p.platforms ? platformsTxt(p.platforms) : null }[req.params.name];
     if (!text) return reply.code(404).send();
     reply.header('content-type', 'text/plain; charset=utf-8').header('content-disposition', `attachment; filename="day${row.day_no}-${req.params.name}"`);
     return reply.send(text);

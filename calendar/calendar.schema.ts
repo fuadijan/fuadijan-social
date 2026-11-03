@@ -3,6 +3,7 @@
  * seed and its tests share them.
  */
 import { z } from 'zod';
+import { shotsAsInstructions, type PostRecord } from '../src/calendar/record.js';
 import { fractionToTime, serialToIsoDate } from './xlsx.js';
 
 export const CALENDAR_COLUMNS = [
@@ -36,6 +37,9 @@ export const SheetRow = z.object({
   confirmation_notes: z.string().nullable(),
   campaign: z.string().nullable(),
   benefit: z.string().nullable(),
+  content: z.record(z.string(), z.string()).nullable(),
+  /** The sheet gave dates and no day numbers: the seed finds the day by its date. */
+  by_date: z.boolean(),
 });
 export type SheetRow = z.infer<typeof SheetRow>;
 
@@ -85,10 +89,10 @@ export function cellTime(v: unknown): string | null {
   return m ? `${m[1]!.padStart(2, '0')}:${m[2]}` : null;
 }
 
-/** Strip the trailing "📍 …" line: the pack adds STORE_ADDRESS itself. */
+/** Strip any "📍 …" line: the pack adds STORE_ADDRESS itself. */
 export function stripAddressLine(caption: string | null): string | null {
   if (!caption) return null;
-  const out = caption.replace(/\s*\n?\s*📍[^\n]*\s*$/u, '').trimEnd();
+  const out = caption.replace(/^[^\S\n]*📍[^\n]*(?:\n|$)/gmu, '').replace(/\n{3,}/g, '\n\n').replace(/\s*📍[^\n]*\s*$/u, '').trimEnd();
   return out || null;
 }
 
@@ -109,7 +113,8 @@ export function dedupeNotes(notes: string | null, instructions: string | null): 
   return notes;
 }
 
-export function cleanRow(raw: Record<CalendarColumn, unknown> & Partial<Record<OptionalColumn, unknown>>, dayNo: number): SheetRow {
+export function cleanRow(raw: Record<CalendarColumn, unknown> & Partial<Record<OptionalColumn, unknown>> & { content?: unknown; by_date?: unknown }, dayNo: number): SheetRow {
+  const content = (raw.content ?? null) as PostRecord | null;
   const row = {
     day_no: dayNo,
     date: cellDate(raw.date) ?? '',
@@ -123,15 +128,17 @@ export function cleanRow(raw: Record<CalendarColumn, unknown> & Partial<Record<O
     status: cellText(raw.status)?.toLowerCase() ?? 'planned',
     asset: cellText(raw.asset),
     objective: cellText(raw.objective),
-    creative_instructions: cellText(raw.creative_instructions),
+    creative_instructions: cellText(raw.creative_instructions) ?? shotsAsInstructions(content?.shot_list),
     on_screen_text: cellText(raw.on_screen_text),
     caption: stripAddressLine(cellText(raw.caption)),
     cta: cellText(raw.cta),
     hashtags: cellText(raw.hashtags),
-    story_ideas: stripPastedHeading(cellText(raw.story_ideas)),
+    story_ideas: stripPastedHeading(cellText(raw.story_ideas)) ?? content?.story_sequence ?? null,
     confirmation_notes: null as string | null,
     campaign: cellText(raw.campaign),
     benefit: cellText(raw.benefit),
+    content,
+    by_date: raw.by_date === true,
   };
   row.confirmation_notes = dedupeNotes(cellText(raw.confirmation_notes), row.creative_instructions);
   return SheetRow.parse(row);

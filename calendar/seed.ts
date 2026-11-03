@@ -16,11 +16,12 @@ import { placeholders } from '../src/calendar/rows.js';
 import { templateKeyFor } from '../src/render/registry.js';
 import { addDays, daysBetween } from '../src/time.js';
 import { z } from 'zod';
-import { CALENDAR_COLUMNS, OPTIONAL_COLUMNS, cleanRow, type CalendarColumn, type OptionalColumn, type SheetRow } from './calendar.schema.js';
+import { CALENDAR_COLUMNS, OPTIONAL_COLUMNS, cleanRow, headerKey, type CalendarColumn, type OptionalColumn, type SheetRow } from './calendar.schema.js';
 import { findCampaign } from '../src/campaigns.js';
 import { findProduct } from '../src/products.js';
 import { findBenefit } from '../src/benefits.js';
-import { campaignLayoutRows, isCampaignLayout } from './layouts.js';
+import { campaignLayoutRows, isCampaignLayout, readRecord, unreadColumns } from './layouts.js';
+import { RECORD_COLUMNS } from '../src/calendar/record.js';
 import { readSheetRows, type WorkbookSource } from './xlsx.js';
 
 export const WORKBOOK_PATH = 'calendar/Fuadijan-Posts-Calendar.xlsx';
@@ -28,7 +29,14 @@ export const WORKBOOK_PATH = 'calendar/Fuadijan-Posts-Calendar.xlsx';
 export interface Workbook {
   rows: SheetRow[];
   readMe: string[];
+  /** Columns the sheet has that nothing reads, reported so a misspelling is not lost. */
+  unread: string[];
 }
+
+const RECORD_HEADERS = new Set(Object.values(RECORD_COLUMNS).flat().map(headerKey));
+
+/** The same object whatever order its keys come back in, for comparing a sheet's record with the stored jsonb. */
+const stableJson = (v: unknown): string | null => (v == null ? null : JSON.stringify(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))));
 
 export interface ReadOptions {
   /** The date of Day 1 for a campaign-layout sheet that has no Date column. */
@@ -56,7 +64,7 @@ export async function readWorkbook(path: WorkbookSource = WORKBOOK_PATH, opts: R
       }
     }
     if (!rows.length) throw new Error('The Calendar sheet has no rows under the header.');
-    return { rows, readMe: await readMeOf(path) };
+    return { rows, readMe: await readMeOf(path), unread: unreadColumns(header) };
   }
   if (header.length < expected.length || expected.some((h, i) => h !== header[i])) {
     throw new Error(`Calendar header is not the 18 expected columns.
@@ -65,16 +73,18 @@ export async function readWorkbook(path: WorkbookSource = WORKBOOK_PATH, opts: R
   }
   // After the 18, optional columns in any order (campaign); anything else is a mistake worth naming.
   const extra = header.slice(expected.length).map((h) => h.toLowerCase());
-  const unknown = extra.filter((h) => h && !(OPTIONAL_COLUMNS as readonly string[]).includes(h));
-  if (unknown.length) throw new Error(`Calendar has columns the app does not know: ${unknown.join(', ')}. After the 18, only ${OPTIONAL_COLUMNS.join(', ')} may follow.`);
+  const unknown = extra.filter((h) => h && !(OPTIONAL_COLUMNS as readonly string[]).includes(h) && !RECORD_HEADERS.has(headerKey(h)));
+  if (unknown.length) throw new Error(`Calendar has columns the app does not know: ${unknown.join(', ')}. After the 18, only ${OPTIONAL_COLUMNS.join(', ')} and the post record's columns may follow.`);
   const optionalAt = new Map<OptionalColumn, number>();
-  extra.forEach((h, i) => { if (h) optionalAt.set(h as OptionalColumn, expected.length + i); });
+  extra.forEach((h, i) => { if ((OPTIONAL_COLUMNS as readonly string[]).includes(h)) optionalAt.set(h as OptionalColumn, expected.length + i); });
+  const hasRecord = extra.some((h) => RECORD_HEADERS.has(headerKey(h)));
   const rows: SheetRow[] = [];
   for (const values of sheet.slice(1)) {
     if (!values.some((v) => v !== null && v !== undefined && String(v).trim() !== '')) continue;
-    const raw = {} as Record<CalendarColumn, unknown> & Partial<Record<OptionalColumn, unknown>>;
+    const raw = {} as Record<CalendarColumn, unknown> & Partial<Record<OptionalColumn, unknown>> & { content?: unknown };
     CALENDAR_COLUMNS.forEach((col, i) => { raw[col] = values[i] ?? null; });
     for (const [col, i] of optionalAt) raw[col] = values[i] ?? null;
+    if (hasRecord) raw.content = readRecord(header, values);
     try {
       rows.push(cleanRow(raw, rows.length + 1));
     } catch (e) {
@@ -82,7 +92,7 @@ export async function readWorkbook(path: WorkbookSource = WORKBOOK_PATH, opts: R
     }
   }
   if (!rows.length) throw new Error('The Calendar sheet has no rows under the header.');
-  return { rows, readMe: await readMeOf(path) };
+  return { rows, readMe: await readMeOf(path), unread: [] };
 }
 
 async function readMeOf(path: WorkbookSource): Promise<string[]> {
@@ -140,10 +150,20 @@ export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: s
   const plan = planOf(offset ? addDays(rows[0]!.date, offset) : rows[0]!.date);
   const result: SeedResult = { plan, inserted: 0, updated: 0, protectedFields: [], kept: [] };
   await inTransaction(pool, async (c) => {
-    for (const r of rows) {
-      const date = offset ? addDays(r.date, offset) : r.date;
+    const onDate = new Map<string, number>();
+    for (const sheetRow of rows) {
+      const date = offset ? addDays(sheetRow.date, offset) : sheetRow.date;
+      // A sheet with only dates: the post already on that date (the nth of that date), else the next free day.
+      let dayNo = sheetRow.day_no;
+      if (sheetRow.by_date) {
+        const nth = onDate.get(date) ?? 0;
+        onDate.set(date, nth + 1);
+        const same = (await c.query<{ day_no: number }>('select day_no from calendar_rows where plan = $1 and date = $2 and custom is null order by day_no', [plan, date])).rows[nth];
+        dayNo = same?.day_no ?? (await c.query<{ n: number }>('select coalesce(max(day_no), 0)::int + 1 as n from calendar_rows where plan = $1 and day_no < 101', [plan])).rows[0]!.n;
+      }
+      const r = { ...sheetRow, day_no: dayNo };
       const existing = (await c.query<Record<string, unknown> & { id: number }>(
-        "select id, to_char(date, 'YYYY-MM-DD') as date, slot, type, dish, theme, caption_hint, to_char(post_time, 'HH24:MI') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, campaign_id, benefit from calendar_rows where plan = $1 and day_no = $2",
+        "select id, to_char(date, 'YYYY-MM-DD') as date, slot, type, dish, theme, caption_hint, to_char(post_time, 'HH24:MI') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, campaign_id, benefit, content from calendar_rows where plan = $1 and day_no = $2",
         [plan, r.day_no])).rows[0];
       // The campaign column names a campaign by id or name; the dish may be a ProductID (P004) from the Products sheet.
       let campaignId: number | null = null;
@@ -165,14 +185,16 @@ export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: s
         if (!known) throw new Error(`Day ${r.day_no}: benefit "${benefit}" looks like a BenefitID but is not on the Benefits sheet or in the app.`);
         benefit = known.benefit;
       }
-      const values: Record<string, string | number | null> = { ...r, date, dish, benefit, campaign_id: campaignId, day_no: undefined as unknown as string, campaign: undefined as unknown as string };
+      const content = r.content ? JSON.stringify(r.content) : null;
+      const values: Record<string, string | number | null> = { ...r, date, dish, benefit, content, campaign_id: campaignId, day_no: undefined as unknown as string, campaign: undefined as unknown as string, by_date: undefined as unknown as string };
       delete (values as Record<string, unknown>).day_no;
       delete (values as Record<string, unknown>).campaign;
+      delete (values as Record<string, unknown>).by_date;
       if (!existing) {
         await c.query(
-          `insert into calendar_rows (plan, day_no, date, slot, type, dish, theme, caption_hint, post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, campaign_id, benefit)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
-          [plan, r.day_no, date, r.slot, r.type, dish, r.theme, r.caption_hint, r.post_time, r.template, r.status, r.asset, r.objective, r.creative_instructions, r.on_screen_text, r.caption, r.cta, r.hashtags, r.story_ideas, r.confirmation_notes, campaignId, benefit]);
+          `insert into calendar_rows (plan, day_no, date, slot, type, dish, theme, caption_hint, post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, campaign_id, benefit, content)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
+          [plan, r.day_no, date, r.slot, r.type, dish, r.theme, r.caption_hint, r.post_time, r.template, r.status, r.asset, r.objective, r.creative_instructions, r.on_screen_text, r.caption, r.cta, r.hashtags, r.story_ideas, r.confirmation_notes, campaignId, benefit, content]);
         result.inserted++;
         continue;
       }
@@ -187,8 +209,9 @@ export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: s
       const edited = new Set((await c.query<{ field: string }>("select distinct field from calendar_edits where row_id = $1 and source <> 'seed'", [existing.id])).rows.map((x) => x.field));
       let changed = false;
       for (const [field, value] of Object.entries(values)) {
-        const current = (existing[field] as string | number | null | undefined) ?? null;
-        if ((current ?? null) === (value ?? null)) continue;
+        const current = (field === 'content' ? (existing.content ? JSON.stringify(existing.content) : null) : existing[field] as string | number | null | undefined) ?? null;
+        const same = field === 'content' ? stableJson(existing.content) === stableJson(r.content) : (current ?? null) === (value ?? null);
+        if (same) continue;
         if (edited.has(field) || (field === 'date' && edited.has('date')) || (field === 'status' && edited.has('status'))) {
           result.protectedFields.push({ day_no: r.day_no, field });
           continue;
@@ -218,7 +241,7 @@ export async function loadWorkbook(pool: pg.Pool, source: WorkbookSource, opts: 
   const { readSlogansSheet, seedSlogans } = await import('./slogans.js');
   // Everything is read and checked before anything is written.
   const withCalendar = await hasCalendarSheet(source);
-  const { rows, readMe } = withCalendar ? await readWorkbook(source, { start: opts.start }) : { rows: [] as SheetRow[], readMe: await readMeOf(source) };
+  const { rows, readMe, unread } = withCalendar ? await readWorkbook(source, { start: opts.start }) : { rows: [] as SheetRow[], readMe: await readMeOf(source), unread: [] as string[] };
   const campaigns = await readCampaignsSheet(source);
   const products = await readProductsSheet(source);
   const benefits = await readBenefitsSheet(source);
@@ -231,7 +254,7 @@ export async function loadWorkbook(pool: pg.Pool, source: WorkbookSource, opts: 
   await seedBenefits(pool, benefits);
   const result: SeedResult = rows.length ? await seedRows(pool, rows, opts.calendarStart ?? rows[0]!.date, opts) : { plan: null, inserted: 0, updated: 0, protectedFields: [], kept: [] };
   const loaded = await seedSlogans(pool, slogans);
-  return { ...result, rows: rows.length, from: rows[0]?.date ?? null, to: rows[rows.length - 1]?.date ?? null, campaigns: campaigns.length, products: products.length, benefits: benefits.length, slogans: loaded, placeholders: placeholderReport(rows), readMe, sheetRows: rows };
+  return { ...result, rows: rows.length, from: rows[0]?.date ?? null, to: rows[rows.length - 1]?.date ?? null, campaigns: campaigns.length, products: products.length, benefits: benefits.length, slogans: loaded, placeholders: placeholderReport(rows), unread, readMe, sheetRows: rows };
 }
 
 export interface WorkbookLoad extends SeedResult {
@@ -241,6 +264,7 @@ export interface WorkbookLoad extends SeedResult {
   campaigns: number;
   products: number;
   benefits: number;
+  unread: string[];
   slogans: { loaded: number; items: number };
   placeholders: string[];
   readMe: string[];

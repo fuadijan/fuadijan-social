@@ -34,6 +34,19 @@ export const CopyVariant = z.object({
 });
 export type CopyVariant = z.infer<typeof CopyVariant>;
 
+/** Every other platform's version of the post, drafted from the same facts; whatever the owner's record already has wins over these. */
+export const PlatformDrafts = z.object({
+  reel_cover_text: z.string().describe('Reel cover: one or two short lines in capitals.'),
+  tiktok_opening: z.string().describe('TikTok on-screen opening text, one or two short lines.'),
+  tiktok_hook: z.string().describe('The first spoken line.'),
+  tiktok_script: z.string().describe('A short spoken script, three or four sentences, plain words.'),
+  tiktok_cta: z.string(),
+  tiktok_hashtags: z.array(z.string()).max(5).describe('3 to 5, with the # sign.'),
+  stories: z.array(z.string()).max(4).describe('A story sequence, one frame per item; a poll frame reads "Poll: question? A / B".'),
+  image_prompt: z.string().describe('One sentence describing a food photo to shoot or mock up: the dish, its setting and the light, no people, no text.'),
+});
+export type PlatformDrafts = z.infer<typeof PlatformDrafts>;
+
 export const ResolvedCopy = z.object({
   label: z.string().describe('Series label in capitals, e.g. FROM THE FIRE.'),
   headline: z.string().describe('Two short lines separated by a newline, the dish or the hook.'),
@@ -47,6 +60,7 @@ export const ResolvedCopy = z.object({
   on_screen_text: z.array(z.string()).describe('For reels: the on-screen text cards in order, brackets resolved or dropped.'),
   unresolved: z.array(Unresolved).describe('Everything that still needs the owner before this is publishable.'),
   variants: z.array(CopyVariant).max(3).default([]).describe('Two alternative wordings of headline, line and caption for the owner to choose from; the main copy above is the first option.'),
+  versions: PlatformDrafts.nullable().default(null).describe('The other platforms, drafted from the same facts. Null when told not to write them.'),
 });
 export type ResolvedCopy = z.infer<typeof ResolvedCopy>;
 

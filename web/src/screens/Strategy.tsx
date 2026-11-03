@@ -172,6 +172,7 @@ function LoadWorkbook({ onLoaded }: { onLoaded: () => void }) {
             {result.slogans.loaded ? `${result.slogans.loaded} slogan${result.slogans.loaded === 1 ? '' : 's'} for ${result.slogans.items} item${result.slogans.items === 1 ? '' : 's'} joined the wording bank.` : 'No Slogans sheet.'}
             {result.plan ? <>{' '}<Link to={`/month?plan=${encodeURIComponent(result.plan)}`}>See {fmtMonth(result.plan)}</Link></> : null}
           </div>
+          {result.unread.length ? <div className="sa-result sa-result--error" style={{ marginTop: 8 }}>These columns were not read: {result.unread.join(', ')}. Check the spelling if they should have been.</div> : null}
           {result.placeholders.length ? (
             <div style={{ marginTop: 8 }}>
               <div className="sa-eyebrow">You will be asked about</div>

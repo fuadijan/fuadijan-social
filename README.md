@@ -135,6 +135,16 @@ improvement; `customerBenefits` in `brand/strategy.json` lists the topics never 
 builders, equipment, furniture) and the customer message for each change. Series now also include WHAT WE ATE
 TODAY, YOU SAID IT (reviews) and FOR OUR CUSTOMERS (benefit posts).
 
+**One record, every platform.** A Calendar row may carry the whole post (`src/calendar/record.ts`, stored in
+`calendar_rows.content`): Canva Headline and Subheading, Reel Cover Text, Hook, Instagram, Facebook and TikTok
+versions, Story Sequence, Reel Shot List, AI Image Prompt, Customer Message, and internal notes (Platform, Content
+Goal, Funnel Stage, KPI, Priority). What the owner wrote is used as written, including a headline that is not the
+product's name and more than five hashtags; what is blank the writer drafts from the same facts when the photo
+arrives, with no new claims. The Day page shows the set under "Every platform" and the pack adds `platforms.txt`.
+`Day` may be a number or a weekday: a weekday is checked against the date, and a sheet with only dates finds each
+post by its date, so a partial sheet never lands on the wrong day. `calendar/Fuadijan-Post-Record-Example.xlsx` is
+a full example.
+
 **The slogan bank.** Keep several slogans per menu item and they are offered among the wordings whenever a post is
 about that item. Load them with the monthly plan: a sheet named `Slogans` in the plan workbook, or the separate
 `calendar/Fuadijan-Slogans.xlsx` (a template with a Read Me is in the repo), columns `Item | Slogan | Line | Caption`

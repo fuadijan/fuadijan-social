@@ -15,8 +15,10 @@ import { CALENDAR_COLUMNS, OPTIONAL_COLUMNS } from './calendar.schema.js';
 import { CAMPAIGN_COLUMNS } from './campaigns.js';
 import { PRODUCT_COLUMNS } from './products.js';
 import { BENEFIT_COLUMNS } from './benefits.js';
+import { writeWorkbook } from './xlsx-write.js';
 
 export const TEMPLATE_PATH = 'calendar/Fuadijan-Monthly-Template.xlsx';
+export const RECORD_TEMPLATE_PATH = 'calendar/Fuadijan-Post-Record-Example.xlsx';
 
 /** Style indexes in the template's styles.xml: 1 = Calendar header (bold on fill), 3 = wrapped text, 4 = bold header, 5 = bold wrapped. */
 const S = { calendarHeader: 1, wrap: 3, header: 4, title: 5 } as const;
@@ -88,6 +90,7 @@ export const READ_ME: string[] = [
   'Benefits sheet: the customer benefits (BenefitID | Benefit), e.g. BEN001 Plenty of parking available. A post about an improvement names one in its benefit column and is written from what the customer gets, never from renovations, builders or equipment.',
   'The Calendar may instead be laid out as Day | CampaignID | ProductID | BenefitID | Series | Format | Hook | Caption | CTA | Hashtags | Status (a Date column is optional; without one, give the date of Day 1 when loading). Series picks the look, Format the slot (Reel, Carousel, Photo), the Hook becomes the theme the writer reads.',
   'Each sheet may come in its own workbook: a workbook of Campaigns, Products or Benefits alone loads those and changes no days.',
+  'One row can carry every platform: Canva Headline, Canva Subheading, Reel Cover Text, Hook, Facebook Version, Facebook CTA, TikTok Opening Text, TikTok Hook, TikTok Script, TikTok CTA, TikTok Hashtags, Story Sequence, Reel Shot List, AI Image Prompt, Customer Message, Platform, Content Goal, Funnel Stage, KPI, Priority. What you write is used as written; what you leave blank the writer drafts when the photo arrives. See Fuadijan-Post-Record-Example.xlsx.',
   'Slogans sheet: your wording bank. Item = the menu item as the menu spells it ("all" = every post). Slogan = the headline, Alt+Enter for a line break. Line and Caption are optional. The same item + slogan is updated, never duplicated, so the bank grows month after month.',
   'Columns sheet explains every calendar column; Templates sheet lists the design templates and series the template, Series and campaign columns accept.',
   'Anything you are not sure of goes in [square brackets]; the agent asks you about it on Telegram before the post is made.',
@@ -198,8 +201,50 @@ export async function buildTemplateWorkbook(path = TEMPLATE_PATH): Promise<{ she
   return { sheets: [...wb.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]!), templates: templates.length };
 }
 
+/** One full post record, in the one-row-per-post shape the Calendar sheet takes. Anything unconfirmed sits in [brackets], so the bot asks before it goes out. */
+export const RECORD_EXAMPLE: Record<string, string> = {
+  Date: '2026-11-19',
+  Day: 'Thursday',
+  CampaignID: 'CAMP004',
+  Campaign: 'Seafood Expansion',
+  ProductID: 'BBQ Barramundi',
+  BenefitID: 'More Choice For Customers',
+  Series: 'FROM THE CHARCOAL SEA',
+  Platform: 'All',
+  Format: 'Reel',
+  'Content Goal': 'Awareness',
+  Status: 'Planned',
+  'Canva Headline': 'WHOLE BBQ\nBARRAMUNDI',
+  'Canva Subheading': 'FROM THE CHARCOAL SEA',
+  'Reel Cover Text': 'NOT EVERYTHING OFF\nTHE GRILL IS A KEBAB',
+  Hook: 'Not everything off the grill is a kebab.',
+  'Instagram Caption': 'Fire. Smoke. Fresh seafood.\n\nOur BBQ Barramundi [is quickly becoming one of the most talked-about dishes at Fuadijan: confirm].\n\nCooked over the grill and served ready to share, it\'s a different way to experience the flavours we\'re known for.\n\n🐟 Whole BBQ Barramundi\n\n🔥 Smoked. Grilled. Rooted in Tradition.',
+  CTA: 'Would you try BBQ Barramundi?',
+  'Instagram Hashtags': '#Barramundi #BBQFish #SeafoodSydney #Fuadijan #AuburnEats #PakistaniFood #SydneyFoodie #FoodSydney',
+  'Facebook Version': 'Some meals are made to be shared.\n\nOur BBQ Barramundi combines fresh seafood with the smoky flavours our customers love.\n\nIf you\'re looking for something a little different next time you visit, this might become your new favourite.\n\nWe\'re always looking for ways to give our customers more choice and more reasons to enjoy Fuadijan.',
+  'Facebook CTA': 'Who would you share this with?',
+  'TikTok Opening Text': 'MOST PEOPLE DON\'T KNOW\nWE SERVE THIS...',
+  'TikTok Hook': 'Not everything on the grill is a kebab.',
+  'TikTok Script': 'Watch this whole Barramundi hit the grill.\n\nFresh fish. Open fire. Simple flavour.\n\n[This is one of Auburn\'s most underrated dishes: confirm].',
+  'TikTok CTA': 'Would you order this?',
+  'TikTok Hashtags': '#SydneyFood #FoodTok #BBQFish #Barramundi #Auburn',
+  'Story Sequence': 'Poll: Fish or BBQ? FISH / BBQ\nWhy not both? (show Barramundi being grilled)\nAvailable now at Fuadijan',
+  'Reel Shot List': 'Whole fish on preparation bench\nMarinade being applied\nFish hitting grill\nSmoke rising\nClose-up of grill marks\nServing shot\nFamily-style table shot',
+  'AI Image Prompt': 'Premium food photography of a whole BBQ barramundi served on a rustic platter, charcoal grilled appearance, vibrant herbs and lemon garnish, restaurant quality food styling, dramatic lighting, black background, no people, no text',
+  'Customer Message': 'We\'re continuously expanding our menu to give customers more ways to enjoy Fuadijan.',
+  Objective: 'Build seafood awareness',
+  'Funnel Stage': 'Discovery',
+  KPI: 'Reach, saves, comments',
+  Priority: 'High',
+};
+
+export async function buildRecordExample(path = RECORD_TEMPLATE_PATH): Promise<void> {
+  const columns = Object.keys(RECORD_EXAMPLE);
+  await writeWorkbook(path, [{ name: 'Calendar', rows: [columns, columns.map((c) => RECORD_EXAMPLE[c]!)], widths: columns.map(() => 28) }]);
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  buildTemplateWorkbook().then((r) => console.log(`${TEMPLATE_PATH}: sheets ${r.sheets.join(', ')}; ${r.templates} templates.`)).catch((e: unknown) => {
+  buildRecordExample().then(() => buildTemplateWorkbook()).then((r) => console.log(`${TEMPLATE_PATH}: sheets ${r.sheets.join(', ')}; ${r.templates} templates. ${RECORD_TEMPLATE_PATH} written.`)).catch((e: unknown) => {
     console.error(e instanceof Error ? e.message : e);
     process.exitCode = 1;
   });

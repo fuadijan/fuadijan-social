@@ -98,7 +98,7 @@ export function uploadToDay(dayNo: number, files: File[], caption: string): Prom
 /** Image bytes for a stored file id. */
 export const fileUrl = (fileId: string) => `/api/files/${fileId}`;
 /** The pack's text files. */
-export const packTextUrl = (dayNo: number, name: 'caption.txt' | 'canva-brief.txt' | 'reel-pack.txt') => `/api/packs/${dayNo}/${name}`;
+export const packTextUrl = (dayNo: number, name: 'caption.txt' | 'canva-brief.txt' | 'reel-pack.txt' | 'platforms.txt') => `/api/packs/${dayNo}/${name}`;
 
 // ─── the Create flow and the wording bank ───────────────────────────────────────────────────────────────
 export const getCreateOptions = () => apiFetch<CreateOptions>('/api/create/options');

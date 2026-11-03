@@ -67,7 +67,7 @@ export function reelLength(row: CalendarRow): string {
 
 export function reelPackTxt(row: CalendarRow, copy: ResolvedCopy, clipsReceived: number): string {
   const onScreen = copy.on_screen_text.length ? copy.on_screen_text : (row.on_screen_text ?? '').split(/\s*→\s*/).map((x) => x.replace(/^[“"]|[”"]$/g, '').trim()).filter(Boolean);
-  const hook = onScreen[0] ?? copy.headline.split('\n')[0] ?? '';
+  const hook = row.content?.hook?.trim() || (onScreen[0] ?? copy.headline.split('\n')[0] ?? '');
   return [
     `=== REEL — Day ${row.day_no} · ${formatDay(row.date)} ===`,
     `Hook (first second): ${hook}`,

@@ -23,6 +23,7 @@ import { slogansFor } from '../slogans.js';
 import { copyBrief, strategyIfAny } from '../strategy.js';
 import { addDays, sydneyDate, sydneyTime } from '../time.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
+import { applyRecord, platformVersions, platformsTxt } from '../calendar/record.js';
 import { answeredQuestions, askQuestion, openQuestions, setQuestionMessageId } from './questions.js';
 import { RENDER_FILENAMES, renderForRow } from './render-stage.js';
 
@@ -311,7 +312,7 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   });
   const written = await ctx.claude.call({ purpose: 'resolve-copy', fixtureKey: `day${row.day_no}`, system: prompt.system, user: prompt.user, schema: ResolvedCopy, jobId: ctx.job.id });
   // The first run of a custom post uses the owner's words as given; a redo lets the note change them.
-  const copy = redo ? written : applyCustomWording(written, row.custom);
+  const copy = applyRecord(redo ? written : applyCustomWording(written, row.custom), row, Boolean(note));
 
   // Everything the menu can't settle goes to the owner, one message per question (so each has its buttons).
   const unresolved = copy.unresolved.filter((u) => !answers.some((a) => a.question === u.question));
@@ -439,6 +440,8 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
   writeFileSync(join(folder, 'caption.txt'), captionText);
   writeFileSync(join(folder, 'canva-brief.txt'), brief);
   if (reelText) writeFileSync(join(folder, 'reel-pack.txt'), reelText);
+  const platforms = platformVersions(row, copy);
+  writeFileSync(join(folder, 'platforms.txt'), platformsTxt(platforms));
   if (design) writeFileSync(join(folder, 'design.json'), JSON.stringify({ ...design, spec: ctx.job.state.design?.spec, critique: ctx.job.state.design?.critique }, null, 2));
 
   for (const r of (await ctx.pool.query<{ format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; file_id: string }>('select format, page, file_id from renders where calendar_row_id = $1 order by format, page', [row.id])).rows) {
@@ -460,12 +463,12 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
   }
 
   const inserted = await ctx.pool.query<{ id: number }>(
-    `insert into packs (calendar_row_id, caption, cta, hashtags, alt_text, story_text, facebook_caption, reel_hook, reel_on_screen_text, reel_shot_list, canva_brief, caption_txt, reel_pack_txt, folder, sources)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) returning id`,
+    `insert into packs (calendar_row_id, caption, cta, hashtags, alt_text, story_text, facebook_caption, reel_hook, reel_on_screen_text, reel_shot_list, canva_brief, caption_txt, reel_pack_txt, folder, sources, platforms)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) returning id`,
     [row.id, copy.caption, copy.cta, copy.hashtags, copy.alt_text, copy.story_text, copy.facebook_caption,
       row.slot === 'reel' ? (copy.on_screen_text[0] ?? copy.headline.split('\n')[0] ?? null) : null,
       row.slot === 'reel' ? copy.on_screen_text : null, row.slot === 'reel' ? reelText?.split('\n').filter((l) => /^\s+\d+\)/.test(l)).map((l) => l.replace(/^\s+\d+\)\s*/, '')) ?? null : null,
-      brief, captionText, reelText, folderName, JSON.stringify(sources)]);
+      brief, captionText, reelText, folderName, JSON.stringify(sources), JSON.stringify(platforms)]);
   await setStatus(ctx.pool, row, 'ready');
   return { kind: 'advance', stage: 'notify', state: { packId: inserted.rows[0]!.id, packFolder: folderName } };
 }

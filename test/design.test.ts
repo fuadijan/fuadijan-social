@@ -193,7 +193,7 @@ describe('design styles', () => {
 });
 
 describe('wording options', () => {
-  const copy = { label: 'L', headline: 'A\nB', line: 'l', caption: 'c', cta: 'Come by.', hashtags: ['#a', '#b', '#c'], alt_text: 'x', story_text: 's', facebook_caption: 'c Come by.', on_screen_text: [], unresolved: [], variants: [{ name: 'Punchy', headline: 'P\nQ', line: 'pl', caption: 'pc' }, { name: 'Dup', headline: 'A\nB', line: 'l', caption: 'c' }] };
+  const copy = { label: 'L', headline: 'A\nB', line: 'l', caption: 'c', cta: 'Come by.', hashtags: ['#a', '#b', '#c'], alt_text: 'x', story_text: 's', facebook_caption: 'c Come by.', versions: null, on_screen_text: [], unresolved: [], variants: [{ name: 'Punchy', headline: 'P\nQ', line: 'pl', caption: 'pc' }, { name: 'Dup', headline: 'A\nB', line: 'l', caption: 'c' }] };
   it('lists the calendar wording first and drops duplicates', () => {
     const options = optionsFrom(copy);
     expect(options.map((o) => o.name)).toEqual(['Calendar wording', 'Punchy']);

@@ -69,7 +69,7 @@ describe('the Create flow', () => {
   });
 
   it("uses the owner's wording as given and asks nothing; the agent's words stay when none is given", () => {
-    const copy = { label: 'L', headline: 'Chapli\nKebab', line: 'agent line', caption: 'agent caption', cta: 'Order now.', hashtags: ['#a', '#b', '#c'], alt_text: 'a', story_text: 's', facebook_caption: 'agent caption Order now.', on_screen_text: [], unresolved: [{ field: 'other' as const, placeholder: '', question: 'q', suggestions: [] }], variants: [] };
+    const copy = { label: 'L', headline: 'Chapli\nKebab', line: 'agent line', caption: 'agent caption', cta: 'Order now.', hashtags: ['#a', '#b', '#c'], alt_text: 'a', story_text: 's', facebook_caption: 'agent caption Order now.', versions: null, on_screen_text: [], unresolved: [{ field: 'other' as const, placeholder: '', question: 'q', suggestions: [] }], variants: [] };
     const spec: CustomSpec = { product: 'Chapli Kebab', style: 'auto', formats: ['feed'], wording: { headline: 'Karahi\nFirst', line: '', caption: '' }, sloganId: null };
     const out = applyCustomWording(copy, spec);
     expect(out).toMatchObject({ headline: 'Karahi\nFirst', line: 'agent line', caption: 'agent caption', facebook_caption: 'agent caption Order now.', unresolved: [] });
