@@ -12,6 +12,9 @@ import { config } from '../config.js';
 import type { Db } from '../db/pool.js';
 import type { Purpose } from './schemas.js';
 
+/** Room for the answer and the thinking before it, which share this limit. A post's copy with every platform's version runs long. */
+export const MAX_OUTPUT_TOKENS = 16_000;
+
 export interface ImageInput { bytes: Buffer; mime: 'image/jpeg' | 'image/png' | 'image/webp' }
 
 export interface CallInput<T> {
@@ -64,7 +67,7 @@ export class LiveClaude implements ClaudeClient {
       const model = input.model ?? this.model;
       const response = await this.client.beta.messages.parse({
         model,
-        max_tokens: 4096,
+        max_tokens: MAX_OUTPUT_TOKENS,
         system: input.system,
         messages: [{ role: 'user', content }],
         output_config: { format: zodOutputFormat(input.schema) },
@@ -78,7 +81,10 @@ export class LiveClaude implements ClaudeClient {
       await logCall(this.db, { purpose: input.purpose, model: response.model ?? model, input: usage.input_tokens, output: usage.output_tokens, cacheRead: usage.cache_read_input_tokens ?? 0, latencyMs: Date.now() - started, ok: true, jobId: input.jobId });
       return input.schema.parse(parsed);
     } catch (err) {
-      await logCall(this.db, { purpose: input.purpose, model: input.model ?? this.model, latencyMs: Date.now() - started, ok: false, error: err instanceof Error ? err.message : String(err), jobId: input.jobId });
+      const raw = err instanceof Error ? err.message : String(err);
+      await logCall(this.db, { purpose: input.purpose, model: input.model ?? this.model, latencyMs: Date.now() - started, ok: false, error: raw, jobId: input.jobId });
+      // The SDK has no typed error for this. Structured output is only ever invalid when the answer stopped early.
+      if (raw.startsWith('Failed to parse structured output')) throw new Error('The written copy was cut off before it finished. Nothing was saved; please try again.', { cause: err });
       throw err;
     }
   }
