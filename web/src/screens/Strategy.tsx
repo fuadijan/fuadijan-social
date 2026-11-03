@@ -130,76 +130,84 @@ function PlanningDocs({ refreshKey }: { refreshKey: number }) {
 
 const fmtMonth = (plan: string) => new Date(`${plan}-01T00:00:00Z`).toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-/**
- * A month's workbook, loaded from the browser the way `npm run seed-calendar -- --file` loads it: the monthly
- * template filled in (sheet Calendar, 18 columns, 30 rows; Slogans optional).
- */
+/** What one workbook did. */
+function LoadedWorkbook({ name, result }: { name: string; result: ImportCalendarResponse }) {
+  return (
+    <div className="sa-result" role="status" style={{ marginBottom: 12 }}>
+      <div className="sa-eyebrow">{name}</div>
+      <div>
+        {result.plan ? (
+          <>
+            <strong>{fmtMonth(result.plan)}</strong>: {result.rows} row{result.rows === 1 ? '' : 's'} read ({result.from} – {result.to}); {result.inserted} day{result.inserted === 1 ? '' : 's'} added, {result.updated} updated
+            {result.kept.length ? `, ${result.kept.length} left as they were (started): Day ${result.kept.join(', ')}` : ''}
+            {result.protectedFields.length ? `; ${result.protectedFields.length} edited field${result.protectedFields.length === 1 ? '' : 's'} kept` : ''}.{' '}
+          </>
+        ) : null}
+        {[result.campaigns ? `${result.campaigns} campaign${result.campaigns === 1 ? '' : 's'}` : null, result.products ? `${result.products} product${result.products === 1 ? '' : 's'}` : null, result.benefits ? `${result.benefits} benefit${result.benefits === 1 ? '' : 's'}` : null].filter(Boolean).join(', ')}{result.campaigns || result.products || result.benefits ? ' loaded. ' : ''}
+        {result.slogans.loaded ? `${result.slogans.loaded} slogan${result.slogans.loaded === 1 ? '' : 's'} for ${result.slogans.items} item${result.slogans.items === 1 ? '' : 's'} joined the wording bank. ` : ''}
+        {result.plan ? <Link to={`/month?plan=${encodeURIComponent(result.plan)}`}>See {fmtMonth(result.plan)}</Link> : null}
+      </div>
+      {result.reference.length ? <div className="sa-note" style={{ marginTop: 8 }}>Planning documents kept: {result.reference.join(', ')}.</div> : null}
+      {result.unread.length ? <div className="sa-result sa-result--error" style={{ marginTop: 8 }}>These columns were not read: {result.unread.join(', ')}. Check the spelling if they should have been.</div> : null}
+      {result.unreadSheets.length ? <div className="sa-note" style={{ marginTop: 8 }}>The app has no place yet for these sheets, so they were left out: {result.unreadSheets.join(', ')}.</div> : null}
+      {result.placeholders.length ? (
+        <div style={{ marginTop: 8 }}>
+          <div className="sa-eyebrow">You will be asked about</div>
+          <ul className="sa-bullets">{result.placeholders.map((p) => <li key={p}>{p}</li>)}</ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** A calendar names campaigns, products and benefits, so it loads after the workbooks that define them. */
+const calendarLast = (files: File[]) => [...files].sort((a, b) => Number(/calendar|content.?records/i.test(a.name)) - Number(/calendar|content.?records/i.test(b.name)));
+
 function LoadWorkbook({ onLoaded }: { onLoaded: () => void }) {
   const inputId = useId();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [start, setStart] = useState('');
   const startId = useId();
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<ImportCalendarResponse | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [results, setResults] = useState<{ name: string; result: ImportCalendarResponse }[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    if (!file) return;
-    setBusy(true);
     setError(null);
-    setResult(null);
-    try {
-      setResult(await importCalendar(file, start || null));
-      onLoaded();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+    setResults([]);
+    // One at a time and in order; a workbook that is refused stops the rest, so a calendar never loads without what it names.
+    for (const file of calendarLast(files)) {
+      setBusy(file.name);
+      try {
+        const result = await importCalendar(file, start || null);
+        setResults((done) => [...done, { name: file.name, result }]);
+        onLoaded();
+      } catch (e) {
+        setError(`${file.name}: ${e instanceof Error ? e.message : String(e)}`);
+        break;
+      }
     }
+    setBusy(null);
   }
 
   return (
-    <Card title="Load a month's workbook">
+    <Card title="Load workbooks">
       <div className="sa-note" style={{ marginBottom: 10 }}>
-        A workbook with any of the sheets the app reads: <strong>Calendar</strong> (the 18-column month, or the Day · CampaignID · ProductID · BenefitID · Series · Format · Hook · Caption · CTA · Hashtags · Status layout), <strong>Campaigns</strong>, <strong>Products</strong>, <strong>Benefits</strong> and <strong>Slogans</strong>. Each may come in its own workbook.
-        The month of the first date names the plan, and a new month lands beside the running one. Loading a month again updates what changed; a day that has started, and any field you edited, is left alone.
+        Choose one workbook or several at once; they load in the right order, the calendar last. The app reads <strong>Calendar</strong> or <strong>Content Records</strong> (one row per post), <strong>Campaigns</strong>, <strong>Products</strong>, <strong>Customer Benefits</strong> and <strong>Slogans</strong>, and keeps the planning sheets (strategy, roadmap, hook, CTA and hashtag libraries) below.
+        The month of the first date names the plan. Loading again updates what changed; a day that has started, and any field you edited, is left alone.
       </div>
       <div className="sa-upload-row" style={{ marginBottom: 12 }}>
-        <label className={`${buttonClass('secondary', 'sm')} sa-upload-pick`} htmlFor={inputId}>{file ? 'Change workbook' : 'Choose workbook (.xlsx)'}</label>
-        <input id={inputId} className="sa-visually-hidden" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); setError(null); }} />
-        {file ? <span className="sa-muted">{file.name}</span> : null}
-        <Button variant="primary" disabled={busy || !file} onClick={() => void load()}>{busy ? 'Loading…' : 'Load it'}</Button>
+        <label className={`${buttonClass('secondary', 'sm')} sa-upload-pick`} htmlFor={inputId}>{files.length ? 'Change workbooks' : 'Choose workbooks (.xlsx)'}</label>
+        <input id={inputId} className="sa-visually-hidden" type="file" multiple accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy !== null} onChange={(e) => { setFiles(Array.from(e.target.files ?? [])); setResults([]); setError(null); }} />
+        {files.length ? <span className="sa-muted">{files.length === 1 ? files[0]!.name : `${files.length} workbooks`}</span> : null}
+        <Button variant="primary" disabled={busy !== null || !files.length} onClick={() => void load()}>{busy ? `Loading ${busy}…` : 'Load'}</Button>
       </div>
       <div className="sa-upload-row" style={{ marginBottom: 12 }}>
         <label className="sa-eyebrow" htmlFor={startId}>First day</label>
-        <input id={startId} className="sa-input" type="date" value={start} disabled={busy} onChange={(e) => setStart(e.target.value)} style={{ width: 'auto' }} />
+        <input id={startId} className="sa-input" type="date" value={start} disabled={busy !== null} onChange={(e) => setStart(e.target.value)} style={{ width: 'auto' }} />
         <span className="sa-note">Only for a Calendar laid out by Day number without dates: the date Day 1 posts on.</span>
       </div>
-      {result ? (
-        <div className="sa-result" role="status" style={{ marginBottom: 12 }}>
-          <div>
-            {result.plan ? (
-              <>
-                <strong>{fmtMonth(result.plan)}</strong>: {result.rows} row{result.rows === 1 ? '' : 's'} read ({result.from} – {result.to}); {result.inserted} day{result.inserted === 1 ? '' : 's'} added, {result.updated} updated
-                {result.kept.length ? `, ${result.kept.length} left as they were (started): Day ${result.kept.join(', ')}` : ''}
-                {result.protectedFields.length ? `; ${result.protectedFields.length} edited field${result.protectedFields.length === 1 ? '' : 's'} kept` : ''}.{' '}
-              </>
-            ) : <>No Calendar sheet in this workbook, so no days changed. </>}
-            {[result.campaigns ? `${result.campaigns} campaign${result.campaigns === 1 ? '' : 's'}` : null, result.products ? `${result.products} product${result.products === 1 ? '' : 's'}` : null, result.benefits ? `${result.benefits} benefit${result.benefits === 1 ? '' : 's'}` : null].filter(Boolean).join(', ')}{result.campaigns || result.products || result.benefits ? ' loaded. ' : ''}
-            {result.slogans.loaded ? `${result.slogans.loaded} slogan${result.slogans.loaded === 1 ? '' : 's'} for ${result.slogans.items} item${result.slogans.items === 1 ? '' : 's'} joined the wording bank.` : 'No Slogans sheet.'}
-            {result.plan ? <>{' '}<Link to={`/month?plan=${encodeURIComponent(result.plan)}`}>See {fmtMonth(result.plan)}</Link></> : null}
-          </div>
-          {result.reference.length ? <div className="sa-note" style={{ marginTop: 8 }}>Planning documents kept: {result.reference.join(', ')}.</div> : null}
-          {result.unread.length ? <div className="sa-result sa-result--error" style={{ marginTop: 8 }}>These columns were not read: {result.unread.join(', ')}. Check the spelling if they should have been.</div> : null}
-          {result.unreadSheets.length ? <div className="sa-note" style={{ marginTop: 8 }}>The app has no place yet for these sheets, so they were left out: {result.unreadSheets.join(', ')}.</div> : null}
-          {result.placeholders.length ? (
-            <div style={{ marginTop: 8 }}>
-              <div className="sa-eyebrow">You will be asked about</div>
-              <ul className="sa-bullets">{result.placeholders.map((p) => <li key={p}>{p}</li>)}</ul>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {results.map((r) => <LoadedWorkbook key={r.name} name={r.name} result={r.result} />)}
       {error ? <div className="sa-result sa-result--error" role="alert">{error}</div> : null}
     </Card>
   );
