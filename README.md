@@ -124,6 +124,17 @@ row's `dish` may be a ProductID. Series are the hero-photo labels (FROM THE FIRE
 FUADIJAN, ROOTED IN TRADITION, FRESH POUR, SAVE ROOM, FROM THE CHARCOAL SEA for seafood). `npm run
 template-workbook` brings the template's sheets, dropdowns and notes up to date with the code.
 
+**The planning documents.** The owner's planning pack arrives as separate workbooks and each loads on its own:
+campaigns with an objective (`CampaignID | CampaignName | Objective`), the product roster, customer benefits
+(`Benefits` or `Customer Benefits`: `BenefitID | Benefit`), and an operational calendar laid out as `Day |
+CampaignID | ProductID | BenefitID | Series | Format | Hook | Caption | CTA | Hashtags | Status`
+(`calendar/layouts.ts`): Series picks the template, Format the slot, the Hook becomes the theme the writer
+reads, the ids resolve against the tables, and without a `Date` column the first day is given on upload
+(`--start` on the command line). A row's `benefit` reaches the writer as the one thing to say about an
+improvement; `customerBenefits` in `brand/strategy.json` lists the topics never written about (renovations,
+builders, equipment, furniture) and the customer message for each change. Series now also include WHAT WE ATE
+TODAY, YOU SAID IT (reviews) and FOR OUR CUSTOMERS (benefit posts).
+
 **The slogan bank.** Keep several slogans per menu item and they are offered among the wordings whenever a post is
 about that item. Load them with the monthly plan: a sheet named `Slogans` in the plan workbook, or the separate
 `calendar/Fuadijan-Slogans.xlsx` (a template with a Read Me is in the repo), columns `Item | Slogan | Line | Caption`

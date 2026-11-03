@@ -15,6 +15,8 @@ const s = loadStrategy();
 describe('the marketing strategy as data', () => {
   it('loads and validates brand/strategy.json', () => {
     expect(s.name).toMatch(/Strategy/);
+    expect(s.customerBenefits?.never).toContain('renovations');
+    expect(copyBrief(s, { date: '2026-11-04', dish: null, theme: 'Easy parking', type: 'benefit', slot: 'carousel' })).toMatch(/Never write about: renovations[\s\S]*- Air conditioning → More comfortable dining/);
     expect(s.taglines.length).toBe(4);
     expect(s.rituals.map((r) => r.name)).toEqual(['Karahi Night', 'Chapli Kebab Day', 'Student Night', 'Family Combo Weekend']);
     expect(s.plan.days).toHaveLength(30);

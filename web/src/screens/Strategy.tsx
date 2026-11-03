@@ -97,7 +97,7 @@ function Campaigns({ refreshKey }: { refreshKey: number }) {
         <Table
           head={['Campaign', 'Dates', 'Series', 'Status', 'Posts']}
           rows={list.map((c: CampaignProgress) => [
-            <span key={c.key}><strong>{c.name}</strong>{c.category ? <><br /><span className="sa-note">{c.category}{c.priority ? ` · ${c.priority} priority` : ''}</span></> : null}</span>,
+            <span key={c.key}><strong>{c.name}</strong>{c.category || c.objective || c.priority ? <><br /><span className="sa-note">{[c.category, c.objective, c.priority ? `${c.priority} priority` : null].filter(Boolean).join(' · ')}</span></> : null}</span>,
             c.start_date ? `${fmtDay(c.start_date)}${c.end_date && c.end_date !== c.start_date ? ` – ${fmtDay(c.end_date)}` : ''}` : '—',
             c.series ?? '—',
             STATUS_WORD[c.status] ?? c.status,
@@ -120,6 +120,8 @@ const fmtMonth = (plan: string) => new Date(`${plan}-01T00:00:00Z`).toLocaleStri
 function LoadWorkbook({ onLoaded }: { onLoaded: () => void }) {
   const inputId = useId();
   const [file, setFile] = useState<File | null>(null);
+  const [start, setStart] = useState('');
+  const startId = useId();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportCalendarResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +132,7 @@ function LoadWorkbook({ onLoaded }: { onLoaded: () => void }) {
     setError(null);
     setResult(null);
     try {
-      setResult(await importCalendar(file));
+      setResult(await importCalendar(file, start || null));
       onLoaded();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -142,7 +144,7 @@ function LoadWorkbook({ onLoaded }: { onLoaded: () => void }) {
   return (
     <Card title="Load a month's workbook">
       <div className="sa-note" style={{ marginBottom: 10 }}>
-        The monthly template filled in: sheet <strong>Calendar</strong> with its 18 columns and one row per post, plus <strong>Campaigns</strong>, <strong>Products</strong> and <strong>Slogans</strong> sheets if you have them.
+        A workbook with any of the sheets the app reads: <strong>Calendar</strong> (the 18-column month, or the Day · CampaignID · ProductID · BenefitID · Series · Format · Hook · Caption · CTA · Hashtags · Status layout), <strong>Campaigns</strong>, <strong>Products</strong>, <strong>Benefits</strong> and <strong>Slogans</strong>. Each may come in its own workbook.
         The month of the first date names the plan, and a new month lands beside the running one. Loading a month again updates what changed; a day that has started, and any field you edited, is left alone.
       </div>
       <div className="sa-upload-row" style={{ marginBottom: 12 }}>
@@ -151,15 +153,24 @@ function LoadWorkbook({ onLoaded }: { onLoaded: () => void }) {
         {file ? <span className="sa-muted">{file.name}</span> : null}
         <Button variant="primary" disabled={busy || !file} onClick={() => void load()}>{busy ? 'Loading…' : 'Load it'}</Button>
       </div>
+      <div className="sa-upload-row" style={{ marginBottom: 12 }}>
+        <label className="sa-eyebrow" htmlFor={startId}>First day</label>
+        <input id={startId} className="sa-input" type="date" value={start} disabled={busy} onChange={(e) => setStart(e.target.value)} style={{ width: 'auto' }} />
+        <span className="sa-note">Only for a Calendar laid out by Day number without dates: the date Day 1 posts on.</span>
+      </div>
       {result ? (
         <div className="sa-result" role="status" style={{ marginBottom: 12 }}>
           <div>
-            <strong>{fmtMonth(result.plan)}</strong>: {result.rows} row{result.rows === 1 ? '' : 's'} read ({result.from} – {result.to}); {result.inserted} day{result.inserted === 1 ? '' : 's'} added, {result.updated} updated
-            {result.kept.length ? `, ${result.kept.length} left as they were (started): Day ${result.kept.join(', ')}` : ''}
-            {result.protectedFields.length ? `; ${result.protectedFields.length} edited field${result.protectedFields.length === 1 ? '' : 's'} kept` : ''}.
-            {' '}{result.campaigns ? `${result.campaigns} campaign${result.campaigns === 1 ? '' : 's'}` : ''}{result.campaigns && result.products ? ' and ' : ''}{result.products ? `${result.products} product${result.products === 1 ? '' : 's'}` : ''}{result.campaigns || result.products ? ' loaded. ' : ''}
+            {result.plan ? (
+              <>
+                <strong>{fmtMonth(result.plan)}</strong>: {result.rows} row{result.rows === 1 ? '' : 's'} read ({result.from} – {result.to}); {result.inserted} day{result.inserted === 1 ? '' : 's'} added, {result.updated} updated
+                {result.kept.length ? `, ${result.kept.length} left as they were (started): Day ${result.kept.join(', ')}` : ''}
+                {result.protectedFields.length ? `; ${result.protectedFields.length} edited field${result.protectedFields.length === 1 ? '' : 's'} kept` : ''}.{' '}
+              </>
+            ) : <>No Calendar sheet in this workbook, so no days changed. </>}
+            {[result.campaigns ? `${result.campaigns} campaign${result.campaigns === 1 ? '' : 's'}` : null, result.products ? `${result.products} product${result.products === 1 ? '' : 's'}` : null, result.benefits ? `${result.benefits} benefit${result.benefits === 1 ? '' : 's'}` : null].filter(Boolean).join(', ')}{result.campaigns || result.products || result.benefits ? ' loaded. ' : ''}
             {result.slogans.loaded ? `${result.slogans.loaded} slogan${result.slogans.loaded === 1 ? '' : 's'} for ${result.slogans.items} item${result.slogans.items === 1 ? '' : 's'} joined the wording bank.` : 'No Slogans sheet.'}
-            {' '}<Link to={`/month?plan=${encodeURIComponent(result.plan)}`}>See {fmtMonth(result.plan)}</Link>
+            {result.plan ? <>{' '}<Link to={`/month?plan=${encodeURIComponent(result.plan)}`}>See {fmtMonth(result.plan)}</Link></> : null}
           </div>
           {result.placeholders.length ? (
             <div style={{ marginTop: 8 }}>

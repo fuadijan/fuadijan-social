@@ -198,6 +198,19 @@
     "Read reviews: new themes, new complaints, fixes to announce.",
     "Set next month: theme weeks, one event, one creator or community collaboration, posting quotas."
   ],
+  "customerBenefits": {
+    "never": ["renovations", "construction", "builders", "equipment purchases", "new furniture"],
+    "translate": [
+      { "change": "Air conditioning", "message": "More comfortable dining" },
+      { "change": "Refurbishment", "message": "Better dining environment" },
+      { "change": "Charcoal BBQ", "message": "Better flavour and cooking" },
+      { "change": "Seafood expansion", "message": "More choice" },
+      { "change": "Juice bar", "message": "More ways to enjoy Fuadijan" },
+      { "change": "Desserts", "message": "A better finish to every meal" },
+      { "change": "Parking", "message": "Easier visits" },
+      { "change": "QR ordering", "message": "Simpler ordering experience" }
+    ]
+  },
   "plan": {
     "from": "2026-11-02",
     "to": "2026-12-01",

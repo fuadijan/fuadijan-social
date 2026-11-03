@@ -31,6 +31,7 @@ function viewJson(v: RowView, extra: Record<string, unknown> = {}) {
     id: r.id, dayNo: r.day_no, date: r.date, slot: r.slot, type: r.type, dish: r.dish, theme: r.theme, status: r.status,
     template: r.template, postTime: r.post_time, title: rowTitle(r), series: seriesLabel(r),
     campaign: v.campaign ? { key: v.campaign.key, name: v.campaign.name, status: v.campaign.status } : null,
+    benefit: r.benefit,
     needs: v.needs.words, needsPhoto: v.needs.photo, needsClips: v.needs.clips, needsDish: v.needs.dish, confirmations: v.needs.confirmations,
     received: v.received, openQuestions: v.openQuestions, suggestion: v.suggestion, placeholders: v.placeholders,
     shotList: shotList(r.creative_instructions),
@@ -300,17 +301,22 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
   app.post('/api/calendar/import', async (req, reply) => {
     if (!req.isMultipart()) return reply.code(400).send({ ok: false, error: 'multipart/form-data expected' });
     let file: { bytes: Buffer; filename: string } | null = null;
+    let start: string | null = null;
     for await (const part of req.parts()) {
       if (part.type === 'file') {
         const bytes = await part.toBuffer();
         if (bytes.length && !file) file = { bytes, filename: part.filename };
+      } else if (part.fieldname === 'start') {
+        const s = String(part.value ?? '').trim();
+        if (s && !/^\d{4}-\d{2}-\d{2}$/.test(s)) return reply.code(400).send({ ok: false, error: 'The first day must be a date (YYYY-MM-DD).' });
+        start = s || null;
       }
     }
     if (!file) return reply.code(400).send({ ok: false, error: 'No workbook was sent.' });
     const { loadWorkbook } = await import('../../calendar/seed.js');
     try {
-      const { sheetRows: _rows, readMe: _readMe, ...result } = await loadWorkbook(ctx.pool, file.bytes, { keepStarted: true });
-      ctx.log.info('Workbook loaded from the web app.', { file: file.filename, plan: result.plan, inserted: result.inserted, updated: result.updated, campaigns: result.campaigns, products: result.products, slogans: result.slogans.loaded });
+      const { sheetRows: _rows, readMe: _readMe, ...result } = await loadWorkbook(ctx.pool, file.bytes, { keepStarted: true, start });
+      ctx.log.info('Workbook loaded from the web app.', { file: file.filename, plan: result.plan, inserted: result.inserted, updated: result.updated, campaigns: result.campaigns, products: result.products, benefits: result.benefits, slogans: result.slogans.loaded });
       return { ok: true, ...result };
     } catch (e) {
       return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });

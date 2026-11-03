@@ -39,6 +39,8 @@ export interface DayView {
   series: string; // "FROM THE FIRE" …
   /** The campaign the post belongs to, when the workbook named one. */
   campaign: { key: string; name: string; status: CampaignStatus } | null;
+  /** A customer benefit the post is about, beside or instead of a dish. */
+  benefit: string | null;
   needs: string; // plain words
   needsPhoto: boolean;
   needsClips: boolean;
@@ -293,10 +295,10 @@ export interface Strategy {
   };
 }
 
-export interface SeedPlanResponse { ok: true; plan: string; inserted: number; updated: number; protectedFields: { day_no: number; field: string }[]; kept: number[] }
+export interface SeedPlanResponse { ok: true; plan: string | null; inserted: number; updated: number; protectedFields: { day_no: number; field: string }[]; kept: number[] }
 
 /** A month's workbook loaded from the browser: the seed's result plus what was read. */
-export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string; to: string; campaigns: number; products: number; slogans: { loaded: number; items: number }; placeholders: string[] }
+export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string | null; to: string | null; campaigns: number; products: number; benefits: number; slogans: { loaded: number; items: number }; placeholders: string[] }
 
 export type CampaignStatus = 'planned' | 'active' | 'done';
 
@@ -306,6 +308,7 @@ export interface CampaignProgress {
   key: string;
   name: string;
   category: string | null;
+  objective: string | null;
   series: string | null;
   template: string | null;
   start_date: string | null;

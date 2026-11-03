@@ -16,6 +16,8 @@ export interface Campaign {
   key: string;
   name: string;
   category: string | null;
+  /** What the campaign is for, in the owner's words ("Food quality perception"). */
+  objective: string | null;
   series: string | null;
   template: string | null;
   start_date: IsoDate | null;
@@ -35,12 +37,13 @@ export interface CampaignProgress extends Campaign {
 /** The sheet's CampaignID as the table keys it: trimmed, lower-cased ("CAMP001" → "camp001"). */
 export const campaignKey = (id: string) => id.trim().toLowerCase().replace(/\s+/g, ' ');
 
-const COLS = "id, key, name, category, series, template, to_char(start_date, 'YYYY-MM-DD') as start_date, to_char(end_date, 'YYYY-MM-DD') as end_date, status, priority";
+const COLS = "id, key, name, category, objective, series, template, to_char(start_date, 'YYYY-MM-DD') as start_date, to_char(end_date, 'YYYY-MM-DD') as end_date, status, priority";
 
 export interface CampaignInput {
   key: string;
   name: string;
   category?: string | null;
+  objective?: string | null;
   series?: string | null;
   template?: string | null;
   start_date?: IsoDate | null;
@@ -52,12 +55,12 @@ export interface CampaignInput {
 /** Insert or update by key: the sheet is the owner's record of a campaign, so what it says wins. */
 export async function upsertCampaign(db: Db, c: CampaignInput): Promise<Campaign> {
   const { rows } = await db.query<Campaign>(
-    `insert into campaigns (key, name, category, series, template, start_date, end_date, status, priority)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     on conflict (key) do update set name = excluded.name, category = excluded.category, series = excluded.series, template = excluded.template,
+    `insert into campaigns (key, name, category, objective, series, template, start_date, end_date, status, priority)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     on conflict (key) do update set name = excluded.name, category = excluded.category, objective = excluded.objective, series = excluded.series, template = excluded.template,
        start_date = excluded.start_date, end_date = excluded.end_date, status = excluded.status, priority = excluded.priority, updated_at = now()
      returning ${COLS}`,
-    [campaignKey(c.key), c.name.trim(), c.category ?? null, c.series ?? null, c.template ?? null, c.start_date ?? null, c.end_date ?? null, c.status ?? 'planned', c.priority ?? null]);
+    [campaignKey(c.key), c.name.trim(), c.category ?? null, c.objective ?? null, c.series ?? null, c.template ?? null, c.start_date ?? null, c.end_date ?? null, c.status ?? 'planned', c.priority ?? null]);
   return rows[0]!;
 }
 

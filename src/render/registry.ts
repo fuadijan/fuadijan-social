@@ -27,9 +27,11 @@ const REGISTRY: Record<string, Entry> = {
   'save-room': { key: 'hero-photo', footer: 'address', label: 'SAVE ROOM' },
   'fresh-pour': { key: 'hero-photo', footer: 'brand', label: 'FRESH POUR' },
   'from-the-charcoal-sea': { key: 'hero-photo', footer: 'brand', label: 'FROM THE CHARCOAL SEA' },
+  'what-we-ate-today': { key: 'hero-photo', footer: 'brand', label: 'WHAT WE ATE TODAY' },
+  'for-our-customers': { key: 'hero-photo', footer: 'address', label: 'FOR OUR CUSTOMERS' },
   'new-product-reveal': { key: 'hero-photo', footer: 'brand', label: 'FROM THE FIRE', style: 'invite' },
   'customer-review': { key: 'review', footer: 'address', label: 'CUSTOMER LOVE' },
-  'you-said-it': { key: 'review', footer: 'address', label: 'CUSTOMER LOVE' },
+  'you-said-it': { key: 'review', footer: 'address', label: 'YOU SAID IT' },
   'chapli-education': { key: 'carousel', footer: 'brand', label: 'FROM THE FIRE' },
   'audience-poll': { key: 'carousel', footer: 'brand', label: 'MODERN FUADIJAN' },
   'brand-intro': { key: 'text-only', footer: 'brand', label: 'THIS IS FUADIJAN' },
@@ -93,7 +95,13 @@ export function templateForSeries(ref: string): string | null {
   const k = ref.trim().toLowerCase().replace(/\s+/g, '-');
   if (REGISTRY[k]) return k;
   const label = ref.trim().toUpperCase().replace(/[\s_-]+/g, ' ');
-  return heroTemplates().find((t) => t.label === label)?.template ?? null;
+  // A photo series first (the one a design starts from), then any other template with that label (YOU SAID IT is a review).
+  return heroTemplates().find((t) => t.label === label)?.template ?? Object.entries(REGISTRY).find(([, e]) => e.label === label)?.[0] ?? null;
+}
+
+/** The series label of a template the registry knows, else null. */
+export function seriesOfTemplate(template: string): string | null {
+  return REGISTRY[template]?.label ?? null;
 }
 
 /** Boot check: every template value in the table has a mapping. */

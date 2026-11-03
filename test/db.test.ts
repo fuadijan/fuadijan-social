@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -261,6 +261,42 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(again).toMatchObject({ inserted: 0, updated: 1, kept: [1] });
     expect((await findCampaign(pool, 'CAMP001'))!.status).toBe('done');
     expect((await rowByDay(pool, 3, '2027-01'))!.campaign_id).toBe((await findCampaign(pool, 'Juice Bar Launch'))!.id);
+  });
+
+  it('loads the planning documents as they come: campaigns alone, benefits alone, then a Day-numbered calendar with a first day', async () => {
+    const { loadWorkbook } = await import('../calendar/seed.js');
+    const { writeWorkbook } = await import('../calendar/xlsx-write.js');
+    const { findCampaign } = await import('../src/campaigns.js');
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'fj-docs-'));
+    // Document 2: campaigns with an objective, no dates yet.
+    const camp = join(dir, 'campaigns.xlsx');
+    await writeWorkbook(camp, [{ name: 'Campaigns', rows: [['CampaignID', 'CampaignName', 'Objective'], ['CAMP101', 'Better Food Initiative', 'Food quality perception'], ['CAMP102', 'Better Experience Initiative', 'Customer experience']] }]);
+    expect(await loadWorkbook(pool, camp, { keepStarted: true })).toMatchObject({ plan: null, rows: 0, inserted: 0, campaigns: 2, products: 0, benefits: 0 });
+    expect((await findCampaign(pool, 'CAMP102'))!.objective).toBe('Customer experience');
+    // Document 3: benefits (and a product) in their own workbook.
+    const ben = join(dir, 'benefits.xlsx');
+    await writeWorkbook(ben, [
+      { name: 'Products', rows: [['ProductID', 'ProductName', 'Category', 'Status', 'Series'], ['P101', 'Mixed BBQ Plate', 'BBQ', 'Active', 'FROM THE FIRE']] },
+      { name: 'Customer Benefits', rows: [['BenefitID', 'Benefit'], ['BEN001', 'Plenty of Parking Available'], ['BEN002', 'Fully Air Conditioned Dining']] },
+    ]);
+    expect(await loadWorkbook(pool, ben, { keepStarted: true })).toMatchObject({ plan: null, campaigns: 0, products: 1, benefits: 2 });
+    // Document 4: the operational calendar by Day number, loaded with the date of Day 1.
+    const cal = join(dir, 'calendar.xlsx');
+    const head = ['Day', 'CampaignID', 'ProductID', 'BenefitID', 'Series', 'Format', 'Hook', 'Caption', 'CTA', 'Hashtags', 'Status'];
+    await writeWorkbook(cal, [{ name: 'Calendar', rows: [head, [1, 'CAMP101', 'P101', null, 'FROM THE FIRE', 'Reel', 'Still hungry?', null, null, null, null], [2, 'CAMP102', null, 'BEN001', 'FOR OUR CUSTOMERS', 'Carousel', 'Easy parking makes a difference', null, null, null, null]] }]);
+    await expect(loadWorkbook(pool, cal, { keepStarted: true })).rejects.toThrow(/no Date column/);
+    const res = await loadWorkbook(pool, cal, { keepStarted: true, start: '2027-03-01' });
+    expect(res).toMatchObject({ plan: '2027-03', inserted: 2, from: '2027-03-01', to: '2027-03-02' });
+    const d1 = (await rowByDay(pool, 1, '2027-03'))!;
+    const d2 = (await rowByDay(pool, 2, '2027-03'))!;
+    expect([d1.dish, d1.theme, d1.template, d1.slot, d1.campaign_id]).toEqual(['Mixed BBQ Plate', 'Still hungry?', 'from-the-fire', 'reel', (await findCampaign(pool, 'CAMP101'))!.id]);
+    expect([d2.dish, d2.benefit, d2.template, d2.slot, d2.type]).toEqual([null, 'Plenty of Parking Available', 'for-our-customers', 'carousel', 'benefit']);
+    // A workbook with nothing the app reads is refused.
+    const none = join(dir, 'none.xlsx');
+    await writeWorkbook(none, [{ name: 'Notes', rows: [['hello']] }]);
+    await expect(loadWorkbook(pool, none)).rejects.toThrow(/none of the sheets the app reads/);
   });
 
   it("makes a custom post from the Create flow: an adopted photo, the owner's wording, a locked style, feed only", async () => {

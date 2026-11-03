@@ -11,7 +11,7 @@ export const CALENDAR_COLUMNS = [
 ] as const;
 export type CalendarColumn = (typeof CALENDAR_COLUMNS)[number];
 /** Columns a workbook may add after the 18, in any order: `campaign` names the row's campaign (its CampaignID or name). */
-export const OPTIONAL_COLUMNS = ['campaign'] as const;
+export const OPTIONAL_COLUMNS = ['campaign', 'benefit'] as const;
 export type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number];
 
 export const SheetRow = z.object({
@@ -35,8 +35,24 @@ export const SheetRow = z.object({
   story_ideas: z.string().nullable(),
   confirmation_notes: z.string().nullable(),
   campaign: z.string().nullable(),
+  benefit: z.string().nullable(),
 });
 export type SheetRow = z.infer<typeof SheetRow>;
+
+/** Header names compared without case, spaces or punctuation: "Campaign Name", "CampaignName" and "campaign_name" are one column. */
+export const headerKey = (s: unknown): string => String(s ?? '').toLowerCase().replace(/[^a-z0-9#]+/g, '');
+
+/** A lookup over a header row: `col('CampaignID', 'Campaign')` is the index of the first of those names present, or -1. */
+export function headerIndex(header: unknown[]): (...names: string[]) => number {
+  const keys = header.map(headerKey);
+  return (...names) => {
+    for (const n of names) {
+      const i = keys.indexOf(headerKey(n));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+}
 
 /** A cell as exceljs gives it: string, number, Date, rich text, or empty. */
 export function cellText(v: unknown): string | null {
@@ -115,6 +131,7 @@ export function cleanRow(raw: Record<CalendarColumn, unknown> & Partial<Record<O
     story_ideas: stripPastedHeading(cellText(raw.story_ideas)),
     confirmation_notes: null as string | null,
     campaign: cellText(raw.campaign),
+    benefit: cellText(raw.benefit),
   };
   row.confirmation_notes = dedupeNotes(cellText(raw.confirmation_notes), row.creative_instructions);
   return SheetRow.parse(row);

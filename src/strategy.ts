@@ -38,6 +38,8 @@ export const StrategySchema = z.object({
   reelIdeas: z.array(z.object({ concept: z.string(), hook: z.string(), shots: z.string(), length: z.string() })),
   visual: z.object({ palette: z.string(), rules: z.array(z.string()) }),
   kpis: z.array(z.object({ layer: z.string(), metric: z.string(), where: z.string(), target: z.string() })),
+  /** Improvements are told as what the customer gets: the topics never written about, and the translation for each. */
+  customerBenefits: z.object({ never: z.array(z.string()), translate: z.array(z.object({ change: z.string(), message: z.string() })) }).optional(),
   monthlyLoop: z.array(z.string()),
   plan: z.object({
     from: z.string(),
@@ -161,6 +163,7 @@ export function copyBrief(s: Strategy, row: { date: string; dish: string | null;
     events.length ? `Running now: ${events.map((e) => `${e.name}${e.approximate ? ' (dates approximate — confirm with the mosque before naming a day)' : ''}`).join('; ')}.` : '',
     `Hashtag sets to draw 3–5 from (the row's own hashtags come first when it has them):\n${list(sets.map((x) => `${x.key}: ${x.tags.join(' ')}`))}`,
     `Caption patterns (shape, not text): ${Object.entries(s.captionTemplates).map(([k, v]) => `${k} → ${v}`).join(' | ')}`,
+    s.customerBenefits ? `Improvements are always told as what the customer gets. Never write about: ${s.customerBenefits.never.join(', ')}. Say instead:\n${list(s.customerBenefits.translate.map((t) => `${t.change} → ${t.message}`))}` : '',
   ].filter(Boolean).join('\n');
 }
 

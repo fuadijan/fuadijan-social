@@ -4,6 +4,7 @@
  */
 import type { Db } from '../db/pool.js';
 import { addDays, sydneyDate, type IsoDate } from '../time.js';
+import { seriesOfTemplate } from '../render/registry.js';
 
 export type Slot = 'feed' | 'carousel' | 'reel';
 export type Status = 'planned' | 'photo-needed' | 'ready' | 'posted';
@@ -50,6 +51,8 @@ export interface CalendarRow {
   custom: CustomSpec | null;
   /** The campaign this post belongs to (campaigns table), or null; several campaigns can run at once. */
   campaign_id: number | null;
+  /** A customer benefit the post is about (resolved from the Benefits sheet), beside or instead of a dish. */
+  benefit: string | null;
   posted_at: Date | null;
   updated_at: Date;
 }
@@ -58,7 +61,7 @@ export interface CalendarRow {
 export const EDITABLE_FIELDS = ['dish', 'caption', 'cta', 'hashtags', 'story_ideas', 'post_time', 'on_screen_text', 'creative_instructions', 'theme', 'objective', 'confirmation_notes'] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
-const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, posted_at, updated_at';
+const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, posted_at, updated_at';
 
 /** Every plan with its first and last date, oldest first. */
 export async function plans(db: Db): Promise<{ plan: string; first: IsoDate; last: IsoDate; rows: number }[]> {
@@ -172,6 +175,9 @@ export function placeholders(row: Pick<CalendarRow, 'dish' | 'caption' | 'cta' |
 
 /** The series label the row belongs to, from its theme/template; falls back to the brand line. */
 export function seriesLabel(row: Pick<CalendarRow, 'template' | 'theme' | 'type'>): string {
+  // The template names its series; the words below only guess for a template the registry does not know.
+  const known = seriesOfTemplate(row.template);
+  if (known) return known;
   const t = `${row.template} ${row.theme ?? ''} ${row.type}`.toLowerCase();
   if (/barramundi|prawn|shrimp|seafood|charcoal-sea|charcoal sea|calamari|\bfish\b/.test(t)) return 'FROM THE CHARCOAL SEA';
   if (t.includes('karahi')) return 'FROM THE KARAHI';

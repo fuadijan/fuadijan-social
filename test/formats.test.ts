@@ -8,7 +8,7 @@ const row = (over: Partial<CalendarRow> = {}): CalendarRow => ({
   id: 4, plan: '2026-11', day_no: 4, date: '2026-11-06', slot: 'reel', type: 'hero-dish', dish: 'Chicken Karahi', theme: 'From the Karahi', caption_hint: null, post_time: null,
   template: 'from-the-karahi', status: 'planned', asset: null, objective: null,
   creative_instructions: 'Reel shot list: 1) Fresh ingredients ready; 2) karahi warming; 3) ingredients added; 4) finished karahi.',
-  on_screen_text: null, caption: 'Pair it with [confirm available bread/rice options].', cta: null, hashtags: null, story_ideas: null, confirmation_notes: null, custom: null, campaign_id: null, posted_at: null, updated_at: new Date(), ...over,
+  on_screen_text: null, caption: 'Pair it with [confirm available bread/rice options].', cta: null, hashtags: null, story_ideas: null, confirmation_notes: null, custom: null, campaign_id: null, benefit: null, posted_at: null, updated_at: new Date(), ...over,
 });
 
 describe('needs and the brief', () => {
@@ -39,7 +39,9 @@ describe('row helpers', () => {
     expect(seriesLabel(row())).toBe('FROM THE KARAHI');
     expect(seriesLabel(row({ template: 'fresh-pour', theme: null }))).toBe('FRESH POUR');
     expect(seriesLabel(row({ template: 'save-room', theme: 'Save room' }))).toBe('SAVE ROOM');
-    expect(seriesLabel(row({ template: 'from-the-fire', theme: 'Chai after the karahi' }))).toBe('FROM THE KARAHI');
+    // The template names the series; the words only guess for a template the registry does not know.
+    expect(seriesLabel(row({ template: 'from-the-fire', theme: 'Chai after the karahi' }))).toBe('FROM THE FIRE');
+    expect(seriesLabel(row({ template: 'legacy', theme: 'Chai after the karahi' }))).toBe('FROM THE KARAHI');
     expect(daySlug(row())).toBe('chicken-karahi');
     expect(daySlug(row({ dish: '[Confirm dessert]', theme: 'Save room — confirm dessert' }))).toBe('save-room-confirm-dessert');
     expect(rowTitle(row())).toBe('Day 4 — Chicken Karahi');

@@ -19,6 +19,8 @@ import { z } from 'zod';
 import { CALENDAR_COLUMNS, OPTIONAL_COLUMNS, cleanRow, type CalendarColumn, type OptionalColumn, type SheetRow } from './calendar.schema.js';
 import { findCampaign } from '../src/campaigns.js';
 import { findProduct } from '../src/products.js';
+import { findBenefit } from '../src/benefits.js';
+import { campaignLayoutRows, isCampaignLayout } from './layouts.js';
 import { readSheetRows, type WorkbookSource } from './xlsx.js';
 
 export const WORKBOOK_PATH = 'calendar/Fuadijan-Posts-Calendar.xlsx';
@@ -28,10 +30,34 @@ export interface Workbook {
   readMe: string[];
 }
 
-export async function readWorkbook(path: WorkbookSource = WORKBOOK_PATH): Promise<Workbook> {
+export interface ReadOptions {
+  /** The date of Day 1 for a campaign-layout sheet that has no Date column. */
+  start?: string | null;
+}
+
+/** Says which row is wrong in the sheet's own terms (its row number and day), not zod's. */
+function rowError(e: unknown, sheetRow: number, day: number): Error {
+  const issues = e instanceof z.ZodError ? e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') : (e instanceof Error ? e.message : String(e));
+  return new Error(`Calendar row ${sheetRow} (Day ${day}): ${issues}`);
+}
+
+export async function readWorkbook(path: WorkbookSource = WORKBOOK_PATH, opts: ReadOptions = {}): Promise<Workbook> {
   const sheet = await readSheetRows(path, 'Calendar');
   const header = (sheet[0] ?? []).map((v) => String(v ?? '').trim());
   const expected = [...CALENDAR_COLUMNS];
+  if (isCampaignLayout(header)) {
+    // The campaign layout (Day | CampaignID | ProductID | BenefitID | Series | Format | Hook | Caption | CTA | Hashtags | Status).
+    const rows: SheetRow[] = [];
+    for (const raw of campaignLayoutRows(sheet, { start: opts.start })) {
+      try {
+        rows.push(cleanRow(raw as Parameters<typeof cleanRow>[0], raw.day as number));
+      } catch (e) {
+        throw rowError(e, rows.length + 2, raw.day as number);
+      }
+    }
+    if (!rows.length) throw new Error('The Calendar sheet has no rows under the header.');
+    return { rows, readMe: await readMeOf(path) };
+  }
   if (header.length < expected.length || expected.some((h, i) => h !== header[i])) {
     throw new Error(`Calendar header is not the 18 expected columns.
   got:      ${header.join(', ')}
@@ -52,12 +78,14 @@ export async function readWorkbook(path: WorkbookSource = WORKBOOK_PATH): Promis
     try {
       rows.push(cleanRow(raw, rows.length + 1));
     } catch (e) {
-      // Say which row is wrong in the sheet's own terms (its row number), not zod's.
-      const issues = e instanceof z.ZodError ? e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') : (e instanceof Error ? e.message : String(e));
-      throw new Error(`Calendar row ${rows.length + 2} (Day ${rows.length + 1}): ${issues}`);
+      throw rowError(e, rows.length + 2, rows.length + 1);
     }
   }
   if (!rows.length) throw new Error('The Calendar sheet has no rows under the header.');
+  return { rows, readMe: await readMeOf(path) };
+}
+
+async function readMeOf(path: WorkbookSource): Promise<string[]> {
   const readMe: string[] = [];
   try {
     for (const row of await readSheetRows(path, 'Read Me')) {
@@ -67,11 +95,23 @@ export async function readWorkbook(path: WorkbookSource = WORKBOOK_PATH): Promis
   } catch {
     // No Read Me sheet: nothing to print.
   }
-  return { rows, readMe };
+  return readMe;
+}
+
+/** True when the workbook has a Calendar sheet at all (a workbook of campaigns, products or benefits alone has none). */
+export async function hasCalendarSheet(path: WorkbookSource): Promise<boolean> {
+  try {
+    await readSheetRows(path, 'Calendar');
+    return true;
+  } catch (e) {
+    if (e instanceof Error && /not found/.test(e.message)) return false;
+    throw e;
+  }
 }
 
 export interface SeedResult {
-  plan: string;
+  /** The month the rows went to; null when the workbook had no Calendar sheet. */
+  plan: string | null;
   inserted: number;
   updated: number;
   protectedFields: { day_no: number; field: string }[];
@@ -103,7 +143,7 @@ export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: s
     for (const r of rows) {
       const date = offset ? addDays(r.date, offset) : r.date;
       const existing = (await c.query<Record<string, unknown> & { id: number }>(
-        "select id, to_char(date, 'YYYY-MM-DD') as date, slot, type, dish, theme, caption_hint, to_char(post_time, 'HH24:MI') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, campaign_id from calendar_rows where plan = $1 and day_no = $2",
+        "select id, to_char(date, 'YYYY-MM-DD') as date, slot, type, dish, theme, caption_hint, to_char(post_time, 'HH24:MI') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, campaign_id, benefit from calendar_rows where plan = $1 and day_no = $2",
         [plan, r.day_no])).rows[0];
       // The campaign column names a campaign by id or name; the dish may be a ProductID (P004) from the Products sheet.
       let campaignId: number | null = null;
@@ -118,14 +158,21 @@ export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: s
         if (!product) throw new Error(`Day ${r.day_no}: dish "${dish}" looks like a ProductID but is not on the Products sheet or in the app.`);
         dish = product.name;
       }
-      const values: Record<string, string | number | null> = { ...r, date, dish, campaign_id: campaignId, day_no: undefined as unknown as string, campaign: undefined as unknown as string };
+      // A benefit by id (BEN001) becomes its words; words are kept as written.
+      let benefit = r.benefit;
+      if (benefit && /^[a-z]+\d+$/i.test(benefit.trim())) {
+        const known = await findBenefit(c, benefit.trim());
+        if (!known) throw new Error(`Day ${r.day_no}: benefit "${benefit}" looks like a BenefitID but is not on the Benefits sheet or in the app.`);
+        benefit = known.benefit;
+      }
+      const values: Record<string, string | number | null> = { ...r, date, dish, benefit, campaign_id: campaignId, day_no: undefined as unknown as string, campaign: undefined as unknown as string };
       delete (values as Record<string, unknown>).day_no;
       delete (values as Record<string, unknown>).campaign;
       if (!existing) {
         await c.query(
-          `insert into calendar_rows (plan, day_no, date, slot, type, dish, theme, caption_hint, post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, campaign_id)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
-          [plan, r.day_no, date, r.slot, r.type, dish, r.theme, r.caption_hint, r.post_time, r.template, r.status, r.asset, r.objective, r.creative_instructions, r.on_screen_text, r.caption, r.cta, r.hashtags, r.story_ideas, r.confirmation_notes, campaignId]);
+          `insert into calendar_rows (plan, day_no, date, slot, type, dish, theme, caption_hint, post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, campaign_id, benefit)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+          [plan, r.day_no, date, r.slot, r.type, dish, r.theme, r.caption_hint, r.post_time, r.template, r.status, r.asset, r.objective, r.creative_instructions, r.on_screen_text, r.caption, r.cta, r.hashtags, r.story_ideas, r.confirmation_notes, campaignId, benefit]);
         result.inserted++;
         continue;
       }
@@ -164,27 +211,36 @@ async function campaignsTableExists(pool: pg.Pool): Promise<boolean> {
  * Everything a month's workbook carries, loaded in the order the rows need: campaigns and products first (a row
  * may name them), then the rows, then the slogans. Shared by the command line and the web app's import.
  */
-export async function loadWorkbook(pool: pg.Pool, source: WorkbookSource, opts: SeedOptions & { calendarStart?: string } = {}): Promise<WorkbookLoad> {
-  const { rows, readMe } = await readWorkbook(source);
+export async function loadWorkbook(pool: pg.Pool, source: WorkbookSource, opts: SeedOptions & ReadOptions & { calendarStart?: string } = {}): Promise<WorkbookLoad> {
   const { readCampaignsSheet, seedCampaigns } = await import('./campaigns.js');
   const { readProductsSheet, seedProducts } = await import('./products.js');
+  const { readBenefitsSheet, seedBenefits } = await import('./benefits.js');
   const { readSlogansSheet, seedSlogans } = await import('./slogans.js');
+  // Everything is read and checked before anything is written.
+  const withCalendar = await hasCalendarSheet(source);
+  const { rows, readMe } = withCalendar ? await readWorkbook(source, { start: opts.start }) : { rows: [] as SheetRow[], readMe: await readMeOf(source) };
   const campaigns = await readCampaignsSheet(source);
   const products = await readProductsSheet(source);
+  const benefits = await readBenefitsSheet(source);
   const slogans = await readSlogansSheet(source);
+  if (!withCalendar && !campaigns.length && !products.length && !benefits.length && !slogans.length) {
+    throw new Error('The workbook has none of the sheets the app reads: Calendar, Campaigns, Products, Benefits, Slogans.');
+  }
   await seedCampaigns(pool, campaigns);
   await seedProducts(pool, products);
-  const result = await seedRows(pool, rows, opts.calendarStart ?? rows[0]!.date, opts);
+  await seedBenefits(pool, benefits);
+  const result: SeedResult = rows.length ? await seedRows(pool, rows, opts.calendarStart ?? rows[0]!.date, opts) : { plan: null, inserted: 0, updated: 0, protectedFields: [], kept: [] };
   const loaded = await seedSlogans(pool, slogans);
-  return { ...result, rows: rows.length, from: rows[0]!.date, to: rows[rows.length - 1]!.date, campaigns: campaigns.length, products: products.length, slogans: loaded, placeholders: placeholderReport(rows), readMe, sheetRows: rows };
+  return { ...result, rows: rows.length, from: rows[0]?.date ?? null, to: rows[rows.length - 1]?.date ?? null, campaigns: campaigns.length, products: products.length, benefits: benefits.length, slogans: loaded, placeholders: placeholderReport(rows), readMe, sheetRows: rows };
 }
 
 export interface WorkbookLoad extends SeedResult {
   rows: number;
-  from: string;
-  to: string;
+  from: string | null;
+  to: string | null;
   campaigns: number;
   products: number;
+  benefits: number;
   slogans: { loaded: number; items: number };
   placeholders: string[];
   readMe: string[];
@@ -204,17 +260,19 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   (async () => {
     const fileArg = process.argv.indexOf('--file');
     const path = fileArg >= 0 && process.argv[fileArg + 1] ? process.argv[fileArg + 1]! : WORKBOOK_PATH;
+    const startArg = process.argv.indexOf('--start');
+    const start = startArg >= 0 ? process.argv[startArg + 1] ?? null : null;
     await createDatabaseIfMissing(config.databaseUrl);
     const pool = createPool(config.databaseUrl);
     try {
       await migrate(pool, () => {});
-      const res = await loadWorkbook(pool, path, { calendarStart: config.calendarStart });
+      const res = await loadWorkbook(pool, path, { calendarStart: config.calendarStart, start });
       const rows = res.sheetRows;
       console.log(`Read ${rows.length} rows from ${path}.`);
       console.log('\nRead Me:');
       for (const l of res.readMe) console.log(`  ${l}`);
-      console.log(`\nPlan ${res.plan}: ${res.inserted} inserted, ${res.updated} updated.`);
-      if (res.campaigns || res.products) console.log(`Campaigns: ${res.campaigns}. Products: ${res.products}.`);
+      console.log(res.plan ? `\nPlan ${res.plan}: ${res.inserted} inserted, ${res.updated} updated.` : '\nNo Calendar sheet: no days loaded.');
+      if (res.campaigns || res.products || res.benefits) console.log(`Campaigns: ${res.campaigns}. Products: ${res.products}. Benefits: ${res.benefits}.`);
       const { readSlogans, seedSlogans, SLOGANS_PATH } = await import('./slogans.js');
       const more = await seedSlogans(pool, await readSlogans([...new Set([WORKBOOK_PATH, SLOGANS_PATH].filter((p) => p !== path))]));
       const slogans = { loaded: res.slogans.loaded + more.loaded, items: res.slogans.items + more.items };

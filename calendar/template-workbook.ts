@@ -14,6 +14,7 @@ import { heroTemplates, knownTemplates, templateEntry } from '../src/render/regi
 import { CALENDAR_COLUMNS, OPTIONAL_COLUMNS } from './calendar.schema.js';
 import { CAMPAIGN_COLUMNS } from './campaigns.js';
 import { PRODUCT_COLUMNS } from './products.js';
+import { BENEFIT_COLUMNS } from './benefits.js';
 
 export const TEMPLATE_PATH = 'calendar/Fuadijan-Monthly-Template.xlsx';
 
@@ -74,6 +75,7 @@ export const COLUMN_NOTES: Record<string, string> = {
   story_ideas: 'One story idea per line (Alt+Enter).',
   confirmation_notes: 'Anything the kitchen must confirm before this can go out.',
   campaign: 'Optional. The campaign this post belongs to: its CampaignID (CAMP001) or its name from the Campaigns sheet. Several campaigns can run in the same month; each row names its own.',
+  benefit: 'Optional. A customer benefit the post is about, as its BenefitID (BEN001) from the Benefits sheet or in words; the writer tells it as what the customer gets, never as the work behind it.',
 };
 
 export const READ_ME: string[] = [
@@ -83,6 +85,9 @@ export const READ_ME: string[] = [
   'Loading the same month again updates what changed in the sheet and leaves alone anything you edited from Telegram or the web app (your edits win). A day that already has a photo, or has moved past planned, is left as it is.',
   'Campaigns sheet: every launch, countdown or seasonal push, with its dates, status and series. Several can run at once. A Calendar row joins one through its campaign column (the CampaignID or the name). The same CampaignID is updated, never duplicated.',
   'Products sheet: the whole roster, including what is not on the menu yet (Status: active, coming soon, planned, retired). A product here can be posted about before it reaches the website; its Series says which look it gets. The same product name is updated, never duplicated.',
+  'Benefits sheet: the customer benefits (BenefitID | Benefit), e.g. BEN001 Plenty of parking available. A post about an improvement names one in its benefit column and is written from what the customer gets, never from renovations, builders or equipment.',
+  'The Calendar may instead be laid out as Day | CampaignID | ProductID | BenefitID | Series | Format | Hook | Caption | CTA | Hashtags | Status (a Date column is optional; without one, give the date of Day 1 when loading). Series picks the look, Format the slot (Reel, Carousel, Photo), the Hook becomes the theme the writer reads.',
+  'Each sheet may come in its own workbook: a workbook of Campaigns, Products or Benefits alone loads those and changes no days.',
   'Slogans sheet: your wording bank. Item = the menu item as the menu spells it ("all" = every post). Slogan = the headline, Alt+Enter for a line break. Line and Caption are optional. The same item + slogan is updated, never duplicated, so the bank grows month after month.',
   'Columns sheet explains every calendar column; Templates sheet lists the design templates and series the template, Series and campaign columns accept.',
   'Anything you are not sure of goes in [square brackets]; the agent asks you about it on Telegram before the post is made.',
@@ -103,8 +108,8 @@ export function templateRows(): Cell[][] {
 export function campaignRows(): Cell[][] {
   return [
     header([...CAMPAIGN_COLUMNS]),
-    wrapped(['CAMP001', 'Charcoal Seafood Launch', 'Product launch', 'FROM THE CHARCOAL SEA', '2026-12-01', '2026-12-21', 'planned', 'high']),
-    wrapped(['CAMP002', 'Juice Bar Launch', 'Launch', 'FRESH POUR', '2026-12-08', '2026-12-31', 'planned', 'medium']),
+    wrapped(['CAMP001', 'Charcoal Seafood Launch', 'Product launch', 'Grow seafood sales', 'FROM THE CHARCOAL SEA', '2026-12-01', '2026-12-21', 'planned', 'high']),
+    wrapped(['CAMP002', 'Juice Bar Launch', 'Launch', 'Build the beverage category', 'FRESH POUR', '2026-12-08', '2026-12-31', 'planned', 'medium']),
   ];
 }
 
@@ -115,6 +120,15 @@ export function productRows(): Cell[][] {
     wrapped(['P002', 'BBQ Barramundi', 'Seafood', 'coming soon', 'FROM THE CHARCOAL SEA']),
     wrapped(['P003', 'Mango Lassi', 'Beverage', 'active', 'FRESH POUR']),
     wrapped(['P004', 'Lava Cake', 'Dessert', 'planned', 'SAVE ROOM']),
+  ];
+}
+
+export function benefitRows(): Cell[][] {
+  return [
+    header([...BENEFIT_COLUMNS]),
+    wrapped(['BEN001', 'Plenty of parking available']),
+    wrapped(['BEN002', 'Fully air-conditioned dining']),
+    wrapped(['BEN003', 'Family-friendly dining']),
   ];
 }
 
@@ -151,8 +165,9 @@ export async function buildTemplateWorkbook(path = TEMPLATE_PATH): Promise<{ she
   const types = await read('[Content_Types].xml');
   const sheetNames = [...workbook.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]!);
   const wanted: { name: string; rows: Cell[][]; widths: number[]; validations: string }[] = [
-    { name: 'Campaigns', rows: campaignRows(), widths: [14, 32, 18, 26, 14, 14, 12, 12], validations: `<dataValidations count="2">${listValidation('G2:G200', ['planned', 'active', 'done'])}${listValidation('H2:H200', ['high', 'medium', 'low'])}</dataValidations>` },
+    { name: 'Campaigns', rows: campaignRows(), widths: [14, 32, 18, 30, 26, 14, 14, 12, 12], validations: `<dataValidations count="2">${listValidation('H2:H200', ['planned', 'active', 'done'])}${listValidation('I2:I200', ['high', 'medium', 'low'])}</dataValidations>` },
     { name: 'Products', rows: productRows(), widths: [12, 32, 18, 16, 26], validations: `<dataValidations count="1">${listValidation('D2:D200', ['active', 'coming soon', 'planned', 'retired'])}</dataValidations>` },
+    { name: 'Benefits', rows: benefitRows(), widths: [12, 60], validations: '' },
   ];
   let wb = workbook;
   let rl = rels;

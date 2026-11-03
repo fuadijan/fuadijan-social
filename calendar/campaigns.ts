@@ -1,18 +1,19 @@
 /**
- * The Campaigns sheet of a month's workbook: `CampaignID | Campaign Name | Category | Series | Start Date |
- * End Date | Status | Priority`, one campaign per row. Several campaigns run at once; each calendar row names
+ * The Campaigns sheet of a month's workbook: `CampaignID | Campaign Name | Category | Objective | Series |
+ * Start Date | End Date | Status | Priority`, one campaign per row (only the id and the name are required;
+ * "CampaignName" and "Campaign Name" are the same column). Several campaigns run at once; each calendar row names
  * its own in the `campaign` column (the id or the name). The sheet is read whole and checked before anything is
  * written; the same CampaignID is updated, never duplicated.
  */
 import type pg from 'pg';
 import { CAMPAIGN_STATUSES, campaignKey, upsertCampaign, type CampaignInput, type CampaignStatus } from '../src/campaigns.js';
 import { templateEntry, templateForSeries } from '../src/render/registry.js';
-import { cellDate, cellText } from './calendar.schema.js';
+import { cellDate, cellText, headerIndex } from './calendar.schema.js';
 import { readSheetRows, sourceName, type WorkbookSource } from './xlsx.js';
 
-export const CAMPAIGN_COLUMNS = ['CampaignID', 'Campaign Name', 'Category', 'Series', 'Start Date', 'End Date', 'Status', 'Priority'] as const;
+export const CAMPAIGN_COLUMNS = ['CampaignID', 'Campaign Name', 'Category', 'Objective', 'Series', 'Start Date', 'End Date', 'Status', 'Priority'] as const;
 
-export type CampaignRow = Required<Pick<CampaignInput, 'key' | 'name' | 'category' | 'series' | 'template' | 'start_date' | 'end_date' | 'status' | 'priority'>>;
+export type CampaignRow = Required<Pick<CampaignInput, 'key' | 'name' | 'category' | 'objective' | 'series' | 'template' | 'start_date' | 'end_date' | 'status' | 'priority'>>;
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/[\s_]+/g, ' ');
 
@@ -33,16 +34,15 @@ export async function readCampaignsSheet(source: WorkbookSource, sheetName = 'Ca
     if (e instanceof Error && /not found/.test(e.message)) return [];
     throw e;
   }
-  const header = (rows[0] ?? []).map((v) => norm(cellText(v) ?? ''));
-  const col = (name: string) => header.indexOf(norm(name));
-  const need = ['CampaignID', 'Campaign Name'].filter((n) => col(n) < 0);
+  const col = headerIndex(rows[0] ?? []);
+  const need = [['CampaignID', 'ID'], ['Campaign Name', 'Name', 'Campaign']].filter((names) => col(...names) < 0).map((n) => n[0]!);
   if (need.length) throw new Error(`${sourceName(source)} sheet "${sheetName}": the header needs the columns ${CAMPAIGN_COLUMNS.join(' | ')}; missing ${need.join(', ')}.`);
-  const at = (r: unknown[], name: string) => (col(name) >= 0 ? cellText(r[col(name)]) : null);
+  const at = (r: unknown[], ...names: string[]) => (col(...names) >= 0 ? cellText(r[col(...names)]) : null);
   const out: CampaignRow[] = [];
   const seen = new Set<string>();
   rows.slice(1).forEach((r, i) => {
-    const key = at(r, 'CampaignID');
-    const name = at(r, 'Campaign Name');
+    const key = at(r, 'CampaignID', 'ID');
+    const name = at(r, 'Campaign Name', 'Name', 'Campaign');
     if (!key && !name) return;
     const where = `${sheetName} row ${i + 2}`;
     if (!key || !name) throw new Error(`${where}: a campaign needs both a CampaignID and a Campaign Name.`);
@@ -70,7 +70,7 @@ export async function readCampaignsSheet(source: WorkbookSource, sheetName = 'Ca
     const priority = at(r, 'Priority');
     const p = priority ? norm(priority) : null;
     if (p && !['high', 'medium', 'low'].includes(p)) throw new Error(`${where}: Priority "${priority}" is not high, medium or low.`);
-    out.push({ key: key.trim(), name: name.trim(), category: at(r, 'Category'), series: template ? templateEntry(template).label : null, template, start_date: startDate, end_date: endDate, status, priority: p });
+    out.push({ key: key.trim(), name: name.trim(), category: at(r, 'Category'), objective: at(r, 'Objective', 'Goal', 'Purpose'), series: template ? templateEntry(template).label : null, template, start_date: startDate, end_date: endDate, status, priority: p });
   });
   return out;
 }

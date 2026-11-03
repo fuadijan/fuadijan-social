@@ -6,7 +6,7 @@
 import type pg from 'pg';
 import { productStatus, upsertProduct, type ProductInput, type ProductStatus } from '../src/products.js';
 import { templateEntry, templateForSeries } from '../src/render/registry.js';
-import { cellText } from './calendar.schema.js';
+import { cellText, headerIndex } from './calendar.schema.js';
 import { readSheetRows, sourceName, type WorkbookSource } from './xlsx.js';
 
 export const PRODUCT_COLUMNS = ['ProductID', 'Product Name', 'Category', 'Status', 'Series'] as const;
@@ -24,15 +24,14 @@ export async function readProductsSheet(source: WorkbookSource, sheetName = 'Pro
     if (e instanceof Error && /not found/.test(e.message)) return [];
     throw e;
   }
-  const header = (rows[0] ?? []).map((v) => norm(cellText(v) ?? ''));
-  const col = (name: string) => header.indexOf(norm(name));
-  if (col('Product Name') < 0) throw new Error(`${sourceName(source)} sheet "${sheetName}": the header needs the columns ${PRODUCT_COLUMNS.join(' | ')}; missing Product Name.`);
-  const at = (r: unknown[], name: string) => (col(name) >= 0 ? cellText(r[col(name)]) : null);
+  const col = headerIndex(rows[0] ?? []);
+  if (col('Product Name', 'Product', 'Name') < 0) throw new Error(`${sourceName(source)} sheet "${sheetName}": the header needs the columns ${PRODUCT_COLUMNS.join(' | ')}; missing Product Name.`);
+  const at = (r: unknown[], ...names: string[]) => (col(...names) >= 0 ? cellText(r[col(...names)]) : null);
   const out: ProductRow[] = [];
   const seen = new Set<string>();
   rows.slice(1).forEach((r, i) => {
-    const name = at(r, 'Product Name');
-    const key = at(r, 'ProductID');
+    const name = at(r, 'Product Name', 'Product', 'Name');
+    const key = at(r, 'ProductID', 'ID');
     if (!name && !key) return;
     const where = `${sheetName} row ${i + 2}`;
     if (!name) throw new Error(`${where}: a product needs a Product Name.`);

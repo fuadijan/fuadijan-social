@@ -114,8 +114,9 @@ export const getCampaigns = () => apiFetch<CampaignsResponse>('/api/campaigns');
 export const seedStrategyPlan = () => post<SeedPlanResponse>('/api/strategy/seed', {});
 
 /** A month's workbook (the monthly template filled in), loaded the way `npm run seed-calendar -- --file` does. */
-export function importCalendar(file: File): Promise<ImportCalendarResponse> {
+export function importCalendar(file: File, start?: string | null): Promise<ImportCalendarResponse> {
   const form = new FormData();
   form.append('file', file, file.name);
+  if (start) form.append('start', start);
   return apiFetch<ImportCalendarResponse>('/api/calendar/import', { method: 'POST', body: form });
 }
