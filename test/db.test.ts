@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -218,6 +218,49 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect((await between(pool, '2026-12-01', '2026-12-05')).map((r) => `${r.plan}:${r.day_no}`)).toContain('2026-12:1');
     // Re-loading December changes nothing.
     expect(await seedRows(pool, december)).toMatchObject({ plan: '2026-12', inserted: 0, updated: 0 });
+  });
+
+  it('loads campaigns and the roster with a month, links each post to its campaign, and reports progress', async () => {
+    const { loadWorkbook } = await import('../calendar/seed.js');
+    const { writeWorkbook } = await import('../calendar/xlsx-write.js');
+    const { CALENDAR_COLUMNS } = await import('../calendar/calendar.schema.js');
+    const { campaignProgress, findCampaign } = await import('../src/campaigns.js');
+    const { findProduct } = await import('../src/products.js');
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const path = join(mkdtempSync(join(tmpdir(), 'fj-load-')), 'january.xlsx');
+    const row = (date: string, dish: string, campaign: string | null) => [date, 'feed', 'launch', dish, null, null, '18:30', 'from-the-fire', 'planned', ...Array<null>(9).fill(null), campaign];
+    const sheets = (rows: unknown[][]) => [
+      { name: 'Calendar', rows: [[...CALENDAR_COLUMNS, 'campaign'], ...rows] as (string | null)[][] },
+      { name: 'Campaigns', rows: [['CampaignID', 'Campaign Name', 'Category', 'Series', 'Start Date', 'End Date', 'Status', 'Priority'], ['CAMP001', 'Charcoal Seafood Launch', 'Product launch', 'FROM THE CHARCOAL SEA', '2027-01-04', '2027-01-25', 'active', 'high'], ['CAMP002', 'Juice Bar Launch', null, 'FRESH POUR', null, null, 'planned', null]] },
+      { name: 'Products', rows: [['ProductID', 'Product Name', 'Category', 'Status', 'Series'], ['P001', 'BBQ Barramundi', 'Seafood', 'coming soon', 'FROM THE CHARCOAL SEA'], ['P002', 'BBQ Prawns', 'Seafood', 'planned', null]] },
+    ];
+    // A row naming a campaign the workbook does not have: nothing of the month is written.
+    await writeWorkbook(path, sheets([row('2027-01-04', 'P001', 'CAMP001'), row('2027-01-05', 'Chapli Kebab', 'Summer Push')]));
+    await expect(loadWorkbook(pool, path, { keepStarted: true })).rejects.toThrow(/Day 2: campaign "Summer Push"/);
+    expect((await pool.query("select count(*)::int n from calendar_rows where plan = '2027-01'")).rows[0]!.n).toBe(0);
+
+    await writeWorkbook(path, sheets([row('2027-01-04', 'P001', 'CAMP001'), row('2027-01-05', 'Chapli Kebab', 'charcoal seafood launch'), row('2027-01-06', 'Mango Lassi', null)]));
+    const res = await loadWorkbook(pool, path, { keepStarted: true });
+    expect(res).toMatchObject({ plan: '2027-01', inserted: 3, updated: 0, rows: 3, campaigns: 2, products: 2 });
+    const seafood = (await findCampaign(pool, 'CAMP001'))!;
+    expect(seafood).toMatchObject({ name: 'Charcoal Seafood Launch', template: 'from-the-charcoal-sea', start_date: '2027-01-04', status: 'active', priority: 'high' });
+    // The ProductID became the product's name; both rows point at the campaign, by id and by name.
+    const d1 = (await rowByDay(pool, 1, '2027-01'))!;
+    const d2 = (await rowByDay(pool, 2, '2027-01'))!;
+    const d3 = (await rowByDay(pool, 3, '2027-01'))!;
+    expect([d1.dish, d1.campaign_id, d2.campaign_id, d3.campaign_id]).toEqual(['BBQ Barramundi', seafood.id, seafood.id, null]);
+    expect((await findProduct(pool, 'prawns'))).toMatchObject({ key: 'p002', name: 'BBQ Prawns', status: 'planned' });
+    // Progress follows the rows' status; several campaigns are listed side by side.
+    await markPosted(pool, d1, 'owner-telegram');
+    const progress = await campaignProgress(pool);
+    expect(progress.map((c) => `${c.key} ${c.posts}/${c.made}/${c.posted} next ${c.next}`)).toEqual(['camp001 2/1/1 next 2027-01-05', 'camp002 0/0/0 next null']);
+    // Loading again updates in place: a campaign's status moves on, the rows stay.
+    await writeWorkbook(path, sheets([row('2027-01-04', 'P001', 'CAMP001'), row('2027-01-05', 'Chapli Kebab', 'CAMP001'), row('2027-01-06', 'Mango Lassi', 'CAMP002')]).map((s) => (s.name === 'Campaigns' ? { ...s, rows: s.rows.map((r) => (r[0] === 'CAMP001' ? [...r.slice(0, 6), 'done', 'high'] : r)) } : s)));
+    const again = await loadWorkbook(pool, path, { keepStarted: true });
+    expect(again).toMatchObject({ inserted: 0, updated: 1, kept: [1] });
+    expect((await findCampaign(pool, 'CAMP001'))!.status).toBe('done');
+    expect((await rowByDay(pool, 3, '2027-01'))!.campaign_id).toBe((await findCampaign(pool, 'Juice Bar Launch'))!.id);
   });
 
   it("makes a custom post from the Create flow: an adopted photo, the owner's wording, a locked style, feed only", async () => {

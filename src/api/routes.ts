@@ -21,6 +21,8 @@ import { STYLE_KEYS, STYLES } from '../render/styles.js';
 import { allSettings } from '../settings.js';
 import { addSlogan, itemKey, listSlogans, removeSlogan, updateSlogan, type Slogan } from '../slogans.js';
 import { eventsOn, loadStrategy, ritualsOn } from '../strategy.js';
+import { campaignProgress } from '../campaigns.js';
+import { listProducts } from '../products.js';
 import { addDays, sydneyDate } from '../time.js';
 
 function viewJson(v: RowView, extra: Record<string, unknown> = {}) {
@@ -28,6 +30,7 @@ function viewJson(v: RowView, extra: Record<string, unknown> = {}) {
   return {
     id: r.id, dayNo: r.day_no, date: r.date, slot: r.slot, type: r.type, dish: r.dish, theme: r.theme, status: r.status,
     template: r.template, postTime: r.post_time, title: rowTitle(r), series: seriesLabel(r),
+    campaign: v.campaign ? { key: v.campaign.key, name: v.campaign.name, status: v.campaign.status } : null,
     needs: v.needs.words, needsPhoto: v.needs.photo, needsClips: v.needs.clips, needsDish: v.needs.dish, confirmations: v.needs.confirmations,
     received: v.received, openQuestions: v.openQuestions, suggestion: v.suggestion, placeholders: v.placeholders,
     shotList: shotList(r.creative_instructions),
@@ -186,8 +189,8 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
 
   // ─── the Create flow: a custom design ──────────────────────────────────────────────────────────────────
 
-  /** Menu items plus every item in the wording bank, with how many wordings each has. */
-  async function products(): Promise<{ name: string; category: string | null; wordings: number; template: string }[]> {
+  /** The roster, the menu and every item in the wording bank, as one list: name, category, status, wordings and the series to start from. */
+  async function products(): Promise<{ name: string; category: string | null; status: string; wordings: number; template: string }[]> {
     let menu: { name: string; category: string | null }[] = [];
     try {
       menu = (await ctx.menu.get()).items.filter((i) => !i.soldOut).map((i) => ({ name: i.name, category: i.category }));
@@ -201,9 +204,22 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       counts.set(s.item_key, (counts.get(s.item_key) ?? 0) + 1);
       names.set(s.item_key, s.item);
     }
-    const out = new Map<string, { name: string; category: string | null; wordings: number; template: string }>();
-    for (const m of menu) out.set(itemKey(m.name), { name: m.name, category: m.category, wordings: counts.get(itemKey(m.name)) ?? 0, template: suggestedTemplate(m.name, m.category) });
-    for (const [k, name] of names) if (!out.has(k)) out.set(k, { name, category: null, wordings: counts.get(k) ?? 0, template: suggestedTemplate(name) });
+    const out = new Map<string, { name: string; category: string | null; status: string; wordings: number; template: string }>();
+    // The roster first: it knows the status and the series; a retired product is not offered.
+    for (const p of await listProducts(ctx.pool)) {
+      if (p.status === 'retired') continue;
+      out.set(p.name_key, { name: p.name, category: p.category, status: p.status, wordings: counts.get(p.name_key) ?? 0, template: p.template ?? suggestedTemplate(p.name, p.category) });
+    }
+    for (const m of menu) {
+      const k = itemKey(m.name);
+      const have = out.get(k);
+      if (have) {
+        have.category = have.category ?? m.category;
+        continue;
+      }
+      out.set(k, { name: m.name, category: m.category, status: 'active', wordings: counts.get(k) ?? 0, template: suggestedTemplate(m.name, m.category) });
+    }
+    for (const [k, name] of names) if (!out.has(k)) out.set(k, { name, category: null, status: 'active', wordings: counts.get(k) ?? 0, template: suggestedTemplate(name) });
     return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -291,25 +307,18 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       }
     }
     if (!file) return reply.code(400).send({ ok: false, error: 'No workbook was sent.' });
-    const { readWorkbook, seedRows, placeholderReport } = await import('../../calendar/seed.js');
-    const { readSlogansSheet, seedSlogans } = await import('../../calendar/slogans.js');
-    let rows;
-    let slogans;
+    const { loadWorkbook } = await import('../../calendar/seed.js');
     try {
-      ({ rows } = await readWorkbook(file.bytes));
-      slogans = await readSlogansSheet(file.bytes);
-    } catch (e) {
-      return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
-    }
-    try {
-      const result = await seedRows(ctx.pool, rows, rows[0]!.date, { keepStarted: true });
-      const loaded = await seedSlogans(ctx.pool, slogans);
-      ctx.log.info('Workbook loaded from the web app.', { file: file.filename, ...result, slogans: loaded.loaded });
-      return { ok: true, ...result, rows: rows.length, from: rows[0]!.date, to: rows[rows.length - 1]!.date, slogans: loaded, placeholders: placeholderReport(rows) };
+      const { sheetRows: _rows, readMe: _readMe, ...result } = await loadWorkbook(ctx.pool, file.bytes, { keepStarted: true });
+      ctx.log.info('Workbook loaded from the web app.', { file: file.filename, plan: result.plan, inserted: result.inserted, updated: result.updated, campaigns: result.campaigns, products: result.products, slogans: result.slogans.loaded });
+      return { ok: true, ...result };
     } catch (e) {
       return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
   });
+
+  /** Every campaign with how far its posts have got; several may run at once. */
+  app.get('/api/campaigns', async () => ({ campaigns: await campaignProgress(ctx.pool) }));
 
   // ─── the wording bank (slogans): one product, many wordings ───────────────────────────────────────────
 

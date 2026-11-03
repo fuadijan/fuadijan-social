@@ -10,6 +10,7 @@ import { answerQuestion, askQuestion, latestOpenQuestion, openQuestions, questio
 import { resendPack } from '../pipeline/stages.js';
 import { CUSTOM_USAGE, adoptAsset, createCustomPost, defaultTemplate, parseCustomCommand, parseCustomInput, photosOf, recentPhotos } from '../pipeline/custom.js';
 import { findItem } from '../menu/source.js';
+import { findProduct } from '../products.js';
 import { redoRow } from '../pipeline/worker.js';
 import { parseDayRef, rowByDishWords } from './dayref.js';
 import { addCustomOption, allCopyOptions, asLine, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
@@ -224,7 +225,10 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       } catch {
         // No menu right now: the name as typed decides.
       }
-      const title = menuName ?? cmd.product;
+      // Not on the menu yet? The roster may know it (coming soon, planned) and the series it belongs to.
+      const roster = menuName ? null : await findProduct(pool, cmd.product);
+      if (roster) category = category ?? roster.category;
+      const title = menuName ?? roster?.name ?? cmd.product;
       let wording = cmd.wording ? { ...cmd.wording, headline: cmd.wording.headline || title } : null;
       let sloganId: number | null = null;
       let wordingWords = wording ? `title "${wording.headline.replace(/\n/g, ' / ')}"${wording.line ? `, line "${wording.line}"` : ''}` : 'the agent writes the wording';
@@ -238,7 +242,7 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       }
       let input;
       try {
-        input = parseCustomInput({ ...cmd, template: defaultTemplate(cmd.product, category), wording, sloganId, postTime: cmd.postTime ?? (await getSetting(pool, 'post_time_default')) ?? '18:00' });
+        input = parseCustomInput({ ...cmd, template: roster?.template ?? defaultTemplate(cmd.product, category), wording, sloganId, postTime: cmd.postTime ?? (await getSetting(pool, 'post_time_default')) ?? '18:00' });
       } catch (e) {
         return void say(e instanceof Error ? e.message : String(e));
       }

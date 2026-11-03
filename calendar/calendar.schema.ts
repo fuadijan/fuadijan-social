@@ -10,6 +10,9 @@ export const CALENDAR_COLUMNS = [
   'objective', 'creative_instructions', 'on_screen_text', 'caption', 'cta', 'hashtags', 'story_ideas', 'confirmation_notes',
 ] as const;
 export type CalendarColumn = (typeof CALENDAR_COLUMNS)[number];
+/** Columns a workbook may add after the 18, in any order: `campaign` names the row's campaign (its CampaignID or name). */
+export const OPTIONAL_COLUMNS = ['campaign'] as const;
+export type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number];
 
 export const SheetRow = z.object({
   day_no: z.number().int().min(1),
@@ -31,6 +34,7 @@ export const SheetRow = z.object({
   hashtags: z.string().nullable(),
   story_ideas: z.string().nullable(),
   confirmation_notes: z.string().nullable(),
+  campaign: z.string().nullable(),
 });
 export type SheetRow = z.infer<typeof SheetRow>;
 
@@ -89,7 +93,7 @@ export function dedupeNotes(notes: string | null, instructions: string | null): 
   return notes;
 }
 
-export function cleanRow(raw: Record<CalendarColumn, unknown>, dayNo: number): SheetRow {
+export function cleanRow(raw: Record<CalendarColumn, unknown> & Partial<Record<OptionalColumn, unknown>>, dayNo: number): SheetRow {
   const row = {
     day_no: dayNo,
     date: cellDate(raw.date) ?? '',
@@ -110,6 +114,7 @@ export function cleanRow(raw: Record<CalendarColumn, unknown>, dayNo: number): S
     hashtags: cellText(raw.hashtags),
     story_ideas: stripPastedHeading(cellText(raw.story_ideas)),
     confirmation_notes: null as string | null,
+    campaign: cellText(raw.campaign),
   };
   row.confirmation_notes = dedupeNotes(cellText(raw.confirmation_notes), row.creative_instructions);
   return SheetRow.parse(row);

@@ -45,14 +45,14 @@ function ProductStep({ opts, value, onChange }: { opts: CreateOptions; value: st
       <div className="sa-chips" style={{ marginTop: 10 }} role="radiogroup" aria-label="Products">
         {shown.map((p) => (
           <button key={p.name} type="button" className={`sa-chip${key(value) === key(p.name) ? ' sa-chip--on' : ''}`} onClick={() => { onChange(p.name); setQ(p.name); }} role="radio" aria-checked={key(value) === key(p.name)}>
-            {p.name}{p.wordings ? <span className="sa-chip-n">{p.wordings}</span> : null}
+            {p.name}{p.status !== 'active' ? <span className="sa-chip-meta"> · {p.status === 'coming-soon' ? 'coming soon' : p.status}</span> : null}{p.wordings ? <span className="sa-chip-n">{p.wordings}</span> : null}
           </button>
         ))}
         {q.trim() && !exact ? (
           <button type="button" className={`sa-chip${key(value) === key(q) ? ' sa-chip--on' : ''}`} onClick={() => onChange(q.trim())}>Use “{q.trim()}”</button>
         ) : null}
       </div>
-      <div className="sa-note" style={{ marginTop: 8 }}>The number is how many wordings the bank has for it. Not on the menu? Type the name; the agent still checks the menu before claiming anything.</div>
+      <div className="sa-note" style={{ marginTop: 8 }}>The number is how many wordings the bank has for it. A product marked coming soon or planned is on the roster but not the menu yet. Not listed? Type the name; the agent still checks the menu before claiming anything.</div>
     </Card>
   );
 }

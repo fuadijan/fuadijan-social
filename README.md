@@ -113,6 +113,17 @@ month of the first date names the plan (`2026-12`); it is added beside the runni
 becomes the plan "Day N" refers to on its first date. Loading the same month again updates what changed and leaves
 owner edits alone. The month view takes `?plan=2026-12` to look ahead.
 
+**Campaigns and the roster.** Two more sheets in the same workbook. `Campaigns` (CampaignID | Campaign Name |
+Category | Series | Start Date | End Date | Status | Priority) records every launch, countdown or seasonal push;
+several run at once, and a Calendar row joins one through its optional `campaign` column (the id or the name).
+The Strategy page lists each campaign with its dates and how many of its posts are made and posted; the Day page
+names the post's campaign. `Products` (ProductID | Product Name | Category | Status | Series) is the whole roster,
+including what is not on the menu yet (active, coming soon, planned, retired): a roster product is offered in
+Create and `/custom` with its series, so a launch can be posted about before the dish reaches the website, and a
+row's `dish` may be a ProductID. Series are the hero-photo labels (FROM THE FIRE, FROM THE KARAHI, MODERN
+FUADIJAN, ROOTED IN TRADITION, FRESH POUR, SAVE ROOM, FROM THE CHARCOAL SEA for seafood). `npm run
+template-workbook` brings the template's sheets, dropdowns and notes up to date with the code.
+
 **The slogan bank.** Keep several slogans per menu item and they are offered among the wordings whenever a post is
 about that item. Load them with the monthly plan: a sheet named `Slogans` in the plan workbook, or the separate
 `calendar/Fuadijan-Slogans.xlsx` (a template with a Read Me is in the repo), columns `Item | Slogan | Line | Caption`

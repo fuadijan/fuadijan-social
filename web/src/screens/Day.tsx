@@ -413,7 +413,7 @@ export function Day() {
     <>
       <PageHeader
         title={data?.title ?? `Day ${dayNo}`}
-        subtitle={data ? `${fmtDate(data.date)} · ${SLOT_LABEL[data.slot]} · ${data.series}` : undefined}
+        subtitle={data ? `${fmtDate(data.date)} · ${SLOT_LABEL[data.slot]} · ${data.series}${data.campaign ? ` · ${data.campaign.name}` : ''}` : undefined}
         back={{ href: '/', label: 'This week' }}
         Link={BackLink}
         actions={nav}

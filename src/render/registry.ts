@@ -26,6 +26,7 @@ const REGISTRY: Record<string, Entry> = {
   'rooted-in-tradition': { key: 'hero-photo', footer: 'brand', label: 'ROOTED IN TRADITION' },
   'save-room': { key: 'hero-photo', footer: 'address', label: 'SAVE ROOM' },
   'fresh-pour': { key: 'hero-photo', footer: 'brand', label: 'FRESH POUR' },
+  'from-the-charcoal-sea': { key: 'hero-photo', footer: 'brand', label: 'FROM THE CHARCOAL SEA' },
   'new-product-reveal': { key: 'hero-photo', footer: 'brand', label: 'FROM THE FIRE', style: 'invite' },
   'customer-review': { key: 'review', footer: 'address', label: 'CUSTOMER LOVE' },
   'you-said-it': { key: 'review', footer: 'address', label: 'CUSTOMER LOVE' },
@@ -70,17 +71,29 @@ export function heroTemplates(): { template: string; label: string; footer: Foot
 }
 
 /** Words that place a product in a series, from its menu category ("Beverages", "Sweets") or its name. */
+const SEAFOOD = /barramundi|prawn|shrimp|seafood|\bfish\b|salmon|snapper|calamari|squid|\bcrab\b|lobster|mussel|oyster/i;
 const DRINK = /juice|lassi|chai|shake|drink|beverage|cola|soda|mocktail|coconut water|\bwater\b|\btea\b|coffee/i;
 const SWEET = /kheer|gulab|jamun|dessert|sweet|mithai|nutella|halwa|falooda|ice cream|rasmalai/i;
 const KARAHI = /karahi|curr|nihari|haleem|daal|\bdal\b/i;
 const MODERN = /burger|wrap|\broll\b|snack|shami/i;
 
-/** The series a custom post starts from: drinks pour, sweets save room, karahis and curries from the karahi, burgers and snacks modern, else the first hero series. */
+/** The series a custom post starts from: seafood from the charcoal sea, drinks pour, sweets save room, karahis and curries from the karahi, burgers and snacks modern, else the first hero series. */
 export function suggestedTemplate(product: string, category?: string | null): string {
   const hay = `${category ?? ''} ${product}`;
   const all = heroTemplates();
   const by = (re: RegExp, label: string) => (re.test(hay) ? all.find((t) => t.label === label)?.template ?? null : null);
-  return by(DRINK, 'FRESH POUR') ?? by(SWEET, 'SAVE ROOM') ?? by(KARAHI, 'FROM THE KARAHI') ?? by(MODERN, 'MODERN FUADIJAN') ?? all[0]!.template;
+  return by(SEAFOOD, 'FROM THE CHARCOAL SEA') ?? by(DRINK, 'FRESH POUR') ?? by(SWEET, 'SAVE ROOM') ?? by(KARAHI, 'FROM THE KARAHI') ?? by(MODERN, 'MODERN FUADIJAN') ?? all[0]!.template;
+}
+
+/**
+ * A series as a sheet names it: a template value ("from-the-charcoal-sea") or a series label ("FROM THE CHARCOAL
+ * SEA", any case) → the hero template to design from; null when neither.
+ */
+export function templateForSeries(ref: string): string | null {
+  const k = ref.trim().toLowerCase().replace(/\s+/g, '-');
+  if (REGISTRY[k]) return k;
+  const label = ref.trim().toUpperCase().replace(/[\s_-]+/g, ' ');
+  return heroTemplates().find((t) => t.label === label)?.template ?? null;
 }
 
 /** Boot check: every template value in the table has a mapping. */

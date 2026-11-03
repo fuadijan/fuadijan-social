@@ -1,9 +1,9 @@
 import { useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { getStrategy, importCalendar, seedStrategyPlan } from '../api';
+import { getCampaigns, getStrategy, importCalendar, seedStrategyPlan } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { ErrorCard, Loading } from '../components/States';
-import type { ImportCalendarResponse, SeedPlanResponse, Strategy as StrategyData } from '../types';
+import type { CampaignProgress, ImportCalendarResponse, SeedPlanResponse, Strategy as StrategyData } from '../types';
 import { useApi } from '../useApi';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -83,13 +83,41 @@ function Plan({ s, today }: { s: StrategyData; today: string }) {
   );
 }
 
+const STATUS_WORD: Record<string, string> = { planned: 'Planned', active: 'Running', done: 'Done' };
+
+/** Every campaign with its dates and how far its posts have got; several run at once. */
+function Campaigns({ refreshKey }: { refreshKey: number }) {
+  const { data, error, loading, reload } = useApi(getCampaigns, `campaigns-${refreshKey}`);
+  if (error) return <Card title="Campaigns"><ErrorCard message={error} onRetry={() => void reload()} /></Card>;
+  if (loading || !data) return <Card title="Campaigns"><Loading what="Reading the campaigns" /></Card>;
+  const list = data.campaigns;
+  return (
+    <Card title="Campaigns">
+      {list.length ? (
+        <Table
+          head={['Campaign', 'Dates', 'Series', 'Status', 'Posts']}
+          rows={list.map((c: CampaignProgress) => [
+            <span key={c.key}><strong>{c.name}</strong>{c.category ? <><br /><span className="sa-note">{c.category}{c.priority ? ` · ${c.priority} priority` : ''}</span></> : null}</span>,
+            c.start_date ? `${fmtDay(c.start_date)}${c.end_date && c.end_date !== c.start_date ? ` – ${fmtDay(c.end_date)}` : ''}` : '—',
+            c.series ?? '—',
+            STATUS_WORD[c.status] ?? c.status,
+            <span key={`${c.key}-p`}>{c.posts ? `${c.made} of ${c.posts} made, ${c.posted} posted` : 'no posts yet'}{c.next ? <><br /><span className="sa-note">next {fmtDay(c.next)}</span></> : null}</span>,
+          ])}
+        />
+      ) : (
+        <div className="sa-note">No campaigns yet. A Campaigns sheet in the month's workbook adds them, and a row's campaign column puts a post under one.</div>
+      )}
+    </Card>
+  );
+}
+
 const fmtMonth = (plan: string) => new Date(`${plan}-01T00:00:00Z`).toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 /**
  * A month's workbook, loaded from the browser the way `npm run seed-calendar -- --file` loads it: the monthly
  * template filled in (sheet Calendar, 18 columns, 30 rows; Slogans optional).
  */
-function LoadWorkbook() {
+function LoadWorkbook({ onLoaded }: { onLoaded: () => void }) {
   const inputId = useId();
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -103,6 +131,7 @@ function LoadWorkbook() {
     setResult(null);
     try {
       setResult(await importCalendar(file));
+      onLoaded();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -113,7 +142,7 @@ function LoadWorkbook() {
   return (
     <Card title="Load a month's workbook">
       <div className="sa-note" style={{ marginBottom: 10 }}>
-        The monthly template filled in: sheet <strong>Calendar</strong> with its 18 columns and one row per post, and a <strong>Slogans</strong> sheet if you have one.
+        The monthly template filled in: sheet <strong>Calendar</strong> with its 18 columns and one row per post, plus <strong>Campaigns</strong>, <strong>Products</strong> and <strong>Slogans</strong> sheets if you have them.
         The month of the first date names the plan, and a new month lands beside the running one. Loading a month again updates what changed; a day that has started, and any field you edited, is left alone.
       </div>
       <div className="sa-upload-row" style={{ marginBottom: 12 }}>
@@ -128,7 +157,8 @@ function LoadWorkbook() {
             <strong>{fmtMonth(result.plan)}</strong>: {result.rows} row{result.rows === 1 ? '' : 's'} read ({result.from} – {result.to}); {result.inserted} day{result.inserted === 1 ? '' : 's'} added, {result.updated} updated
             {result.kept.length ? `, ${result.kept.length} left as they were (started): Day ${result.kept.join(', ')}` : ''}
             {result.protectedFields.length ? `; ${result.protectedFields.length} edited field${result.protectedFields.length === 1 ? '' : 's'} kept` : ''}.
-            {' '}{result.slogans.loaded ? `${result.slogans.loaded} slogan${result.slogans.loaded === 1 ? '' : 's'} for ${result.slogans.items} item${result.slogans.items === 1 ? '' : 's'} joined the wording bank.` : 'No Slogans sheet.'}
+            {' '}{result.campaigns ? `${result.campaigns} campaign${result.campaigns === 1 ? '' : 's'}` : ''}{result.campaigns && result.products ? ' and ' : ''}{result.products ? `${result.products} product${result.products === 1 ? '' : 's'}` : ''}{result.campaigns || result.products ? ' loaded. ' : ''}
+            {result.slogans.loaded ? `${result.slogans.loaded} slogan${result.slogans.loaded === 1 ? '' : 's'} for ${result.slogans.items} item${result.slogans.items === 1 ? '' : 's'} joined the wording bank.` : 'No Slogans sheet.'}
             {' '}<Link to={`/month?plan=${encodeURIComponent(result.plan)}`}>See {fmtMonth(result.plan)}</Link>
           </div>
           {result.placeholders.length ? (
@@ -146,6 +176,7 @@ function LoadWorkbook() {
 
 export function Strategy() {
   const { data, error, loading, reload } = useApi(getStrategy, 'strategy');
+  const [loads, setLoads] = useState(0);
   if (error) return <ErrorCard message={error} onRetry={() => void reload()} />;
   if (loading || !data) return <Loading what="Reading the strategy" />;
   const s = data.strategy;
@@ -212,7 +243,9 @@ export function Strategy() {
 
       <Plan s={s} today={data.today} />
 
-      <LoadWorkbook />
+      <Campaigns refreshKey={loads} />
+
+      <LoadWorkbook onLoaded={() => setLoads((n) => n + 1)} />
 
       <Card title="Poster concepts">
         <Table head={['Poster', 'Headline', 'Supporting line', 'Visual']} rows={s.posters.map((p) => [p.name, <strong key={p.name}>{p.headline.replace('\n', ' / ')}</strong>, p.line, p.visual])} />

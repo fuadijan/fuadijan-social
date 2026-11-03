@@ -37,6 +37,8 @@ export interface DayView {
   postTime: string | null; // HH:MM or HH:MM:SS
   title: string; // "Day 12 — Chicken Tikka Snack Pack"
   series: string; // "FROM THE FIRE" …
+  /** The campaign the post belongs to, when the workbook named one. */
+  campaign: { key: string; name: string; status: CampaignStatus } | null;
   needs: string; // plain words
   needsPhoto: boolean;
   needsClips: boolean;
@@ -234,7 +236,7 @@ export interface CreateOptions {
   today: string;
   postTimeDefault: string;
   /** `template` is the series suggested for the product (its menu category: drinks pour, sweets save room, karahis from the karahi). */
-  products: { name: string; category: string | null; wordings: number; template: string }[];
+  products: { name: string; category: string | null; status: string; wordings: number; template: string }[];
   templates: { template: string; label: string; footer: 'brand' | 'address'; style: StyleKey | null }[];
   styles: { key: StyleKey; name: string; blurb: string; needsCutout: boolean; story: boolean }[];
   photos: RecentPhoto[];
@@ -294,6 +296,28 @@ export interface Strategy {
 export interface SeedPlanResponse { ok: true; plan: string; inserted: number; updated: number; protectedFields: { day_no: number; field: string }[]; kept: number[] }
 
 /** A month's workbook loaded from the browser: the seed's result plus what was read. */
-export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string; to: string; slogans: { loaded: number; items: number }; placeholders: string[] }
+export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string; to: string; campaigns: number; products: number; slogans: { loaded: number; items: number }; placeholders: string[] }
+
+export type CampaignStatus = 'planned' | 'active' | 'done';
+
+/** A campaign and how far its posts have got; several run at once. */
+export interface CampaignProgress {
+  id: number;
+  key: string;
+  name: string;
+  category: string | null;
+  series: string | null;
+  template: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: CampaignStatus;
+  priority: string | null;
+  posts: number;
+  made: number;
+  posted: number;
+  next: string | null;
+}
+
+export interface CampaignsResponse { campaigns: CampaignProgress[] }
 
 export interface StrategyResponse { today: string; strategy: Strategy; todayRituals: string[]; runningEvents: string[]; wordingsInBank: number }

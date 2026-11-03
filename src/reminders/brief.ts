@@ -4,6 +4,7 @@ import { placeholders, rowsBetween, type CalendarRow } from '../calendar/rows.js
 import { needsDish, suggestDish } from '../calendar/suggest.js';
 import { briefLine, describeNeeds, type Needs } from '../messaging/formats.js';
 import { openQuestionCounts } from '../pipeline/questions.js';
+import { campaignsOfRows, type Campaign } from '../campaigns.js';
 import type { IsoDate } from '../time.js';
 
 export interface RowReceived { photos: number; clips: number }
@@ -21,11 +22,13 @@ export interface RowView {
   openQuestions: number;
   suggestion: string | null;
   placeholders: string[];
+  campaign: Campaign | null;
 }
 
 export async function rowViews(ctx: AppContext, rows: CalendarRow[]): Promise<RowView[]> {
   const received = await receivedByRow(ctx);
   const open = await openQuestionCounts(ctx.pool);
+  const campaigns = await campaignsOfRows(ctx.pool, rows.map((r) => r.campaign_id));
   let menu: Awaited<ReturnType<typeof ctx.menu.get>> | null = null;
   try {
     menu = await ctx.menu.get();
@@ -37,7 +40,7 @@ export async function rowViews(ctx: AppContext, rows: CalendarRow[]): Promise<Ro
     const ph = placeholders(row);
     const needs = describeNeeds(row, rec, open.get(row.id) ?? 0, ph.length);
     const suggestion = needsDish(row) && menu ? suggestDish(row, menu) : null;
-    return { row, needs, received: rec, openQuestions: open.get(row.id) ?? 0, suggestion, placeholders: ph };
+    return { row, needs, received: rec, openQuestions: open.get(row.id) ?? 0, suggestion, placeholders: ph, campaign: row.campaign_id != null ? campaigns.get(row.campaign_id) ?? null : null };
   });
 }
 
