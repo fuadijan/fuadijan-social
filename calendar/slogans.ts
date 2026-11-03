@@ -5,7 +5,7 @@
  */
 import { existsSync } from 'node:fs';
 import type pg from 'pg';
-import { readSheetRows } from './xlsx.js';
+import { readSheetRows, sourceName, type WorkbookSource } from './xlsx.js';
 import { WORKBOOK_PATH } from './seed.js';
 import { addSlogan } from '../src/slogans.js';
 
@@ -17,11 +17,12 @@ export interface SloganRow { item: string; headline: string; line: string | null
 const text = (v: unknown): string => (v == null ? '' : String(v)).replace(/\r\n?/g, '\n').trim();
 
 /** The slogans of one sheet; [] when the file or the sheet is missing; throws on a wrong header. */
-export async function readSlogansSheet(path: string, sheetName = 'Slogans'): Promise<SloganRow[]> {
-  if (!existsSync(path)) return [];
+export async function readSlogansSheet(source: WorkbookSource, sheetName = 'Slogans'): Promise<SloganRow[]> {
+  if (typeof source === 'string' && !existsSync(source)) return [];
+  const path = sourceName(source);
   let rows;
   try {
-    rows = await readSheetRows(path, sheetName);
+    rows = await readSheetRows(source, sheetName);
   } catch (e) {
     if (e instanceof Error && /not found/.test(e.message)) return [];
     throw e;

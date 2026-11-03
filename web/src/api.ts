@@ -2,7 +2,7 @@
  * Same-origin JSON client. A 401 means no hub session: the page goes to the hub's login and comes back here.
  * A 403 carrying `hub` means signed in but not granted Social: the page goes to the hub.
  */
-import type { CreateOptions, CreateRequest, CreateResponse, DayResponse, EditableField, Me, MonthResponse, SeedPlanResponse, StatusResponse, StrategyResponse, UploadResponse, WeekResponse, Wording, WordingInput, WordingsResponse } from './types';
+import type { CreateOptions, CreateRequest, CreateResponse, DayResponse, EditableField, ImportCalendarResponse, Me, MonthResponse, SeedPlanResponse, StatusResponse, StrategyResponse, UploadResponse, WeekResponse, Wording, WordingInput, WordingsResponse } from './types';
 
 export const DEFAULT_HUB = 'https://apps.nutrimeals.au';
 
@@ -111,3 +111,10 @@ export const deleteWording = (id: number) => apiFetch<{ ok: true }>(`/api/wordin
 
 export const getStrategy = () => apiFetch<StrategyResponse>('/api/strategy');
 export const seedStrategyPlan = () => post<SeedPlanResponse>('/api/strategy/seed', {});
+
+/** A month's workbook (the monthly template filled in), loaded the way `npm run seed-calendar -- --file` does. */
+export function importCalendar(file: File): Promise<ImportCalendarResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  return apiFetch<ImportCalendarResponse>('/api/calendar/import', { method: 'POST', body: form });
+}

@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -6,6 +6,8 @@ import { copyBrief, designBrief, eventsOn, hashtagsFor, loadStrategy, ritualsOn,
 import { buildStrategyWorkbook, strategyRows } from '../calendar/strategy-workbook.js';
 import { readWorkbook } from '../calendar/seed.js';
 import { readSlogansSheet } from '../calendar/slogans.js';
+import { writeWorkbook } from '../calendar/xlsx-write.js';
+import { CALENDAR_COLUMNS } from '../calendar/calendar.schema.js';
 import { templateKeyFor } from '../src/render/registry.js';
 
 const s = loadStrategy();
@@ -81,5 +83,23 @@ describe('the marketing strategy as data', () => {
     const slogans = await readSlogansSheet(path);
     expect(slogans.length).toBe(strategyWordings(s).length);
     expect(slogans.find((x) => x.item === 'Karahi Night')?.headline).toBe('Karahi\nNight');
+
+    // The web app's import reads the same workbook from memory (an upload) and gets the same rows and slogans.
+    const bytes = readFileSync(path);
+    expect((await readWorkbook(bytes)).rows).toEqual(wb.rows);
+    expect((await readSlogansSheet(bytes)).length).toBe(slogans.length);
+  });
+
+  it('names the wrong row of an uploaded workbook, and refuses what is not a workbook', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fj-import-'));
+    const path = join(dir, 'bad.xlsx');
+    const row = (date: string, slot: string) => [date, slot, 'hero-dish', 'Chapli Kebab', null, null, '18:30', 'from-the-fire', 'planned', ...Array<null>(9).fill(null)];
+    await writeWorkbook(path, [{ name: 'Calendar', rows: [[...CALENDAR_COLUMNS], row('2026-12-01', 'feed'), row('2026-12-02', 'story')] }]);
+    await expect(readWorkbook(readFileSync(path))).rejects.toThrow(/Calendar row 3 \(Day 2\): slot/);
+    await expect(readWorkbook(Buffer.from('not a zip'))).rejects.toThrow(/the uploaded workbook is not an .xlsx workbook/);
+    await writeWorkbook(path, [{ name: 'Calendar', rows: [['date', 'dish']] }]);
+    await expect(readWorkbook(path)).rejects.toThrow(/18 expected columns/);
+    await writeWorkbook(path, [{ name: 'Calendar', rows: [[...CALENDAR_COLUMNS]] }]);
+    await expect(readWorkbook(path)).rejects.toThrow(/no rows under the header/);
   });
 });

@@ -293,4 +293,7 @@ export interface Strategy {
 
 export interface SeedPlanResponse { ok: true; plan: string; inserted: number; updated: number; protectedFields: { day_no: number; field: string }[]; kept: number[] }
 
+/** A month's workbook loaded from the browser: the seed's result plus what was read. */
+export interface ImportCalendarResponse extends SeedPlanResponse { rows: number; from: string; to: string; slogans: { loaded: number; items: number }; placeholders: string[] }
+
 export interface StrategyResponse { today: string; strategy: Strategy; todayRituals: string[]; runningEvents: string[]; wordingsInBank: number }

@@ -275,6 +275,42 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     return { ok: true, ...result };
   });
 
+  /**
+   * Loads a month's workbook (the monthly template filled in: sheet Calendar, 18 columns, and an optional Slogans
+   * sheet) exactly as `npm run seed-calendar -- --file` does, but from the browser: dates as written, the month
+   * of the first date names the plan, a day that has started is left alone, owner-edited fields stay protected,
+   * and the Slogans sheet joins the wording bank. Nothing is written when any row is wrong.
+   */
+  app.post('/api/calendar/import', async (req, reply) => {
+    if (!req.isMultipart()) return reply.code(400).send({ ok: false, error: 'multipart/form-data expected' });
+    let file: { bytes: Buffer; filename: string } | null = null;
+    for await (const part of req.parts()) {
+      if (part.type === 'file') {
+        const bytes = await part.toBuffer();
+        if (bytes.length && !file) file = { bytes, filename: part.filename };
+      }
+    }
+    if (!file) return reply.code(400).send({ ok: false, error: 'No workbook was sent.' });
+    const { readWorkbook, seedRows, placeholderReport } = await import('../../calendar/seed.js');
+    const { readSlogansSheet, seedSlogans } = await import('../../calendar/slogans.js');
+    let rows;
+    let slogans;
+    try {
+      ({ rows } = await readWorkbook(file.bytes));
+      slogans = await readSlogansSheet(file.bytes);
+    } catch (e) {
+      return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    try {
+      const result = await seedRows(ctx.pool, rows, rows[0]!.date, { keepStarted: true });
+      const loaded = await seedSlogans(ctx.pool, slogans);
+      ctx.log.info('Workbook loaded from the web app.', { file: file.filename, ...result, slogans: loaded.loaded });
+      return { ok: true, ...result, rows: rows.length, from: rows[0]!.date, to: rows[rows.length - 1]!.date, slogans: loaded, placeholders: placeholderReport(rows) };
+    } catch (e) {
+      return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
   // ─── the wording bank (slogans): one product, many wordings ───────────────────────────────────────────
 
   const wordingJson = (s: Slogan) => ({ id: s.id, item: s.item, itemKey: s.item_key, headline: s.headline, line: s.line, caption: s.caption, source: s.source });

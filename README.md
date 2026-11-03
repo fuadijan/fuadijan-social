@@ -107,7 +107,8 @@ any earlier wording can be chosen again (`/wording N k` does the same); after th
 designs and the pack. `/set wording off` skips the question and uses the calendar wording.
 
 **Loading a month.** Fill `calendar/Fuadijan-Monthly-Template.xlsx` (sheets: Calendar, Columns, Templates, Slogans,
-Read Me), save it as the month's workbook and run `npm run seed-calendar -- --file "calendar/December.xlsx"`. The
+Read Me), save it as the month's workbook and load it on the Strategy page ("Load a month's workbook"), or run
+`npm run seed-calendar -- --file "calendar/December.xlsx"` next to the database. The
 month of the first date names the plan (`2026-12`); it is added beside the running month, never over it, and
 becomes the plan "Day N" refers to on its first date. Loading the same month again updates what changed and leaves
 owner edits alone. The month view takes `?plan=2026-12` to look ahead.

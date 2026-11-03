@@ -29,8 +29,20 @@ function textOf(xml: string): string {
   return decodeEntities([...xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map((m) => m[1]!).join(''));
 }
 
-export async function readSheetRows(path: string, sheetName: string): Promise<Cell[][]> {
-  const zip = await JSZip.loadAsync(readFileSync(path));
+/** A workbook on disk (its path) or already in memory (an upload). */
+export type WorkbookSource = string | Buffer;
+
+/** How a source is named in an error: the path, or "the uploaded workbook". */
+export const sourceName = (source: WorkbookSource): string => (typeof source === 'string' ? source : 'the uploaded workbook');
+
+export async function readSheetRows(source: WorkbookSource, sheetName: string): Promise<Cell[][]> {
+  const path = sourceName(source);
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(typeof source === 'string' ? readFileSync(source) : source);
+  } catch {
+    throw new Error(`${path} is not an .xlsx workbook.`);
+  }
   const get = async (name: string) => {
     const f = zip.file(name.replace(/^\//, ''));
     return f ? unprefix(await f.async('string')) : null;

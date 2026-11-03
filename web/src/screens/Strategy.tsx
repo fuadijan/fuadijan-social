@@ -1,9 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { getStrategy, seedStrategyPlan } from '../api';
-import { Button, Card, PageHeader } from '../components/fj';
+import { getStrategy, importCalendar, seedStrategyPlan } from '../api';
+import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { ErrorCard, Loading } from '../components/States';
-import type { SeedPlanResponse, Strategy as StrategyData } from '../types';
+import type { ImportCalendarResponse, SeedPlanResponse, Strategy as StrategyData } from '../types';
 import { useApi } from '../useApi';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -83,6 +83,67 @@ function Plan({ s, today }: { s: StrategyData; today: string }) {
   );
 }
 
+const fmtMonth = (plan: string) => new Date(`${plan}-01T00:00:00Z`).toLocaleString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/**
+ * A month's workbook, loaded from the browser the way `npm run seed-calendar -- --file` loads it: the monthly
+ * template filled in (sheet Calendar, 18 columns, 30 rows; Slogans optional).
+ */
+function LoadWorkbook() {
+  const inputId = useId();
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ImportCalendarResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      setResult(await importCalendar(file));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="Load a month's workbook">
+      <div className="sa-note" style={{ marginBottom: 10 }}>
+        The monthly template filled in: sheet <strong>Calendar</strong> with its 18 columns and one row per post, and a <strong>Slogans</strong> sheet if you have one.
+        The month of the first date names the plan, and a new month lands beside the running one. Loading a month again updates what changed; a day that has started, and any field you edited, is left alone.
+      </div>
+      <div className="sa-upload-row" style={{ marginBottom: 12 }}>
+        <label className={`${buttonClass('secondary', 'sm')} sa-upload-pick`} htmlFor={inputId}>{file ? 'Change workbook' : 'Choose workbook (.xlsx)'}</label>
+        <input id={inputId} className="sa-visually-hidden" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); setError(null); }} />
+        {file ? <span className="sa-muted">{file.name}</span> : null}
+        <Button variant="primary" disabled={busy || !file} onClick={() => void load()}>{busy ? 'Loading…' : 'Load it'}</Button>
+      </div>
+      {result ? (
+        <div className="sa-result" role="status" style={{ marginBottom: 12 }}>
+          <div>
+            <strong>{fmtMonth(result.plan)}</strong>: {result.rows} row{result.rows === 1 ? '' : 's'} read ({result.from} – {result.to}); {result.inserted} day{result.inserted === 1 ? '' : 's'} added, {result.updated} updated
+            {result.kept.length ? `, ${result.kept.length} left as they were (started): Day ${result.kept.join(', ')}` : ''}
+            {result.protectedFields.length ? `; ${result.protectedFields.length} edited field${result.protectedFields.length === 1 ? '' : 's'} kept` : ''}.
+            {' '}{result.slogans.loaded ? `${result.slogans.loaded} slogan${result.slogans.loaded === 1 ? '' : 's'} for ${result.slogans.items} item${result.slogans.items === 1 ? '' : 's'} joined the wording bank.` : 'No Slogans sheet.'}
+            {' '}<Link to={`/month?plan=${encodeURIComponent(result.plan)}`}>See {fmtMonth(result.plan)}</Link>
+          </div>
+          {result.placeholders.length ? (
+            <div style={{ marginTop: 8 }}>
+              <div className="sa-eyebrow">You will be asked about</div>
+              <ul className="sa-bullets">{result.placeholders.map((p) => <li key={p}>{p}</li>)}</ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {error ? <div className="sa-result sa-result--error" role="alert">{error}</div> : null}
+    </Card>
+  );
+}
+
 export function Strategy() {
   const { data, error, loading, reload } = useApi(getStrategy, 'strategy');
   if (error) return <ErrorCard message={error} onRetry={() => void reload()} />;
@@ -150,6 +211,8 @@ export function Strategy() {
       </Card>
 
       <Plan s={s} today={data.today} />
+
+      <LoadWorkbook />
 
       <Card title="Poster concepts">
         <Table head={['Poster', 'Headline', 'Supporting line', 'Visual']} rows={s.posters.map((p) => [p.name, <strong key={p.name}>{p.headline.replace('\n', ' / ')}</strong>, p.line, p.visual])} />

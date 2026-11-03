@@ -15,8 +15,9 @@ import { migrate } from '../src/db/migrate.js';
 import { placeholders } from '../src/calendar/rows.js';
 import { templateKeyFor } from '../src/render/registry.js';
 import { addDays, daysBetween } from '../src/time.js';
+import { z } from 'zod';
 import { CALENDAR_COLUMNS, cleanRow, type CalendarColumn, type SheetRow } from './calendar.schema.js';
-import { readSheetRows } from './xlsx.js';
+import { readSheetRows, type WorkbookSource } from './xlsx.js';
 
 export const WORKBOOK_PATH = 'calendar/Fuadijan-Posts-Calendar.xlsx';
 
@@ -25,7 +26,7 @@ export interface Workbook {
   readMe: string[];
 }
 
-export async function readWorkbook(path = WORKBOOK_PATH): Promise<Workbook> {
+export async function readWorkbook(path: WorkbookSource = WORKBOOK_PATH): Promise<Workbook> {
   const sheet = await readSheetRows(path, 'Calendar');
   const header = (sheet[0] ?? []).map((v) => String(v ?? '').trim());
   const expected = [...CALENDAR_COLUMNS];
@@ -39,8 +40,15 @@ export async function readWorkbook(path = WORKBOOK_PATH): Promise<Workbook> {
     if (!values.some((v) => v !== null && v !== undefined && String(v).trim() !== '')) continue;
     const raw = {} as Record<CalendarColumn, unknown>;
     CALENDAR_COLUMNS.forEach((col, i) => { raw[col] = values[i] ?? null; });
-    rows.push(cleanRow(raw, rows.length + 1));
+    try {
+      rows.push(cleanRow(raw, rows.length + 1));
+    } catch (e) {
+      // Say which row is wrong in the sheet's own terms (its row number), not zod's.
+      const issues = e instanceof z.ZodError ? e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') : (e instanceof Error ? e.message : String(e));
+      throw new Error(`Calendar row ${rows.length + 2} (Day ${rows.length + 1}): ${issues}`);
+    }
   }
+  if (!rows.length) throw new Error('The Calendar sheet has no rows under the header.');
   const readMe: string[] = [];
   try {
     for (const row of await readSheetRows(path, 'Read Me')) {
