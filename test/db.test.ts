@@ -500,6 +500,24 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(rows.filter((r) => r.item_key === 'all')).toHaveLength(4);
   });
 
+  it('stops promising a pack once the newest job has failed, and promises it again when a new one starts', async () => {
+    const { rowViews } = await import('../src/reminders/brief.js');
+    const { rows: [made] } = await pool.query<{ id: number }>(
+      "insert into calendar_rows (plan, day_no, date, slot, type, dish, template, status) values ('2099-01', 1, '2099-01-05', 'feed', 'hero-dish', 'Lamb Karahi', 'from-the-karahi', 'planned') returning id");
+    const rowId = made!.id;
+    const { rows: [photo] } = await pool.query<{ id: number }>("insert into assets (kind, calendar_row_id) values ('document', $1) returning id", [rowId]);
+    const words = async () => (await rowViews(ctx, [(await rowByDay(pool, 1, '2099-01'))!]))[0]!.needs.words;
+    expect(await words()).toBe('Nothing more from you; the pack is on its way.');
+    // A job that knows its post only through its photo counts.
+    await pool.query("insert into jobs (asset_id, stage, status) values ($1, 'resolve', 'failed')", [photo!.id]);
+    expect(await words()).toBe("The last try didn't finish. Send the photo again, or reply /redo 1.");
+    await pool.query("insert into jobs (asset_id, calendar_row_id, stage, status) values ($1, $2, 'resolve', 'queued')", [photo!.id, rowId]);
+    expect(await words()).toBe('Nothing more from you; the pack is on its way.');
+    await pool.query("insert into jobs (calendar_row_id, stage, status) values ($1, 'resolve', 'failed')", [rowId]);
+    await pool.query("update calendar_rows set status = 'ready' where id = $1", [rowId]);
+    expect(await words()).toBe("Ready to post, but your last change didn't finish. Send it again with /redo 1.");
+  });
+
   it('understands "posted 2" and "skip 3"', async () => {
     messenger.sent.length = 0;
     await handleFreeText(ctx, 'posted 2');

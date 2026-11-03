@@ -17,6 +17,14 @@ describe('needs and the brief', () => {
     expect(describeNeeds(row({ slot: 'feed', status: 'ready' }), { photos: 1, clips: 0 }, 0, 0).words).toBe('Nothing — ready to post.');
     expect(describeNeeds(row({ dish: null, slot: 'feed' }), { photos: 0, clips: 0 }, 2, 0).words).toBe('Needs: a dish to choose, a hero photo and 2 confirmations.');
     expect(describeNeeds(row({ status: 'posted' }), { photos: 1, clips: 1 }, 0, 0).words).toBe('Posted.');
+    expect(describeNeeds(row(), { photos: 1, clips: 0 }, 0, 0).words).toBe('Nothing more from you; the pack is on its way.');
+  });
+
+  it('does not promise a pack after the last try failed', () => {
+    expect(describeNeeds(row(), { photos: 1, clips: 0 }, 0, 0, true).words).toBe("The last try didn't finish. Send the photo again, or reply /redo 4.");
+    expect(describeNeeds(row({ status: 'ready' }), { photos: 1, clips: 0 }, 0, 0, true).words).toBe("Ready to post, but your last change didn't finish. Send it again with /redo 4.");
+    expect(describeNeeds(row(), { photos: 0, clips: 0 }, 0, 0, true).words).toBe('Needs: clips.');
+    expect(describeNeeds(row({ status: 'posted' }), { photos: 1, clips: 0 }, 0, 0, true).words).toBe('Posted.');
   });
 
   it('writes the brief line like the brief', () => {

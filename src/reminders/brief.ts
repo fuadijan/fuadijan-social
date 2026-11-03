@@ -15,6 +15,16 @@ export async function receivedByRow(ctx: AppContext): Promise<Map<number, RowRec
   return new Map(rows.map((r) => [r.calendar_row_id, { photos: Number(r.photos), clips: Number(r.clips) }]));
 }
 
+/** Posts whose newest job failed. A job may know its post directly or only through its photo. */
+export async function rowsWithFailedLastJob(ctx: AppContext): Promise<Set<number>> {
+  const { rows } = await ctx.pool.query<{ row_id: number; status: string }>(
+    `select distinct on (coalesce(j.calendar_row_id, a.calendar_row_id)) coalesce(j.calendar_row_id, a.calendar_row_id) as row_id, j.status
+       from jobs j left join assets a on a.id = j.asset_id
+      where coalesce(j.calendar_row_id, a.calendar_row_id) is not null
+      order by coalesce(j.calendar_row_id, a.calendar_row_id), j.id desc`);
+  return new Set(rows.filter((r) => r.status === 'failed').map((r) => r.row_id));
+}
+
 export interface RowView {
   row: CalendarRow;
   needs: Needs;
@@ -27,6 +37,7 @@ export interface RowView {
 
 export async function rowViews(ctx: AppContext, rows: CalendarRow[]): Promise<RowView[]> {
   const received = await receivedByRow(ctx);
+  const failed = await rowsWithFailedLastJob(ctx);
   const open = await openQuestionCounts(ctx.pool);
   const campaigns = await campaignsOfRows(ctx.pool, rows.map((r) => r.campaign_id));
   let menu: Awaited<ReturnType<typeof ctx.menu.get>> | null = null;
@@ -38,7 +49,7 @@ export async function rowViews(ctx: AppContext, rows: CalendarRow[]): Promise<Ro
   return rows.map((row) => {
     const rec = received.get(row.id) ?? { photos: 0, clips: 0 };
     const ph = placeholders(row);
-    const needs = describeNeeds(row, rec, open.get(row.id) ?? 0, ph.length);
+    const needs = describeNeeds(row, rec, open.get(row.id) ?? 0, ph.length, failed.has(row.id));
     const suggestion = needsDish(row) && menu ? suggestDish(row, menu) : null;
     return { row, needs, received: rec, openQuestions: open.get(row.id) ?? 0, suggestion, placeholders: ph, campaign: row.campaign_id != null ? campaigns.get(row.campaign_id) ?? null : null };
   });

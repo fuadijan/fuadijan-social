@@ -21,7 +21,8 @@ export interface Needs {
   words: string; // "Needs: hero photo and 2 confirmations" / "Nothing — ready to post."
 }
 
-export function describeNeeds(row: CalendarRow, received: { photos: number; clips: number }, openQuestions: number, placeholders: number): Needs {
+/** `lastTryFailed`: the newest job for this post failed, so nothing is on its way until the owner tries again. */
+export function describeNeeds(row: CalendarRow, received: { photos: number; clips: number }, openQuestions: number, placeholders: number, lastTryFailed = false): Needs {
   const dish = !row.dish || row.dish.startsWith('[');
   const photo = row.slot !== 'reel' && received.photos === 0 && row.status !== 'posted';
   const clips = row.slot === 'reel' && received.clips === 0 && received.photos === 0 && row.status !== 'posted';
@@ -32,7 +33,12 @@ export function describeNeeds(row: CalendarRow, received: { photos: number; clip
   if (clips) parts.push('clips');
   if (confirmations) parts.push(`${confirmations} confirmation${confirmations === 1 ? '' : 's'}`);
   if (row.status === 'posted') return { photo, clips, dish, confirmations, words: 'Posted.' };
-  if (!parts.length) return { photo, clips, dish, confirmations, words: row.status === 'ready' ? 'Nothing — ready to post.' : 'Nothing more from you; the pack is on its way.' };
+  if (!parts.length) {
+    const words = row.status === 'ready'
+      ? (lastTryFailed ? `Ready to post, but your last change didn't finish. Send it again with /redo ${row.day_no}.` : 'Nothing — ready to post.')
+      : (lastTryFailed ? `The last try didn't finish. Send the photo again, or reply /redo ${row.day_no}.` : 'Nothing more from you; the pack is on its way.');
+    return { photo, clips, dish, confirmations, words };
+  }
   return { photo, clips, dish, confirmations, words: `Needs: ${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` };
 }
 
