@@ -16,14 +16,14 @@ import { PACKS_FOLDER, latestCopyOptions, rerenderRow, updateOption } from './wo
 const ROW_FIELDS = ['caption', 'cta', 'hashtags'] as const;
 const RECORD_FIELDS = [
   'alt_text', 'story_text', 'facebook_caption', 'facebook_cta', 'facebook_hashtags', 'tiktok_opening', 'tiktok_hook', 'tiktok_script', 'tiktok_caption', 'tiktok_cta', 'tiktok_hashtags',
-  'story_sequence', 'reel_cover_text', 'canva_headline', 'canva_subheading',
+  'story_sequence', 'reel_cover_text', 'canva_headline', 'canva_subheading', 'hook',
 ] as const satisfies readonly RecordField[];
 
 export const POST_TEXT_FIELDS = [...ROW_FIELDS, ...RECORD_FIELDS] as const;
 export type PostTextField = (typeof POST_TEXT_FIELDS)[number];
 
 /** Printed on the designs, so changing it means making them again. */
-export const ON_THE_DESIGN: readonly PostTextField[] = ['canva_headline', 'canva_subheading', 'reel_cover_text'];
+export const ON_THE_DESIGN: readonly PostTextField[] = ['canva_headline', 'canva_subheading', 'reel_cover_text', 'hook'];
 const REQUIRED: readonly PostTextField[] = ['caption', 'canva_headline'];
 
 export class PostBusyError extends Error {
@@ -50,6 +50,7 @@ export function copyWith(copy: ResolvedCopy, field: PostTextField, value: string
     case 'facebook_caption': return value ? { ...copy, facebook_caption: v } : copy;
     case 'canva_headline': return { ...copy, headline: v };
     case 'canva_subheading': return value ? { ...copy, label: v } : copy;
+    case 'hook': return value ? { ...copy, line: v } : copy;
     default: return copy;
   }
 }
@@ -112,9 +113,10 @@ export async function setPostText(db: Db, row: CalendarRow, field: PostTextField
   const fresh = (await rowById(db, row.id))!;
 
   // The wording in use (the first one until one is picked) says the same, or picking it again would undo this edit.
-  if (field === 'caption' || field === 'canva_headline') {
+  const inWording = field === 'caption' ? { caption: value! } : field === 'canva_headline' ? { headline: value! } : field === 'hook' && value ? { line: value } : null;
+  if (inWording) {
     const set = await latestCopyOptions(db, row.id);
-    if (set) await updateOption(db, set, set.chosen ?? 0, field === 'caption' ? { caption: value! } : { headline: value! });
+    if (set) await updateOption(db, set, set.chosen ?? 0, inWording);
   }
 
   const job = await latestJobWithCopy(db, row.id);
@@ -125,6 +127,8 @@ export async function setPostText(db: Db, row: CalendarRow, field: PostTextField
   if (!made) return { rebuilding: false };
   // The text changes either way: until the new designs arrive the page already shows it.
   await refreshPack(db, fresh, copy);
-  if (!ON_THE_DESIGN.includes(field) || await rowIsWaiting(db, row.id)) return { rebuilding: false };
+  // A reel's cover and story don't print the line.
+  const printed = ON_THE_DESIGN.includes(field) && !(field === 'hook' && row.slot === 'reel');
+  if (!printed || await rowIsWaiting(db, row.id)) return { rebuilding: false };
   return { rebuilding: Boolean(await rerenderRow(db, row.id)) };
 }

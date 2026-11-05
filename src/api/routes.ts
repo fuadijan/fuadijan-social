@@ -14,19 +14,20 @@ import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
 import { addOwnerOption, allCopyOptions, copyOptionsById, latestCopyOptions, markChosen, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from '../pipeline/wording.js';
-import { POST_TEXT_FIELDS, PostBusyError, rowIsBusy, rowIsWaiting, setPostText, type PostTextField } from '../pipeline/post-text.js';
+import { POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostText, type PostTextField } from '../pipeline/post-text.js';
+import { WORDING_LIBRARIES, wordingsView } from '../wordings-view.js';
 import { adoptAsset, createCustomPost, parseCustomInput, recentPhotos } from '../pipeline/custom.js';
 import { rowViews, type RowView } from '../reminders/brief.js';
 import { heroTemplates, suggestedTemplate, templateEntry } from '../render/registry.js';
 import { STYLE_KEYS, STYLES } from '../render/styles.js';
 import { allSettings } from '../settings.js';
-import { addSlogan, itemKey, listSlogans, removeSlogan, updateSlogan, type Slogan } from '../slogans.js';
+import { addSlogan, itemKey, linkSlogan, listSlogans, removeSlogan, unlinkSlogan, updateSlogan, type Slogan } from '../slogans.js';
 import { eventsOn, loadStrategy, ritualsOn } from '../strategy.js';
 import { campaignProgress } from '../campaigns.js';
 import { platformVersions, platformsTxt, type PlatformVersions } from '../calendar/record.js';
 import { listProducts } from '../products.js';
 import { listBenefits } from '../benefits.js';
-import { listReference } from '../reference.js';
+import { editReferenceRow, listReference } from '../reference.js';
 import { addDays, sydneyDate } from '../time.js';
 
 function viewJson(v: RowView, extra: Record<string, unknown> = {}) {
@@ -396,16 +397,21 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
 
   const wordingJson = (s: Slogan) => ({ id: s.id, item: s.item, itemKey: s.item_key, headline: s.headline, line: s.line, caption: s.caption, source: s.source });
 
-  app.get('/api/wordings', async () => {
-    const groups = new Map<string, { item: string; itemKey: string; wordings: ReturnType<typeof wordingJson>[] }>();
-    for (const s of await listSlogans(ctx.pool)) {
-      const g = groups.get(s.item_key) ?? { item: s.item_key === 'all' ? 'Every post' : s.item, itemKey: s.item_key, wordings: [] };
-      g.wordings.push(wordingJson(s));
-      groups.set(s.item_key, g);
-    }
-    // The house wordings first, then the products by name.
-    const list = [...groups.values()].sort((a, b) => (a.itemKey === 'all' ? -1 : b.itemKey === 'all' ? 1 : a.item.localeCompare(b.item)));
-    return { groups: list, products: (await products()).map((p) => p.name) };
+  // Every wording the app holds, each with what it belongs to: the bank, every post in the plan and the libraries.
+  app.get('/api/wordings', async () => ({ ...await wordingsView(ctx.pool), products: (await products()).map((p) => p.name) }));
+
+  /** One row of a wording library, changed by the owner. */
+  app.patch<{ Params: { sheet: string; index: string }; Body: { was?: unknown; cells?: unknown } }>('/api/wordings/library/:sheet/:index', async (req, reply) => {
+    const { sheet } = req.params;
+    if (!WORDING_LIBRARIES.includes(sheet)) return reply.code(404).send({ ok: false, error: 'No such library' });
+    const asRow = (v: unknown) => (Array.isArray(v) ? v.map((c) => String(c ?? '').trim()) : null);
+    const was = asRow(req.body?.was);
+    const cells = asRow(req.body?.cells);
+    if (!was || !cells || was.length !== cells.length || !cells.some(Boolean)) return reply.code(400).send({ ok: false, error: 'A row needs its text.' });
+    const header = (await listReference(ctx.pool)).find((s) => s.name === sheet)?.header ?? [];
+    const tidy = cells.map((c, i) => (/hashtags/i.test(header[i] ?? '') ? cleanHashtags(c) : c));
+    if (!await editReferenceRow(ctx.pool, sheet, Number(req.params.index), was, tidy)) return reply.code(409).send({ ok: false, error: 'This row has changed since the page loaded. Reload and try again.' });
+    return { ok: true };
   });
 
   function wordingBody(body: Record<string, unknown> | undefined): { headline: string; line: string | null; caption: string | null } {
@@ -433,6 +439,20 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     } catch (e) {
       return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
+  });
+
+  /** Links a wording to another item. */
+  app.post<{ Params: { id: string }; Body: { item?: string } }>('/api/wordings/:id/items', async (req, reply) => {
+    const item = String(req.body?.item ?? '').trim().slice(0, 60);
+    if (!item) return reply.code(400).send({ ok: false, error: 'Which item should it go on?' });
+    if (!await linkSlogan(ctx.pool, Number(req.params.id), item)) return reply.code(404).send({ ok: false, error: 'No such wording' });
+    return { ok: true };
+  });
+
+  /** Takes a wording off one item; the wording itself stays. */
+  app.delete<{ Params: { id: string; itemKey: string } }>('/api/wordings/:id/items/:itemKey', async (req, reply) => {
+    if (!await unlinkSlogan(ctx.pool, Number(req.params.id), req.params.itemKey)) return reply.code(404).send({ ok: false, error: 'It is not on that item.' });
+    return { ok: true };
   });
 
   app.delete<{ Params: { id: string } }>('/api/wordings/:id', async (req, reply) => {

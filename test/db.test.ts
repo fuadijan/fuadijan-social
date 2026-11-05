@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql', '0012_design_photos.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql', '0012_design_photos.sql', '0013_reference_edits.sql', '0014_slogan_items.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -603,6 +603,51 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect((await rowByDay(pool, 2))!.design_photos).toBeNull();
     for (const q of await openQuestions(pool, row.id)) await pool.query("update questions set answered_at = now(), answer = 'x' where id = $1", [q.id]);
     await pool.query("update jobs set status = 'done' where calendar_row_id = $1 and status in ('waiting', 'queued')", [row.id]);
+  });
+
+  it('one wording on several items: changed once for all, linked and unlinked, kept when its last item goes', async () => {
+    const { addSlogan, linkSlogan, listSlogans, slogansFor, unlinkSlogan, unlinkedSlogans, updateSlogan } = await import('../src/slogans.js');
+    const s = await addSlogan(pool, { item: 'Mutton Pulao', headline: 'Slow and\nfragrant', line: 'Cooked in one pot.', source: 'owner-web' });
+    expect(await linkSlogan(pool, s.id, 'Beef Pulao')).toBe(true);
+    expect(await linkSlogan(pool, s.id, 'beef  pulao')).toBe(true); // already there: no second link
+    expect(await listSlogans(pool, 'beef pulao')).toHaveLength(1);
+    await updateSlogan(pool, s.id, { headline: 'Slow and\nsavoury', line: 'One pot.' });
+    expect((await listSlogans(pool, 'Mutton Pulao'))[0]).toMatchObject({ headline: 'Slow and\nsavoury', item: 'Mutton Pulao' });
+    expect((await listSlogans(pool, 'Beef Pulao'))[0]).toMatchObject({ headline: 'Slow and\nsavoury', item: 'Beef Pulao' });
+    // A post about both gets it once.
+    expect((await slogansFor(pool, ['Mutton Pulao, Beef Pulao'])).filter((x) => x.id === s.id)).toHaveLength(1);
+    await addSlogan(pool, { item: 'Mutton Pulao', headline: 'Second', source: 'owner-web' });
+    await expect(updateSlogan(pool, s.id, { headline: 'Second' })).rejects.toThrow(/already has a wording/);
+    expect(await unlinkSlogan(pool, s.id, 'Mutton Pulao')).toBe(true);
+    expect((await slogansFor(pool, ['Mutton Pulao'])).filter((x) => x.id === s.id)).toEqual([]);
+    expect(await unlinkSlogan(pool, s.id, 'Beef Pulao')).toBe(true);
+    expect(await unlinkSlogan(pool, s.id, 'Beef Pulao')).toBe(false);
+    expect((await unlinkedSlogans(pool)).map((x) => x.id)).toContain(s.id);
+    expect(await linkSlogan(pool, s.id, 'Beef Pulao')).toBe(true);
+    expect((await unlinkedSlogans(pool)).map((x) => x.id)).not.toContain(s.id);
+  });
+
+  it('lists every wording with what it belongs to, and an edit to a library row survives loading the workbook again', async () => {
+    const { wordingsView } = await import('../src/wordings-view.js');
+    const { addSlogan, linkSlogan } = await import('../src/slogans.js');
+    const { editReferenceRow, listReference, storeReference } = await import('../src/reference.js');
+    await storeReference(pool, { name: 'Hooks Library', source: 'test', header: ['HookID', 'Series', 'Hook'], rows: [['HK-1', 'FROM THE FIRE', 'Listen.'], ['HK-2', 'FROM THE KARAHI', 'Watch.']] });
+    expect(await editReferenceRow(pool, 'Hooks Library', 0, ['HK-1', 'stale', 'x'], ['HK-1', 'FROM THE FIRE', 'No'])).toBe(false);
+    expect(await editReferenceRow(pool, 'Hooks Library', 0, ['HK-1', 'FROM THE FIRE', 'Listen.'], ['HK-1', 'FROM THE KARAHI', 'Hear it.'])).toBe(true);
+    expect(await editReferenceRow(pool, 'Hooks Library', 0, ['HK-1', 'FROM THE KARAHI', 'Hear it.'], ['HK-1', 'FROM THE KARAHI', 'Hear it now.'])).toBe(true);
+    await storeReference(pool, { name: 'Hooks Library', source: 'test', header: ['HookID', 'Series', 'Hook'], rows: [['HK-1', 'FROM THE FIRE', 'Listen.'], ['HK-2', 'FROM THE KARAHI', 'Watched.']] });
+    expect((await listReference(pool)).find((s) => s.name === 'Hooks Library')!.rows).toEqual([['HK-1', 'FROM THE KARAHI', 'Hear it now.'], ['HK-2', 'FROM THE KARAHI', 'Watched.']]);
+
+    const shared = await addSlogan(pool, { item: 'Chapli Kebab', headline: 'Shared line', source: 'owner-web' });
+    await linkSlogan(pool, shared.id, 'Lamb Karahi');
+    const view = await wordingsView(pool);
+    const chapli = view.groups.find((g) => g.itemKey === 'chapli kebab')!;
+    expect(chapli.posts.map((p) => p.dayNo)).toContain(2);
+    expect(chapli.usedOn.map((d) => d.dayNo)).toContain(2);
+    expect(chapli.wordings.find((w) => w.id === shared.id)!.items.map((i) => i.itemKey)).toEqual(['chapli kebab', 'lamb karahi']);
+    expect(view.groups.find((g) => g.itemKey === 'lamb karahi')!.wordings.map((w) => w.id)).toContain(shared.id);
+    expect(view.groups[0]!.itemKey).toBe('all');
+    expect(view.libraries.map((l) => l.name)).toContain('Hooks Library');
   });
 
   it('understands "posted 2" and "skip 3"', async () => {

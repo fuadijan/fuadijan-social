@@ -19,10 +19,25 @@ export interface ReferenceSheet {
 }
 
 export async function storeReference(db: Db, s: ReferenceSheet): Promise<void> {
+  // A row the owner changed stays changed; a row the workbook itself has since changed is the workbook's again.
+  const owner = (await db.query<{ owner_rows: Record<string, string[]> }>('select owner_rows from reference_sheets where name = $1', [s.name])).rows[0]?.owner_rows ?? {};
+  const rows = s.rows.map((r) => owner[JSON.stringify(r)] ?? r);
   await db.query(
     `insert into reference_sheets (name, source, header, rows) values ($1, $2, $3, $4)
      on conflict (name) do update set source = excluded.source, header = excluded.header, rows = excluded.rows, loaded_at = now()`,
-    [s.name, s.source, JSON.stringify(s.header), JSON.stringify(s.rows)]);
+    [s.name, s.source, JSON.stringify(s.header), JSON.stringify(rows)]);
+}
+
+/** The owner changes one row of a library. `was` is the row they saw: if it has moved since, nothing is saved and false comes back. */
+export async function editReferenceRow(db: Db, name: string, index: number, was: string[], cells: string[]): Promise<boolean> {
+  const sheet = (await db.query<{ rows: string[][]; owner_rows: Record<string, string[]> }>('select rows, owner_rows from reference_sheets where name = $1', [name])).rows[0];
+  const current = sheet?.rows[index];
+  if (!sheet || !current || JSON.stringify(current) !== JSON.stringify(was)) return false;
+  const rows = sheet.rows.map((r, i) => (i === index ? cells : r));
+  // Keyed by the workbook's own text, however many times the owner has changed it since.
+  const key = Object.entries(sheet.owner_rows).find(([, v]) => JSON.stringify(v) === JSON.stringify(was))?.[0] ?? JSON.stringify(was);
+  await db.query('update reference_sheets set rows = $2, owner_rows = $3 where name = $1', [name, JSON.stringify(rows), JSON.stringify({ ...sheet.owner_rows, [key]: cells })]);
+  return true;
 }
 
 export async function listReference(db: Db): Promise<ReferenceSheet[]> {

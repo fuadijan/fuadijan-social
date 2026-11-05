@@ -113,6 +113,9 @@ export const getWordings = () => apiFetch<WordingsResponse>('/api/wordings');
 export const addWording = (item: string, w: WordingInput) => post<{ ok: true; wording: Wording }>('/api/wordings', { item, ...w });
 export const updateWording = (id: number, w: WordingInput) => apiFetch<{ ok: true; wording: Wording }>(`/api/wordings/${id}`, { method: 'PATCH', body: JSON.stringify(w) });
 export const deleteWording = (id: number) => apiFetch<{ ok: true }>(`/api/wordings/${id}`, { method: 'DELETE' });
+export const linkWording = (id: number, item: string) => post<{ ok: true }>(`/api/wordings/${id}/items`, { item });
+export const unlinkWording = (id: number, itemKey: string) => apiFetch<{ ok: true }>(`/api/wordings/${id}/items/${encodeURIComponent(itemKey)}`, { method: 'DELETE' });
+export const editLibraryRow = (sheet: string, index: number, was: string[], cells: string[]) => apiFetch<{ ok: true }>(`/api/wordings/library/${encodeURIComponent(sheet)}/${index}`, { method: 'PATCH', body: JSON.stringify({ was, cells }) });
 
 export const getCampaigns = () => apiFetch<CampaignsResponse>('/api/campaigns');
 export const getPlanning = () => apiFetch<PlanningResponse>('/api/planning');

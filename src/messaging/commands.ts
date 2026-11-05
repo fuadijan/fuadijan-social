@@ -14,7 +14,7 @@ import { findProduct } from '../products.js';
 import { redoRow } from '../pipeline/worker.js';
 import { parseDayRef, rowByDishWords } from './dayref.js';
 import { addCustomOption, allCopyOptions, asLine, latestCopyOptions, rerenderWithWording } from '../pipeline/wording.js';
-import { addSlogan, listSlogans, removeSlogan, slogansByItem } from '../slogans.js';
+import { addSlogan, forgetSloganFor, listSlogans, slogansByItem } from '../slogans.js';
 import { SET_ALIASES, allDishFacts, getSetting, removeDishFact, setDishFact, setSetting } from '../settings.js';
 import { formatDay, sydneyDate, sydneyTime, addDays } from '../time.js';
 import { weekLines } from '../reminders/brief.js';
@@ -184,7 +184,7 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       if (rm) {
         const list = await listSlogans(pool, item);
         const target = list[Number(rm[1]) - 1];
-        return void say(target && (await removeSlogan(pool, target.id)) ? `Forgot slogan ${rm[1]} for ${item}.` : `No slogan ${rm[1]} for ${item}.`);
+        return void say(target && (await forgetSloganFor(pool, target.id, item)) ? `Forgot slogan ${rm[1]} for ${item}.` : `No slogan ${rm[1]} for ${item}.`);
       }
       const [headline = '', line, caption] = body.split('|').map((p) => p.trim());
       if (!headline) return void say('Format: /slogan <item> -- <headline> | <line> | <caption>');

@@ -141,7 +141,7 @@ export type PostTextField =
   | 'caption' | 'cta' | 'hashtags' | 'alt_text' | 'story_text'
   | 'facebook_caption' | 'facebook_cta' | 'facebook_hashtags'
   | 'tiktok_opening' | 'tiktok_hook' | 'tiktok_script' | 'tiktok_caption' | 'tiktok_cta' | 'tiktok_hashtags'
-  | 'story_sequence' | 'reel_cover_text' | 'canva_headline' | 'canva_subheading';
+  | 'story_sequence' | 'reel_cover_text' | 'canva_headline' | 'canva_subheading' | 'hook';
 
 /** Who made an edit: the owner from the web app or Telegram, the agent, or the seed import. */
 export type EditSource = 'owner-web' | 'owner-telegram' | 'agent' | 'seed' | string;
@@ -245,10 +245,39 @@ export interface Wording {
   line: string | null;
   caption: string | null;
   source: string;
+  /** Every item this wording is linked to. */
+  items: { item: string; itemKey: string }[];
 }
 
-export interface WordingGroup { item: string; itemKey: string; wordings: Wording[] }
-export interface WordingsResponse { groups: WordingGroup[]; products: string[] }
+/** One post's wording, as the Wordings tab lists it under each of its items. */
+export interface PostWording {
+  dayNo: number;
+  date: string;
+  status: Status;
+  slot: Slot;
+  title: string;
+  series: string;
+  headline: string;
+  line: string;
+  caption: string;
+  cta: string;
+  hashtags: string;
+  platforms: PlatformVersions | null;
+  set: WordingSet | null;
+  waiting: boolean;
+}
+export interface WordingGroup {
+  /** Empty for the wordings not linked to anything. */
+  item: string;
+  itemKey: string;
+  category: string | null;
+  wordings: Wording[];
+  posts: PostWording[];
+  usedOn: { dayNo: number; date: string; status: Status }[];
+}
+/** A planning library of wordings; `belongsTo` says what a group's value stands for. */
+export interface WordingLibrary { name: string; title: string; header: string[]; rows: string[][]; groupColumn: number; belongsTo: Record<string, string> }
+export interface WordingsResponse { groups: WordingGroup[]; libraries: WordingLibrary[]; products: string[] }
 export interface WordingInput { headline: string; line: string; caption: string }
 
 export interface RecentPhoto {

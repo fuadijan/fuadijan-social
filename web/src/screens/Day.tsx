@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
-import { fileUrl, getDay, markPosted, packTextUrl, patchPostText, pushDay, setDesignPhotos, skipDay } from '../api';
+import { fileUrl, getDay, markPosted, packTextUrl, pushDay, setDesignPhotos, skipDay } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { CopyButton } from '../components/CopyButton';
 import { EditableText, FIELD_LABEL } from '../components/EditableText';
+import { Body, PlatformTexts, PostText, type PostEdit } from '../components/PostTexts';
 import { QuestionButtons } from '../components/QuestionButtons';
 import { ShareButton } from '../components/ShareButton';
 import { Empty, ErrorCard, Loading } from '../components/States';
@@ -11,7 +12,7 @@ import { StatusPill } from '../components/StatusPill';
 import { UploadPhotos } from '../components/UploadPhotos';
 import { WordingOptions } from '../components/WordingOptions';
 import { fmtDate, fmtDateTime, fmtTime, paragraphs, SLOT_LABEL, splitArrows } from '../format';
-import type { Asset, DayResponse, EditSource, Pack, PostTextField, Row } from '../types';
+import type { Asset, DayResponse, EditSource, Pack, Row } from '../types';
 import { useApi } from '../useApi';
 
 const FIRST_DAY = 1;
@@ -24,26 +25,6 @@ const BackLink = ({ href, children, className }: { href: string; children?: Reac
 
 type Reload = () => Promise<void>;
 
-/** A finished text of the post: starts from what shows, and a save goes straight into the pack. */
-function PostText({ d, field, label, value, hint, reload, onRebuild, copy = true, className, kind }: { d: DayResponse; field: PostTextField; label: string; value: string | null | undefined; hint?: string; reload: Reload; onRebuild: () => void; copy?: boolean; className?: string; kind?: 'input' }) {
-  const text = value?.trim() ?? '';
-  return (
-    <EditableText
-      dayNo={d.dayNo}
-      label={label}
-      value={text}
-      copyText={copy ? text : null}
-      kind={kind}
-      hint={hint}
-      save={async (v) => {
-        if ((await patchPostText(d.dayNo, field, v)).rebuilding) onRebuild();
-      }}
-      onSaved={reload}
-    >
-      <Body text={text} className={className} />
-    </EditableText>
-  );
-}
 
 /** A read-only field (the pack's derived text, which has no row column to edit). */
 function Field({ label, value, copy, mono = false, className }: { label: string; value: string | null | undefined; copy?: boolean; mono?: boolean; className?: string }) {
@@ -60,11 +41,6 @@ function Field({ label, value, copy, mono = false, className }: { label: string;
     </div>
   );
 }
-
-const Body = ({ text, className }: { text: string | null | undefined; className?: string }) => {
-  const t = text?.trim() ?? '';
-  return <div className={`sa-field-body${t ? '' : ' sa-field-body--muted'}${className ? ` ${className}` : ''}`}>{t || '—'}</div>;
-};
 
 /** The copy the owner posts: the pack's resolved text when a pack exists, else the sheet's draft. */
 function resolvedCopy(row: Row, pack: Pack | null) {
@@ -149,17 +125,18 @@ function ShootSection({ d, reload }: { d: DayResponse; reload: Reload }) {
 function CopySection({ d, reload, onRebuild }: { d: DayResponse; reload: Reload; onRebuild: () => void }) {
   const c = resolvedCopy(d.row, d.pack);
   const direct = c.draft ? undefined : 'Saved straight into the pack.';
+  const edit: PostEdit = { dayNo: d.dayNo, reload, onRebuild };
   return (
     <Card title="Copy">
       {c.draft ? <span className="sa-draft">Draft — the pack isn't made yet</span> : null}
-      <PostText d={d} field="caption" label="Caption" value={c.caption} hint={direct} reload={reload} onRebuild={onRebuild} />
-      <PostText d={d} field="cta" label="CTA" value={c.cta} hint={direct} reload={reload} onRebuild={onRebuild} />
-      <PostText d={d} field="hashtags" label="Hashtags" value={c.hashtags} hint={direct ?? 'Space separated; a missing # is added.'} className="sa-hashtags" reload={reload} onRebuild={onRebuild} />
+      <PostText {...edit} field="caption" label="Caption" value={c.caption} hint={direct} />
+      <PostText {...edit} field="cta" label="CTA" value={c.cta} hint={direct} />
+      <PostText {...edit} field="hashtags" label="Hashtags" value={c.hashtags} hint={direct ?? 'Space separated; a missing # is added.'} className="sa-hashtags" />
       {!c.draft ? (
         <>
-          <PostText d={d} field="alt_text" label="Alt text" value={c.alt} reload={reload} onRebuild={onRebuild} />
-          {d.platforms ? null : <PostText d={d} field="facebook_caption" label="Facebook caption" value={c.facebook} reload={reload} onRebuild={onRebuild} />}
-          <PostText d={d} field="story_text" label="Story text" value={c.story} reload={reload} onRebuild={onRebuild} />
+          <PostText {...edit} field="alt_text" label="Alt text" value={c.alt} />
+          {d.platforms ? null : <PostText {...edit} field="facebook_caption" label="Facebook caption" value={c.facebook} />}
+          <PostText {...edit} field="story_text" label="Story text" value={c.story} />
         </>
       ) : d.row.caption_hint ? (
         <Field label="Caption hint (from the sheet)" value={d.row.caption_hint} />
@@ -172,39 +149,14 @@ function CopySection({ d, reload, onRebuild }: { d: DayResponse; reload: Reload;
 function PlatformsSection({ d, reload, onRebuild }: { d: DayResponse; reload: Reload; onRebuild: () => void }) {
   const p = d.platforms;
   if (!p) return null;
-  // "All" or blank means every platform; otherwise only those the record names.
-  const wanted = p.notes.platform.toLowerCase();
-  const wants = (name: string) => !wanted || wanted === 'all' || wanted.includes(name);
-  const fb = [p.facebook.caption, p.facebook.cta, p.facebook.hashtags.join(' ')].filter(Boolean).join('\n\n');
-  const edit = { d, reload, onRebuild };
-  const onDesign = 'This is on the design, so saving makes the designs again.';
-  const hasTikTok = p.tiktok.opening || p.tiktok.hook || p.tiktok.script;
+  const edit: PostEdit = { dayNo: d.dayNo, reload, onRebuild };
   const n = p.notes;
   const hasNotes = n.goal || n.funnel || n.kpi || n.priority || n.objective || n.platform;
   return (
     <Card title="Every platform">
       {d.pack ? null : <span className="sa-draft">From the record. The writer fills the rest when the photo arrives.</span>}
-      {wants('facebook') && fb ? (
-        <>
-          <PostText {...edit} field="facebook_caption" label="Facebook caption" value={p.facebook.caption} />
-          <PostText {...edit} field="facebook_cta" label="Facebook CTA" value={p.facebook.cta} />
-          <PostText {...edit} field="facebook_hashtags" label="Facebook hashtags" value={p.facebook.hashtags.join(' ')} className="sa-hashtags" />
-        </>
-      ) : null}
-      {wants('tiktok') && hasTikTok ? (
-        <>
-          <PostText {...edit} field="tiktok_opening" label="TikTok opening text" value={p.tiktok.opening} />
-          <PostText {...edit} field="tiktok_hook" label="TikTok hook" value={p.tiktok.hook} />
-          <PostText {...edit} field="tiktok_script" label="TikTok script" value={p.tiktok.script} />
-          <PostText {...edit} field="tiktok_caption" label="TikTok caption" value={p.tiktok.caption} />
-          <PostText {...edit} field="tiktok_cta" label="TikTok CTA" value={p.tiktok.cta} />
-          <PostText {...edit} field="tiktok_hashtags" label="TikTok hashtags" value={p.tiktok.hashtags.join(' ')} className="sa-hashtags" />
-        </>
-      ) : null}
-      {p.stories.length ? <PostText {...edit} field="story_sequence" label="Story sequence" value={p.stories.join('\n')} hint="One story per line." /> : null}
-      {p.reel_cover ? <PostText {...edit} field="reel_cover_text" label="Reel cover" value={p.reel_cover} hint={onDesign} /> : null}
-      {p.canva.headline ? <PostText {...edit} field="canva_headline" label="Headline on the design" value={p.canva.headline} hint={onDesign} /> : null}
-      {p.canva.subheading ? <PostText {...edit} field="canva_subheading" label="Label on the design" value={p.canva.subheading} hint={onDesign} /> : null}
+      <PlatformTexts p={p} edit={edit} />
+      {p.canva.headline ? <PostText {...edit} field="canva_headline" label="Headline on the design" value={p.canva.headline} hint="This is on the design, so saving makes the designs again." /> : null}
       {p.photo_edit_prompt ? <Field label="Photo edit prompt (use with a real photo of the food)" value={p.photo_edit_prompt} copy /> : null}
       {p.image_prompt ? <Field label="Image prompt (backgrounds, mock-ups and concepts only, never a dish you sell)" value={p.image_prompt} copy /> : null}
       {p.benefit || p.customer_message ? <Field label="Customer benefit" value={[p.benefit, p.customer_message].filter(Boolean).join('\n')} /> : null}

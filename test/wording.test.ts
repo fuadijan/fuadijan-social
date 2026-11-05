@@ -3,6 +3,7 @@ import type { ResolvedCopy } from '../src/brain/schemas.js';
 import type { Slogan } from '../src/slogans.js';
 import { asLine, optionsFrom, ownerOptions, type CopyOptions } from '../src/pipeline/wording.js';
 import { cleanHashtags, copyWith } from '../src/pipeline/post-text.js';
+import { postItems } from '../src/wordings-view.js';
 
 const copy = {
   headline: 'Beef Seekh', line: 'Hand formed, special spices.', caption: 'Beef Seekh, hand formed and grilled.',
@@ -25,6 +26,13 @@ describe('wording options', () => {
     expect(ownerOptions(set)).toEqual([own]);
     expect(ownerOptions(null)).toEqual([]);
     expect(optionsFrom(copy, [], ownerOptions(set)).at(-1)).toEqual(own);
+  });
+
+  it('puts a post under each dish it names, or under its benefit or series without one', () => {
+    const row = { template: 'from-the-karahi', theme: null, type: 'hero-dish', benefit: null };
+    expect(postItems({ ...row, dish: 'Lamb Karahi, Chicken Karahi' })).toEqual(['Lamb Karahi', 'Chicken Karahi']);
+    expect(postItems({ ...row, dish: '[choose a dish]', benefit: 'Plenty of parking' })).toEqual(['Plenty of parking']);
+    expect(postItems({ ...row, dish: null })).toHaveLength(1);
   });
 
   it('tidies typed hashtags and changes only the edited part of the copy', () => {

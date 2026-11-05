@@ -14,7 +14,7 @@ export const FIELD_LABEL: Record<string, string> = {
   post_time: 'Post time', status: 'Status', date: 'Date', design_photos: 'Photos in the design',
   'content.alt_text': 'Alt text', 'content.story_text': 'Story text', 'content.facebook_caption': 'Facebook caption', 'content.facebook_cta': 'Facebook CTA', 'content.facebook_hashtags': 'Facebook hashtags',
   'content.tiktok_opening': 'TikTok opening text', 'content.tiktok_hook': 'TikTok hook', 'content.tiktok_script': 'TikTok script', 'content.tiktok_caption': 'TikTok caption', 'content.tiktok_cta': 'TikTok CTA', 'content.tiktok_hashtags': 'TikTok hashtags',
-  'content.story_sequence': 'Story sequence', 'content.reel_cover_text': 'Reel cover', 'content.canva_headline': 'Headline on the design', 'content.canva_subheading': 'Label on the design',
+  'content.story_sequence': 'Story sequence', 'content.reel_cover_text': 'Reel cover', 'content.canva_headline': 'Headline on the design', 'content.canva_subheading': 'Label on the design', 'content.hook': 'Line on the design',
 };
 
 interface Props {
