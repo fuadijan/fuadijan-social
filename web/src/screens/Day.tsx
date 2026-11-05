@@ -81,7 +81,7 @@ function HeadSection({ d, reload }: { d: DayResponse; reload: Reload }) {
               <dt>Custom</dt>
               <dd>
                 {row.custom.style === 'auto' ? 'style by the art director' : `${row.custom.style} style`} · {row.custom.formats.map((f) => (f === 'feed' ? 'feed' : 'story')).join(' + ')}
-                {row.custom.wording ? ' · your wording' : ' · wording by the agent'}
+                {row.custom.wording ? ' · your caption' : ' · caption by the agent'}
               </dd>
             </>
           ) : null}
@@ -170,8 +170,8 @@ function PlatformsSection({ d, reload, onRebuild }: { d: DayResponse; reload: Re
 
 function WordingSection({ d, reload, onRebuild }: { d: DayResponse; reload: Reload; onRebuild: () => void }) {
   return (
-    <Card title="Wording" id="wording">
-      <div className="sa-note" style={{ marginBottom: 10 }}>{d.wording.length ? 'Every wording for this day. Pick one and the designs and pack are made with it; change any of them, or add your own.' : 'The writer’s wordings appear here when the photo arrives. You can add your own now.'}</div>
+    <Card title="Captions" id="wording">
+      <div className="sa-note" style={{ marginBottom: 10 }}>{d.wording.length ? 'Every caption set for this day: title, line and caption. Pick one and the designs and pack are made with it; change any of them, or add your own.' : 'The writer’s captions appear here when the photo arrives. You can add your own now.'}</div>
       <WordingOptions dayNo={d.dayNo} sets={d.wording} waiting={d.wordingWaiting} onChosen={reload} onRebuild={onRebuild} />
     </Card>
   );

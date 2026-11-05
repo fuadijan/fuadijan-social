@@ -72,7 +72,7 @@ export function WordingOptions({ dayNo, sets, waiting, onChosen, onRebuild }: { 
           onCancel={() => setAdding(false)}
         />
       ) : (
-        <div className="sa-wording-actions"><Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => setAdding(true)}>+ Add your own wording</Button></div>
+        <div className="sa-wording-actions"><Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => setAdding(true)}>+ Add your own caption</Button></div>
       )}
       {sets.map((set, si) => (
         <div key={set.id} className="sa-wording-set">
@@ -97,7 +97,7 @@ export function WordingOptions({ dayNo, sets, waiting, onChosen, onRebuild }: { 
               return (
                 <li key={i} className={`sa-wording-option${chosen ? ' sa-wording-option--chosen' : ''}`}>
                   <div className="sa-wording-head">
-                    <span className="sa-wording-name">{i + 1} · {o.name}</span>
+                    <span className="sa-wording-name">{i + 1} · {o.name.replace(/wording/i, 'caption').replace(/^Slogan/, 'Reusable')}</span>
                     {chosen ? <span className="sa-wording-chosen">in use</span> : null}
                   </div>
                   <div className="sa-wording-headline">{o.headline.split('\n').map((l, k) => <span key={k}>{l}</span>)}</div>

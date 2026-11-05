@@ -168,9 +168,10 @@ the pack, with no writer run and no question. Only text printed on the design (h
 title and line) makes the designs again. The owner's record edits are logged as `content.<field>`, and loading a workbook
 leaves those fields alone; the owner's wordings carry into the next writer run.
 
-**The Wordings tab.** Every wording in one list, each with what it belongs to, and all of it editable
-(`src/wordings-view.ts`): reusable wordings, every post's wording under each dish it names, and the hook, CTA, hashtag and
-benefit caption libraries by series, goal, tag group or benefit. A reusable wording links to any number of items
+**The Captions tab.** (Called wordings in the code and the Telegram commands.) Every caption in one list, each with what
+it belongs to, and all of it editable (`src/wordings-view.ts`): reusable captions, every post's title, line and caption
+under each dish it names, and the benefit captions under their benefit; the hook, CTA and hashtag libraries follow, by
+series, goal or tag group. A post's words or a hook can be saved as a reusable caption, which is what can be linked. A reusable wording links to any number of items
 (`slogan_items`), so one change reaches them all; taken off its last item it is kept as not linked. Moving a library row
 is editing its series. An edited library row survives loading the same workbook again (`reference_sheets.owner_rows`).
 Changing a reusable wording also reaches every post written but not yet posted that offers it (`spreadSloganEdit`): a

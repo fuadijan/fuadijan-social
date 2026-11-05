@@ -3,7 +3,7 @@ import type { ResolvedCopy } from '../src/brain/schemas.js';
 import type { Slogan } from '../src/slogans.js';
 import { asLine, optionAfterSloganEdit, optionsFrom, ownerOptions, type CopyOptions } from '../src/pipeline/wording.js';
 import { cleanHashtags, copyWith } from '../src/pipeline/post-text.js';
-import { postItems } from '../src/wordings-view.js';
+import { postItems, withBenefitCaptions, type WordingLibrary } from '../src/wordings-view.js';
 
 const copy = {
   headline: 'Beef Seekh', line: 'Hand formed, special spices.', caption: 'Beef Seekh, hand formed and grilled.',
@@ -26,6 +26,14 @@ describe('wording options', () => {
     expect(ownerOptions(set)).toEqual([own]);
     expect(ownerOptions(null)).toEqual([]);
     expect(optionsFrom(copy, [], ownerOptions(set)).at(-1)).toEqual(own);
+  });
+
+  it('puts each benefit caption in the one list under its benefit, with or without posts', () => {
+    const lib = { name: 'Benefit Caption Templates', title: 'x', header: ['BenefitID', 'Hook'], groupColumn: 0, belongsTo: { 'BEN-01': 'Plenty of parking', 'BEN-02': 'Air conditioning' }, rows: [['BEN-01', 'A'], ['BEN-02', 'B'], ['BEN-01', 'C'], ['BEN-09', 'D']] } as WordingLibrary;
+    const parking = { item: 'Plenty of parking', itemKey: 'plenty of parking', category: null, wordings: [], posts: [], templateRows: [], usedOn: [] };
+    const groups = withBenefitCaptions([parking], lib);
+    expect(groups.map((g) => [g.item, g.templateRows])).toEqual([['Air conditioning', [1]], ['BEN-09', [3]], ['Plenty of parking', [0, 2]]]);
+    expect(withBenefitCaptions([parking], undefined)).toEqual([parking]);
   });
 
   it('puts a post under each dish it names, or under its benefit or series without one', () => {

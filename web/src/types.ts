@@ -273,11 +273,13 @@ export interface WordingGroup {
   category: string | null;
   wordings: Wording[];
   posts: PostWording[];
+  /** Rows of the benefit caption library that belong here, by their place in it. */
+  templateRows: number[];
   usedOn: { dayNo: number; date: string; status: Status }[];
 }
 /** A planning library of wordings; `belongsTo` says what a group's value stands for. */
 export interface WordingLibrary { name: string; title: string; header: string[]; rows: string[][]; groupColumn: number; belongsTo: Record<string, string> }
-export interface WordingsResponse { groups: WordingGroup[]; libraries: WordingLibrary[]; products: string[] }
+export interface WordingsResponse { groups: WordingGroup[]; libraries: WordingLibrary[]; benefitCaptions: WordingLibrary | null; products: string[] }
 export interface WordingInput { headline: string; line: string; caption: string }
 
 export interface RecentPhoto {

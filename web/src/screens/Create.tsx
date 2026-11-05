@@ -7,7 +7,7 @@ import { fmtDate } from '../format';
 import type { CreateOptions, CustomFormat, StyleKey, Wording, WordingInput } from '../types';
 import { useApi } from '../useApi';
 
-const STEPS = ['Product', 'Series', 'Wording', 'Style', 'Output', 'Photo'] as const;
+const STEPS = ['Product', 'Series', 'Caption', 'Style', 'Output', 'Photo'] as const;
 const MAX_FILES = 10;
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -52,7 +52,7 @@ function ProductStep({ opts, value, onChange }: { opts: CreateOptions; value: st
           <button type="button" className={`sa-chip${key(value) === key(q) ? ' sa-chip--on' : ''}`} onClick={() => onChange(q.trim())}>Use “{q.trim()}”</button>
         ) : null}
       </div>
-      <div className="sa-note" style={{ marginTop: 8 }}>The number is how many wordings the bank has for it. A product marked coming soon or planned is on the roster but not the menu yet. Not listed? Type the name; the agent still checks the menu before claiming anything.</div>
+      <div className="sa-note" style={{ marginTop: 8 }}>The number is how many reusable captions it has. A product marked coming soon or planned is on the roster but not the menu yet. Not listed? Type the name; the agent still checks the menu before claiming anything.</div>
     </Card>
   );
 }
@@ -86,7 +86,7 @@ function WordingStep({ product, bank, value, onChange }: { product: string; bank
   );
   return (
     <Card title="3 · Title and writing">
-      {mine.length === 0 && house.length === 0 ? <div className="sa-note" style={{ marginBottom: 10 }}>No wordings in the bank for {product} yet. Write one below, or <Link to="/wordings">keep some in Wordings</Link> for next time.</div> : null}
+      {mine.length === 0 && house.length === 0 ? <div className="sa-note" style={{ marginBottom: 10 }}>No reusable captions for {product} yet. Write one below, or <Link to="/captions">keep some in Captions</Link> for next time.</div> : null}
       {mine.length > 0 ? (
         <>
           <div className="sa-eyebrow">For {product}</div>
@@ -101,7 +101,7 @@ function WordingStep({ product, bank, value, onChange }: { product: string; bank
       ) : null}
       <ul className="sa-options">
         <Option on={value?.kind === 'own'} onPick={() => onChange({ kind: 'own', w: own })} title="Write my own" sub="The title is the product's name unless you change it; your line goes under it as typed." />
-        <Option on={value?.kind === 'agent'} onPick={() => onChange({ kind: 'agent' })} title="Let the agent write it" sub="It drafts the headline, line and caption from the menu; you pick a wording before the design, as usual." />
+        <Option on={value?.kind === 'agent'} onPick={() => onChange({ kind: 'agent' })} title="Let the agent write it" sub="It drafts the headline, line and caption from the menu; you pick one before the design, as usual." />
       </ul>
       {value?.kind === 'own' ? (
         <div className="sa-form" style={{ marginTop: 12 }}>
@@ -120,7 +120,7 @@ function WordingStep({ product, bank, value, onChange }: { product: string; bank
           </div>
         </div>
       ) : null}
-      {mine.length > 0 || house.length > 0 ? <p className="sa-note" style={{ marginTop: 10 }}><Link to="/wordings">Manage the wordings</Link></p> : null}
+      {mine.length > 0 || house.length > 0 ? <p className="sa-note" style={{ marginTop: 10 }}><Link to="/captions">Manage the captions</Link></p> : null}
     </Card>
   );
 }
@@ -235,8 +235,8 @@ export function Create() {
 
   const opts = options.data;
   if (options.error && !opts) return <><PageHeader title="New design" /><ErrorCard message={options.error} onRetry={() => void options.reload()} /></>;
-  if (!opts) return <><PageHeader title="New design" /><Loading what="Getting the menu and the wordings" /></>;
-  const wordings = bank.data?.groups.flatMap((g) => g.wordings) ?? [];
+  if (!opts) return <><PageHeader title="New design" /><Loading what="Getting the menu and the captions" /></>;
+  const wordings = bank.data?.groups.flatMap((g) => g.wordings).filter((w) => w.itemKey !== '') ?? [];
   const theDate = date || opts.today;
 
   const ownOk = wording?.kind !== 'own' || wording.w.headline.trim().length > 0;
@@ -304,7 +304,7 @@ export function Create() {
               <dl className="sa-summary">
                 <dt>Product</dt><dd>{product}</dd>
                 <dt>Series</dt><dd>{seriesLabel}</dd>
-                <dt>Wording</dt><dd>{wording?.kind === 'agent' ? 'the agent writes it; you pick before the design' : wording?.kind === 'bank' ? `${product.trim()} — ${wording.w.headline.replace('\n', ' ')}` : wording ? `${wording.w.headline.replace('\n', ' / ')}${wording.w.line ? ` — ${wording.w.line}` : ''}` : '—'}</dd>
+                <dt>Caption</dt><dd>{wording?.kind === 'agent' ? 'the agent writes it; you pick before the design' : wording?.kind === 'bank' ? `${product.trim()} — ${wording.w.headline.replace('\n', ' ')}` : wording ? `${wording.w.headline.replace('\n', ' / ')}${wording.w.line ? ` — ${wording.w.line}` : ''}` : '—'}</dd>
                 <dt>Style</dt><dd>{styleName}</dd>
                 <dt>Make</dt><dd>{formats.map((f) => (f === 'feed' ? 'Feed 4:5' : 'Story 9:16')).join(' + ')} · {fmtDate(theDate)}{time ? ` at ${time}` : ''}</dd>
                 <dt>Photo</dt><dd>{photo?.kind === 'files' ? photo.files.map((f) => f.name).join(', ') : photo?.kind === 'asset' ? `already received · ${photo.label}` : '—'}</dd>

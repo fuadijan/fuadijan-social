@@ -51,6 +51,8 @@ export interface WordingGroup {
   category: string | null;
   wordings: BankWording[];
   posts: PostWording[];
+  /** Rows of the benefit caption library that belong here, by their place in it. */
+  templateRows: number[];
   /** Every post the group's wordings reach, for the "used on" line. */
   usedOn: { dayNo: number; date: string; status: CalendarRow['status'] }[];
 }
@@ -70,7 +72,7 @@ export function groupWordings(posts: { row: CalendarRow; wording: PostWording }[
   const group = (item: string, key = itemKey(item)) => {
     const have = groups.get(key);
     if (have) return have;
-    const made: WordingGroup = { item: key === 'all' ? 'Every post' : item, itemKey: key, category: categories.get(key) ?? null, wordings: [], posts: [], usedOn: [] };
+    const made: WordingGroup = { item: key === 'all' ? 'Every post' : item, itemKey: key, category: categories.get(key) ?? null, wordings: [], posts: [], templateRows: [], usedOn: [] };
     groups.set(key, made);
     return made;
   };
@@ -95,6 +97,7 @@ const LIBRARIES = [
   { name: 'Benefit Caption Templates', title: 'Benefit captions', groupBy: 'BenefitID' },
 ] as const;
 export const WORDING_LIBRARIES: readonly string[] = LIBRARIES.map((l) => l.name);
+const BENEFIT_CAPTIONS = 'Benefit Caption Templates';
 
 export interface WordingLibrary {
   name: string;
@@ -120,11 +123,30 @@ async function libraries(db: Db): Promise<WordingLibrary[]> {
   return LIBRARIES.flatMap((l) => {
     const s = sheets.get(l.name);
     if (!s) return [];
-    return [{ name: l.name, title: l.title, header: s.header, rows: s.rows, groupColumn: s.header.findIndex((h) => h.trim().toLowerCase() === l.groupBy.toLowerCase()), belongsTo: l.name === 'Benefit Caption Templates' ? benefits : inSeries }];
+    return [{ name: l.name, title: l.title, header: s.header, rows: s.rows, groupColumn: s.header.findIndex((h) => h.trim().toLowerCase() === l.groupBy.toLowerCase()), belongsTo: l.name === BENEFIT_CAPTIONS ? benefits : inSeries }];
   });
 }
 
-export async function wordingsView(db: Db): Promise<{ groups: WordingGroup[]; libraries: WordingLibrary[] }> {
+/** Puts the benefit captions in the one list, each under its benefit. */
+export function withBenefitCaptions(groups: WordingGroup[], lib: WordingLibrary | undefined): WordingGroup[] {
+  if (!lib) return groups;
+  const out = [...groups];
+  lib.rows.forEach((row, index) => {
+    const id = row[lib.groupColumn]?.trim() ?? '';
+    const item = lib.belongsTo[id.toUpperCase()] ?? id;
+    const key = itemKey(item);
+    let g = out.find((x) => x.itemKey === key);
+    if (!g) {
+      g = { item, itemKey: key, category: 'Benefit', wordings: [], posts: [], templateRows: [], usedOn: [] };
+      out.push(g);
+    }
+    g.templateRows.push(index);
+  });
+  const rank = (g: WordingGroup) => (g.itemKey === 'all' ? 0 : g.itemKey === '' ? 1 : 2);
+  return out.sort((a, b) => rank(a) - rank(b) || a.item.localeCompare(b.item));
+}
+
+export async function wordingsView(db: Db): Promise<{ groups: WordingGroup[]; libraries: WordingLibrary[]; benefitCaptions: WordingLibrary | null }> {
   const rows = await allRows(db);
   const ids = rows.map((r) => r.id);
   const packs = new Map((await db.query<{ calendar_row_id: number; caption: string; cta: string | null; hashtags: string[]; platforms: PlatformVersions | null }>(
@@ -150,5 +172,11 @@ export async function wordingsView(db: Db): Promise<{ groups: WordingGroup[]; li
     return { row, wording };
   }));
   const categories = new Map((await listProducts(db)).map((p) => [p.name_key, p.category]));
-  return { groups: groupWordings(posts, [...await listSlogans(db), ...await unlinkedSlogans(db)], categories), libraries: await libraries(db) };
+  const libs = await libraries(db);
+  const benefitCaptions = libs.find((l) => l.name === BENEFIT_CAPTIONS);
+  return {
+    groups: withBenefitCaptions(groupWordings(posts, [...await listSlogans(db), ...await unlinkedSlogans(db)], categories), benefitCaptions),
+    libraries: libs.filter((l) => l.name !== BENEFIT_CAPTIONS),
+    benefitCaptions: benefitCaptions ?? null,
+  };
 }

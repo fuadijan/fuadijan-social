@@ -31,7 +31,7 @@ const NAV: FjNavSection[] = [
     label: 'Create',
     items: [
       { href: '/create', label: 'New design', shortLabel: 'Create', icon: '✨' },
-      { href: '/wordings', label: 'Wordings', icon: '✍️' },
+      { href: '/captions', label: 'Captions', icon: '✍️' },
       { href: '/strategy', label: 'Strategy', icon: '🧭' },
     ],
   },
@@ -63,7 +63,8 @@ export function App() {
         <Route path="/day" element={<DayRedirect />} />
         <Route path="/day/:dayNo" element={<Day />} />
         <Route path="/create" element={<Create />} />
-        <Route path="/wordings" element={<Wordings />} />
+        <Route path="/captions" element={<Wordings />} />
+        <Route path="/wordings" element={<Navigate to="/captions" replace />} />
         <Route path="/strategy" element={<Strategy />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

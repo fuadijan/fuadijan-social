@@ -414,8 +414,9 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     return { ok: true };
   });
 
-  function wordingBody(body: Record<string, unknown> | undefined): { headline: string; line: string | null; caption: string | null } {
-    const headline = String(body?.headline ?? '').replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 2).join('\n').slice(0, 60);
+  /** A post's headline is its title, 60 characters at most; a reusable one goes on the post's line, so `max` lets it run longer. */
+  function wordingBody(body: Record<string, unknown> | undefined, max = 60): { headline: string; line: string | null; caption: string | null } {
+    const headline = String(body?.headline ?? '').replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 2).join('\n').slice(0, max);
     if (!headline) throw new Error('A wording needs a headline.');
     return { headline, line: String(body?.line ?? '').trim().slice(0, 140) || null, caption: String(body?.caption ?? '').trim().slice(0, 2200) || null };
   }
@@ -424,7 +425,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const item = String(req.body?.item ?? '').trim().slice(0, 60);
     if (!item) return reply.code(400).send({ ok: false, error: 'Which product is this wording for?' });
     try {
-      const s = await addSlogan(ctx.pool, { item, ...wordingBody(req.body), source: 'owner-web' });
+      const s = await addSlogan(ctx.pool, { item, ...wordingBody(req.body, 140), source: 'owner-web' });
       return { ok: true, wording: wordingJson(s) };
     } catch (e) {
       return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
@@ -434,7 +435,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/wordings/:id', async (req, reply) => {
     try {
       const before = await sloganById(ctx.pool, Number(req.params.id));
-      const s = before && await updateSlogan(ctx.pool, before.id, wordingBody(req.body));
+      const s = before && await updateSlogan(ctx.pool, before.id, wordingBody(req.body, 140));
       if (!before || !s) return reply.code(404).send({ ok: false, error: 'No such wording' });
       return { ok: true, wording: wordingJson(s), ...await spreadSloganEdit(ctx.pool, before, s) };
     } catch (e) {
