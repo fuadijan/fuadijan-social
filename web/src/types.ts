@@ -247,9 +247,13 @@ export interface Wording {
   source: string;
   /** Every item this wording is linked to. */
   items: { item: string; itemKey: string }[];
+  /** The posts it reaches. */
+  posts: PostRef[];
 }
 
-/** One post's wording, as the Wordings tab lists it under each of its items. */
+/** A post under a wording; `inUse` when it is the wording that post is using. */
+export interface PostRef { dayNo: number; date: string; status: Status; inUse?: boolean }
+/** One post's own words, as the Captions tab lists them. */
 export interface PostWording {
   dayNo: number;
   date: string;
@@ -257,6 +261,7 @@ export interface PostWording {
   slot: Slot;
   title: string;
   series: string;
+  items: string[];
   headline: string;
   line: string;
   caption: string;
@@ -266,20 +271,9 @@ export interface PostWording {
   set: WordingSet | null;
   waiting: boolean;
 }
-export interface WordingGroup {
-  /** Empty for the wordings not linked to anything. */
-  item: string;
-  itemKey: string;
-  category: string | null;
-  wordings: Wording[];
-  posts: PostWording[];
-  /** Rows of the benefit caption library that belong here, by their place in it. */
-  templateRows: number[];
-  usedOn: { dayNo: number; date: string; status: Status }[];
-}
-/** A planning library of wordings; `belongsTo` says what a group's value stands for. */
-export interface WordingLibrary { name: string; title: string; header: string[]; rows: string[][]; groupColumn: number; belongsTo: Record<string, string> }
-export interface WordingsResponse { groups: WordingGroup[]; libraries: WordingLibrary[]; benefitCaptions: WordingLibrary | null; products: string[] }
+/** A planning library of wordings; `belongsTo` says what a group's value stands for, `posts` what uses each row. */
+export interface WordingLibrary { name: string; title: string; header: string[]; rows: string[][]; groupColumn: number; belongsTo: Record<string, string>; posts: Record<number, PostRef[]> }
+export interface WordingsResponse { reusable: Wording[]; posts: PostWording[]; libraries: WordingLibrary[]; products: string[] }
 export interface WordingInput { headline: string; line: string; caption: string }
 
 export interface RecentPhoto {

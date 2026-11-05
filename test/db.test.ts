@@ -679,12 +679,11 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const shared = await addSlogan(pool, { item: 'Chapli Kebab', headline: 'Shared line', source: 'owner-web' });
     await linkSlogan(pool, shared.id, 'Lamb Karahi');
     const view = await wordingsView(pool);
-    const chapli = view.groups.find((g) => g.itemKey === 'chapli kebab')!;
-    expect(chapli.posts.map((p) => p.dayNo)).toContain(2);
-    expect(chapli.usedOn.map((d) => d.dayNo)).toContain(2);
-    expect(chapli.wordings.find((w) => w.id === shared.id)!.items.map((i) => i.itemKey)).toEqual(['chapli kebab', 'lamb karahi']);
-    expect(view.groups.find((g) => g.itemKey === 'lamb karahi')!.wordings.map((w) => w.id)).toContain(shared.id);
-    expect(view.groups[0]!.itemKey).toBe('all');
+    const card = view.reusable.find((w) => w.id === shared.id)!;
+    expect(card.items.map((i) => i.itemKey)).toEqual(['chapli kebab', 'lamb karahi']);
+    expect(card.posts.map((p) => p.dayNo)).toContain(2);
+    expect(view.reusable.filter((w) => w.id === shared.id)).toHaveLength(1);
+    expect(view.posts.find((p) => p.dayNo === 2)!.items).toContain('Chapli Kebab');
     expect(view.libraries.map((l) => l.name)).toContain('Hooks Library');
   });
 

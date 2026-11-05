@@ -236,7 +236,8 @@ export function Create() {
   const opts = options.data;
   if (options.error && !opts) return <><PageHeader title="New design" /><ErrorCard message={options.error} onRetry={() => void options.reload()} /></>;
   if (!opts) return <><PageHeader title="New design" /><Loading what="Getting the menu and the captions" /></>;
-  const wordings = bank.data?.groups.flatMap((g) => g.wordings).filter((w) => w.itemKey !== '') ?? [];
+  // One entry per link, for the product's own and the house lists; a caption on no product is offered nowhere.
+  const wordings = bank.data?.reusable.flatMap((w) => w.items.map((i) => ({ ...w, item: i.item, itemKey: i.itemKey }))) ?? [];
   const theDate = date || opts.today;
 
   const ownOk = wording?.kind !== 'own' || wording.w.headline.trim().length > 0;

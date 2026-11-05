@@ -3,7 +3,8 @@ import type { ResolvedCopy } from '../src/brain/schemas.js';
 import type { Slogan } from '../src/slogans.js';
 import { asLine, optionAfterSloganEdit, optionsFrom, ownerOptions, type CopyOptions } from '../src/pipeline/wording.js';
 import { cleanHashtags, copyWith } from '../src/pipeline/post-text.js';
-import { postItems, withBenefitCaptions, type WordingLibrary } from '../src/wordings-view.js';
+import { postItems, postsUsingRow, reusableWordings, type PostWording } from '../src/wordings-view.js';
+import type { CalendarRow } from '../src/calendar/rows.js';
 
 const copy = {
   headline: 'Beef Seekh', line: 'Hand formed, special spices.', caption: 'Beef Seekh, hand formed and grilled.',
@@ -28,12 +29,35 @@ describe('wording options', () => {
     expect(optionsFrom(copy, [], ownerOptions(set)).at(-1)).toEqual(own);
   });
 
-  it('puts each benefit caption in the one list under its benefit, with or without posts', () => {
-    const lib = { name: 'Benefit Caption Templates', title: 'x', header: ['BenefitID', 'Hook'], groupColumn: 0, belongsTo: { 'BEN-01': 'Plenty of parking', 'BEN-02': 'Air conditioning' }, rows: [['BEN-01', 'A'], ['BEN-02', 'B'], ['BEN-01', 'C'], ['BEN-09', 'D']] } as WordingLibrary;
-    const parking = { item: 'Plenty of parking', itemKey: 'plenty of parking', category: null, wordings: [], posts: [], templateRows: [], usedOn: [] };
-    const groups = withBenefitCaptions([parking], lib);
-    expect(groups.map((g) => [g.item, g.templateRows])).toEqual([['Air conditioning', [1]], ['BEN-09', [3]], ['Plenty of parking', [0, 2]]]);
-    expect(withBenefitCaptions([parking], undefined)).toEqual([parking]);
+  it('lists the posts under a reusable caption: linked, holding it, or using it', () => {
+    const post = (dayNo: number, dish: string, options: PostWording['set'] | null = null, more: Partial<PostWording> = {}) => ({
+      row: { day_no: dayNo, date: '2026-11-10', status: 'ready', dish, theme: null } as unknown as CalendarRow,
+      wording: { dayNo, set: options, ...more } as PostWording,
+    });
+    const set = (options: NonNullable<PostWording['set']>['options'], chosen: number | null) => ({ id: 1, options, chosen, createdAt: new Date() });
+    const fromIt = { name: 'Slogan · Lamb Karahi', headline: 'T', line: 'Slow cooked', caption: 'C', sloganId: 5 };
+    const links = [slogan({ id: 5, item: 'Lamb Karahi', item_key: 'lamb karahi', headline: 'Slow cooked' }), slogan({ id: 5, item: 'Beef Karahi', item_key: 'beef karahi', headline: 'Slow cooked' })];
+    const posts = [post(10, 'Lamb Karahi'), post(15, 'Beef Karahi, Naan'), post(20, 'Burger'), post(25, 'Burger', set([fromIt], 0)), post(26, 'Burger', set([{ ...fromIt, sloganId: undefined }], null))];
+    const [w] = reusableWordings(links, posts);
+    expect(w!.items.map((i) => i.item)).toEqual(['Lamb Karahi', 'Beef Karahi']);
+    expect(w!.posts.map((p) => [p.dayNo, Boolean(p.inUse)])).toEqual([[10, false], [15, false], [25, true], [26, false]]);
+    // On every post it lists only the posts using it; a caption on nothing reaches nothing.
+    const [every] = reusableWordings([slogan({ id: 5, item: 'all', item_key: 'all', headline: 'Slow cooked' })], posts);
+    expect(every!.posts.map((p) => p.dayNo)).toEqual([25]);
+    const [none] = reusableWordings([slogan({ id: 6, item: '', item_key: '', headline: 'Alone' })], posts);
+    expect([none!.items, none!.posts]).toEqual([[], []]);
+  });
+
+  it('finds the posts using a library row by their text', () => {
+    const post = (dayNo: number, w: Partial<PostWording>, benefit: string | null = null) => ({
+      row: { day_no: dayNo, date: '2026-11-10', status: 'ready', benefit, content: null } as unknown as CalendarRow,
+      wording: { dayNo, line: '', cta: '', caption: '', hashtags: '', platforms: null, ...w } as PostWording,
+    });
+    const days = (header: string[], row: string[], posts: ReturnType<typeof post>[], more = {}) => postsUsingRow({ header, ...more }, row, posts).map((p) => p.dayNo);
+    expect(days(['HookID', 'Series', 'Hook'], ['H', 'S', '"Rate  this skewer."'], [post(1, { line: 'rate this skewer.' }), post(2, { line: 'Other' })])).toEqual([1]);
+    expect(days(['CTAID', 'CTA', 'Goal'], ['C', 'Come in tonight.', 'Visit'], [post(3, { cta: 'Come in tonight.' }), post(4, { cta: 'Later' })])).toEqual([3]);
+    expect(days(['Tag Group', 'Platform', 'Hashtags'], ['Core', 'Instagram', '#a #B'], [post(5, { hashtags: '#c #b #A' }), post(6, { hashtags: '#a' })])).toEqual([5]);
+    expect(days(['BenefitID', 'Hook', 'Caption Template'], ['BEN-01', 'H', 'C'], [post(7, {}, 'Plenty of parking'), post(8, {}, 'Air conditioning')], { groupColumn: 0, belongsTo: { 'BEN-01': 'Plenty of parking' } })).toEqual([7]);
   });
 
   it('puts a post under each dish it names, or under its benefit or series without one', () => {

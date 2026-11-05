@@ -397,7 +397,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
 
   const wordingJson = (s: Slogan) => ({ id: s.id, item: s.item, itemKey: s.item_key, headline: s.headline, line: s.line, caption: s.caption, source: s.source });
 
-  // Every wording the app holds, each with what it belongs to: the bank, every post in the plan and the libraries.
+  // Every wording the app holds, each with what uses it: the bank, every post in the plan and the libraries.
   app.get('/api/wordings', async () => ({ ...await wordingsView(ctx.pool), products: (await products()).map((p) => p.name) }));
 
   /** One row of a wording library, changed by the owner. */
