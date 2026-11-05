@@ -46,8 +46,18 @@ export function optionsFrom(copy: ResolvedCopy, slogans: Slogan[] = [], extra: W
   for (const v of copy.variants) push({ name: v.name || `Option ${out.length + 1}`, headline: v.headline, line: v.line, caption: v.caption });
   for (const e of extra) push(e);
   // A bank wording goes on the line under the product's name; its own line, if any, follows.
-  for (const s of slogans) push({ name: `Slogan · ${s.item_key === 'all' ? 'house' : s.item}`, headline: copy.headline, line: asLine(s.headline, s.line), caption: s.caption ?? copy.caption, sloganId: s.id });
+  for (const s of slogans) push(optionFromSlogan(s, copy.headline, copy.caption));
   return out;
+}
+
+/** A reusable wording as a post's option: it goes on the line under the post's title, and borrows the post's caption if it has none. */
+export function optionFromSlogan(s: Slogan, headline: string, caption: string): WordingOption {
+  return { name: `Slogan · ${s.item_key === 'all' ? 'house' : s.item}`, headline, line: asLine(s.headline, s.line), caption: s.caption ?? caption, sloganId: s.id };
+}
+
+/** Whether a post's option came from this reusable wording; older options have no link and are matched by their words. */
+export function optionIsFrom(o: WordingOption, s: Pick<Slogan, 'id' | 'headline' | 'line'>): boolean {
+  return o.sloganId === s.id || (o.sloganId === undefined && o.name.startsWith('Slogan ·') && o.line === asLine(s.headline, s.line));
 }
 
 const key = (o: WordingOption) => `${o.headline}\u0000${o.line}\u0000${o.caption}`.toLowerCase();
@@ -99,8 +109,7 @@ export async function addCustomOption(db: Db, set: CopyOptions, text: string, mo
  */
 export function optionAfterSloganEdit(o: WordingOption, before: Slogan, after: Pick<Slogan, 'headline' | 'line' | 'caption'>, mainCaption: string): WordingOption | null {
   if (o.owner) return null;
-  const fromIt = o.sloganId === before.id || (o.sloganId === undefined && o.name.startsWith('Slogan ·') && o.line === asLine(before.headline, before.line));
-  if (!fromIt) return null;
+  if (!optionIsFrom(o, before)) return null;
   const borrowed = before.caption ? o.caption !== before.caption : true;
   return { ...o, sloganId: before.id, line: asLine(after.headline, after.line), caption: after.caption ?? (borrowed ? o.caption : mainCaption) };
 }

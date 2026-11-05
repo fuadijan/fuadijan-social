@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ResolvedCopy } from '../src/brain/schemas.js';
-import type { Slogan } from '../src/slogans.js';
+import { aboutPost, linkReaches, type Slogan } from '../src/slogans.js';
 import { asLine, optionAfterSloganEdit, optionsFrom, ownerOptions, type CopyOptions } from '../src/pipeline/wording.js';
 import { cleanHashtags, copyWith } from '../src/pipeline/post-text.js';
 import { postItems, postsUsingRow, reusableWordings, type PostWording } from '../src/wordings-view.js';
-import type { CalendarRow } from '../src/calendar/rows.js';
+import { postAbout, type CalendarRow } from '../src/calendar/rows.js';
 
 const copy = {
   headline: 'Beef Seekh', line: 'Hand formed, special spices.', caption: 'Beef Seekh, hand formed and grilled.',
@@ -46,6 +46,27 @@ describe('wording options', () => {
     expect(every!.posts.map((p) => p.dayNo)).toEqual([25]);
     const [none] = reusableWordings([slogan({ id: 6, item: '', item_key: '', headline: 'Alone' })], posts);
     expect([none!.items, none!.posts]).toEqual([[], []]);
+  });
+
+  it('matches a link on whole words and through the product\'s group', () => {
+    expect(linkReaches('tea', 'grilled steak')).toBe(false);
+    expect(linkReaches('tea', 'karak tea | fresh pour')).toBe(true);
+    expect(linkReaches('karahi', 'our karahis')).toBe(true);
+    const products = [{ name_key: 'seekh platter', category: 'BBQ', series: 'From the Fire' }, { name_key: 'goat karahi', category: 'Karahi', series: 'From the Karahi' }];
+    expect(linkReaches('bbq', aboutPost(['Seekh Platter'], products))).toBe(true);
+    expect(linkReaches('from the fire', aboutPost(['Seekh Platter'], products))).toBe(true);
+    expect(linkReaches('bbq', aboutPost(['Goat Karahi'], products))).toBe(false);
+  });
+
+  it('keeps a BBQ caption off a Karahi post, even one whose theme mentions BBQ', () => {
+    const about = (row: Partial<CalendarRow>) => postAbout({ dish: null, benefit: null, template: 'x', theme: null, type: 'x', ...row } as CalendarRow);
+    expect(about({ dish: 'Goat Karahi', theme: 'Better than BBQ' })).not.toContain('Better than BBQ');
+    expect(about({ dish: '[a karahi]', theme: 'Karahi night' })).toContain('Karahi night');
+    const products = [{ name_key: 'seekh platter', category: 'BBQ', series: null }, { name_key: 'goat karahi', category: 'Karahi', series: null }];
+    const post = (dayNo: number, dish: string) => ({ row: { day_no: dayNo, date: '2026-11-10', status: 'ready', dish, theme: 'Better than BBQ', template: 'x', type: 'x' } as unknown as CalendarRow, wording: { dayNo, set: null } as PostWording });
+    const [w] = reusableWordings([slogan({ id: 7, item: 'BBQ', item_key: 'bbq', headline: 'Smoke and salt' })], [post(1, 'Seekh Platter'), post(2, 'Goat Karahi')], products);
+    expect(w!.posts.map((p) => p.dayNo)).toEqual([1]);
+    expect(w!.items).toEqual([{ item: 'BBQ', itemKey: 'bbq', products: 1 }]);
   });
 
   it('finds the posts using a library row by their text', () => {

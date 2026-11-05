@@ -181,6 +181,12 @@ export function placeholders(row: Pick<CalendarRow, 'dish' | 'caption' | 'cta' |
 }
 
 /** The series label the row belongs to, from its theme/template; falls back to the brand line. */
+/** What a post is about, for matching a caption's links. With a dish settled the theme is left out: a theme can mention anything. */
+export function postAbout(row: Pick<CalendarRow, 'dish' | 'benefit' | 'template' | 'theme' | 'type'>): (string | null)[] {
+  const settled = Boolean(row.dish) && !row.dish!.includes('[');
+  return [row.dish, row.benefit, seriesLabel(row), settled ? null : row.theme];
+}
+
 export function seriesLabel(row: Pick<CalendarRow, 'template' | 'theme' | 'type'>): string {
   // The template names its series; the words below only guess for a template the registry does not know.
   const known = seriesOfTemplate(row.template);

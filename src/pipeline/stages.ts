@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { AppContext } from '../context.js';
 import { MatchResult, ResolvedCopy, type Unresolved } from '../brain/schemas.js';
 import { matchPrompt, resolvePrompt } from '../brain/prompts.js';
-import { allRows, daySlug, rowByDay, rowById, rowsBetween, seriesLabel, setStatus, type CalendarRow } from '../calendar/rows.js';
+import { allRows, daySlug, postAbout, rowByDay, rowById, rowsBetween, seriesLabel, setStatus, type CalendarRow } from '../calendar/rows.js';
 import { getFile, putFile } from '../files.js';
 import { crop, cropAround, decode, measure, thumbnail, type Quality } from '../images/prep.js';
 import { hasTag, parseCaption, type ParsedCaption } from '../intake/caption.js';
@@ -307,7 +307,7 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   const rosterProduct = row.dish && !row.dish.startsWith('[') ? await findProduct(ctx.pool, row.dish.split(',')[0]!) : null;
   const rosterFact = rosterProduct ? productFact(rosterProduct, row.date) : null;
   if (rosterFact) facts.push(rosterFact);
-  const slogans = await slogansFor(ctx.pool, [row.dish, cap.subject, read?.dish_canonical, seriesLabel(row), row.theme]);
+  const slogans = await slogansFor(ctx.pool, [...postAbout(row), cap.subject, read?.dish_canonical]);
   // A custom post tells the writer what is the owner's and fixed, and what is left to write.
   const redo = Boolean(ctx.job.state.redo);
   const note = [ctx.job.state.note ?? cap.note, row.custom ? customResolveNote(row.custom, redo ? { redo: true, ownerEdits: await ownerEditsSince(ctx.pool, row) } : undefined) : null].filter(Boolean).join('\n') || null;

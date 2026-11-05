@@ -1,9 +1,10 @@
 /**
  * The slogan bank: wordings the owner keeps. A slogan is a headline (two short lines, or one), with an optional
  * supporting line and caption, linked to any number of items (slogan_items), so changing it once changes it for all of
- * them. Item "all" applies to every post; otherwise a slogan is offered when the item's name appears in the row's dish,
- * the caption subject, Claude's dish read or the series label, the same loose match dish facts use. Loaded from the
- * Slogans sheet (calendar/slogans.ts), added with /slogan, or edited and linked on the Wordings tab.
+ * them. Item "all" applies to every post. Otherwise an item is a product or a group of them (a category or a series),
+ * and a slogan is offered on a post only when the item's whole name is in what the post is about, or names the group of a
+ * product it is about: linked to BBQ, it reaches the BBQ products and never a Karahi. Loaded from the Slogans sheet
+ * (calendar/slogans.ts), added with /slogan, or edited and linked on the Captions tab.
  */
 import type { Db } from './db/pool.js';
 
@@ -19,6 +20,27 @@ export interface Slogan {
 }
 
 export const itemKey = (item: string) => item.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** Whether a link's name is in the words, as whole words: "tea" is not in "steak". A plural counts. */
+export function linkReaches(key: string, about: string): boolean {
+  if (key.length < 3) return false;
+  const name = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${name}s?($|[^a-z0-9])`).test(about);
+}
+
+export interface ProductGroup { name_key: string; category: string | null; series: string | null }
+
+/** Each product on the roster and the groups it is in. */
+export async function productGroups(db: Db): Promise<ProductGroup[]> {
+  return (await db.query<ProductGroup>("select name_key, category, series from products where status <> 'retired'")).rows;
+}
+
+/** What a post is about, for matching links: its words, then the category and series of each product they name. */
+export function aboutPost(texts: (string | null | undefined)[], products: ProductGroup[]): string {
+  const words = texts.filter((t): t is string => Boolean(t)).join(' | ').toLowerCase().replace(/\s+/g, ' ');
+  const groups = products.filter((p) => linkReaches(p.name_key, words)).flatMap((p) => [p.category, p.series]).filter(Boolean);
+  return [words, ...groups].join(' | ').toLowerCase();
+}
 
 const LINKED = `select s.id, i.item, i.item_key, s.headline, s.line, s.caption, s.source from slogan_items i join slogans s on s.id = i.slogan_id where s.retired_at is null`;
 
@@ -95,12 +117,12 @@ export async function slogansByItem(db: Db): Promise<{ item: string; n: number }
   return rows.map((r) => ({ item: r.item, n: Number(r.n) }));
 }
 
-/** The slogans that apply to a post: item "all", plus every item whose name appears in the texts. A wording on several of them comes once. */
+/** The slogans that apply to a post: item "all", plus every item the post is about. A wording on several of them comes once. */
 export async function slogansFor(db: Db, texts: (string | null | undefined)[]): Promise<Slogan[]> {
-  const hay = texts.filter((t): t is string => Boolean(t)).join(' | ').toLowerCase().replace(/\s+/g, ' ');
+  const about = aboutPost(texts, await productGroups(db));
   const all = await listSlogans(db);
   // The item's own slogans first, the house ones ("all") after them.
-  const own = all.filter((s) => s.item_key !== 'all' && s.item_key.length >= 3 && hay.includes(s.item_key));
+  const own = all.filter((s) => s.item_key !== 'all' && linkReaches(s.item_key, about));
   const seen = new Set<number>();
   return [...own, ...all.filter((s) => s.item_key === 'all')].filter((s) => !seen.has(s.id) && Boolean(seen.add(s.id)));
 }

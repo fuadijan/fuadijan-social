@@ -14,7 +14,7 @@ import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
 import { addOwnerOption, allCopyOptions, copyOptionsById, latestCopyOptions, markChosen, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from '../pipeline/wording.js';
-import { POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostText, spreadSloganEdit, type PostTextField } from '../pipeline/post-text.js';
+import { POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostText, spreadSloganEdit, spreadSloganLink, type PostTextField } from '../pipeline/post-text.js';
 import { WORDING_LIBRARIES, wordingsView } from '../wordings-view.js';
 import { adoptAsset, createCustomPost, parseCustomInput, recentPhotos } from '../pipeline/custom.js';
 import { rowViews, type RowView } from '../reminders/brief.js';
@@ -275,7 +275,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
   // ─── the Create flow: a custom design ──────────────────────────────────────────────────────────────────
 
   /** The roster, the menu and every item in the wording bank, as one list: name, category, status, wordings and the series to start from. */
-  async function products(): Promise<{ name: string; category: string | null; status: string; wordings: number; template: string }[]> {
+  async function products(): Promise<{ name: string; category: string | null; series: string | null; status: string; wordings: number; template: string }[]> {
     let menu: { name: string; category: string | null }[] = [];
     try {
       menu = (await ctx.menu.get()).items.filter((i) => !i.soldOut).map((i) => ({ name: i.name, category: i.category }));
@@ -289,11 +289,11 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       counts.set(s.item_key, (counts.get(s.item_key) ?? 0) + 1);
       names.set(s.item_key, s.item);
     }
-    const out = new Map<string, { name: string; category: string | null; status: string; wordings: number; template: string }>();
+    const out = new Map<string, { name: string; category: string | null; series: string | null; status: string; wordings: number; template: string }>();
     // The roster first: it knows the status and the series; a retired product is not offered.
     for (const p of await listProducts(ctx.pool)) {
       if (p.status === 'retired') continue;
-      out.set(p.name_key, { name: p.name, category: p.category, status: p.status, wordings: counts.get(p.name_key) ?? 0, template: p.template ?? suggestedTemplate(p.name, p.category) });
+      out.set(p.name_key, { name: p.name, category: p.category, series: p.series, status: p.status, wordings: counts.get(p.name_key) ?? 0, template: p.template ?? suggestedTemplate(p.name, p.category) });
     }
     for (const m of menu) {
       const k = itemKey(m.name);
@@ -302,9 +302,9 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
         have.category = have.category ?? m.category;
         continue;
       }
-      out.set(k, { name: m.name, category: m.category, status: 'active', wordings: counts.get(k) ?? 0, template: suggestedTemplate(m.name, m.category) });
+      out.set(k, { name: m.name, category: m.category, series: null, status: 'active', wordings: counts.get(k) ?? 0, template: suggestedTemplate(m.name, m.category) });
     }
-    for (const [k, name] of names) if (!out.has(k)) out.set(k, { name, category: null, status: 'active', wordings: counts.get(k) ?? 0, template: suggestedTemplate(name) });
+    for (const [k, name] of names) if (!out.has(k)) out.set(k, { name, category: null, series: null, status: 'active', wordings: counts.get(k) ?? 0, template: suggestedTemplate(name) });
     return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -426,7 +426,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     if (!item) return reply.code(400).send({ ok: false, error: 'Which product is this wording for?' });
     try {
       const s = await addSlogan(ctx.pool, { item, ...wordingBody(req.body, 140), source: 'owner-web' });
-      return { ok: true, wording: wordingJson(s) };
+      return { ok: true, wording: wordingJson(s), posts: await spreadSloganLink(ctx.pool, s.id, item, true) };
     } catch (e) {
       return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
@@ -448,13 +448,13 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const item = String(req.body?.item ?? '').trim().slice(0, 60);
     if (!item) return reply.code(400).send({ ok: false, error: 'Which item should it go on?' });
     if (!await linkSlogan(ctx.pool, Number(req.params.id), item)) return reply.code(404).send({ ok: false, error: 'No such wording' });
-    return { ok: true };
+    return { ok: true, posts: await spreadSloganLink(ctx.pool, Number(req.params.id), item, true) };
   });
 
   /** Takes a wording off one item; the wording itself stays. */
   app.delete<{ Params: { id: string; itemKey: string } }>('/api/wordings/:id/items/:itemKey', async (req, reply) => {
     if (!await unlinkSlogan(ctx.pool, Number(req.params.id), req.params.itemKey)) return reply.code(404).send({ ok: false, error: 'It is not on that item.' });
-    return { ok: true };
+    return { ok: true, posts: await spreadSloganLink(ctx.pool, Number(req.params.id), req.params.itemKey, false) };
   });
 
   app.delete<{ Params: { id: string } }>('/api/wordings/:id', async (req, reply) => {

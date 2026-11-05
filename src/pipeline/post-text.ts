@@ -7,12 +7,12 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ResolvedCopy } from '../brain/schemas.js';
 import { platformVersions, platformsTxt, type RecordField } from '../calendar/record.js';
-import { editField, recordEdit, rowById, type CalendarRow, type EditSource } from '../calendar/rows.js';
+import { editField, postAbout, recordEdit, rowById, type CalendarRow, type EditSource } from '../calendar/rows.js';
 import type { Db } from '../db/pool.js';
 import { allSettings } from '../settings.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
-import type { Slogan } from '../slogans.js';
-import { PACKS_FOLDER, applyOption, latestCopyOptions, optionAfterSloganEdit, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from './wording.js';
+import { aboutPost, itemKey, linkReaches, productGroups, sloganById, type Slogan } from '../slogans.js';
+import { PACKS_FOLDER, applyOption, latestCopyOptions, optionAfterSloganEdit, optionFromSlogan, optionIsFrom, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from './wording.js';
 
 const ROW_FIELDS = ['caption', 'cta', 'hashtags'] as const;
 const RECORD_FIELDS = [
@@ -95,18 +95,58 @@ async function refreshPack(db: Db, row: CalendarRow, copy: ResolvedCopy): Promis
   return true;
 }
 
+/** The latest wordings of every post written but not yet posted. */
+async function unpostedSets(db: Db): Promise<CopyOptions[]> {
+  return (await db.query<CopyOptions>(
+    `select distinct on (o.calendar_row_id) o.* from copy_options o join calendar_rows r on r.id = o.calendar_row_id
+     where r.retired_at is null and r.status <> 'posted' order by o.calendar_row_id, o.created_at desc, o.id desc`)).rows;
+}
+
+/**
+ * A reusable wording was linked to an item or taken off one, and posts written but not yet posted follow: those about the
+ * item get it in their list, or lose it when no other link reaches them. A post using it keeps it, as does one the owner
+ * changed it on, and a post waiting on the owner's answer keeps its numbering. Returns how many posts changed.
+ */
+export async function spreadSloganLink(db: Db, id: number, item: string, linked: boolean): Promise<number> {
+  const slogan = await sloganById(db, id);
+  if (!slogan) return 0;
+  const key = itemKey(item);
+  const products = await productGroups(db);
+  const keys = (await db.query<{ item_key: string }>('select item_key from slogan_items where slogan_id = $1', [id])).rows.map((r) => r.item_key);
+  let posts = 0;
+  for (const set of await unpostedSets(db)) {
+    const row = await rowById(db, set.calendar_row_id);
+    if (!row) continue;
+    const about = aboutPost(postAbout(row), products);
+    if (key !== 'all' && !linkReaches(key, about)) continue;
+    const at = set.options.findIndex((o) => optionIsFrom(o, slogan));
+    if (linked) {
+      if (at >= 0) continue;
+      const main = set.options[0];
+      if (!main) continue;
+      await db.query('update copy_options set options = $2 where id = $1', [set.id, JSON.stringify([...set.options, optionFromSlogan({ ...slogan, item, item_key: key }, main.headline, main.caption)])]);
+      posts++;
+      continue;
+    }
+    if (at < 0 || at === set.chosen || set.options[at]!.owner) continue;
+    if (keys.some((k) => k === 'all' || linkReaches(k, about))) continue;
+    if (await rowIsWaiting(db, row.id) || await rowIsBusy(db, row.id)) continue;
+    const chosen = set.chosen != null && set.chosen > at ? set.chosen - 1 : set.chosen;
+    await db.query('update copy_options set options = $2, chosen = $3 where id = $1', [set.id, JSON.stringify(set.options.filter((_, i) => i !== at)), chosen]);
+    posts++;
+  }
+  return posts;
+}
+
 /**
  * A reusable wording changed: every post written but not yet posted that offers it gets the new words in its list. A post
  * using it follows, the pack at once and new designs only if the words on them changed. A wording the owner changed on
  * the post stays theirs. Returns how many posts changed and how many are having their designs made again.
  */
 export async function spreadSloganEdit(db: Db, before: Slogan, after: Pick<Slogan, 'headline' | 'line' | 'caption'>): Promise<{ posts: number; rebuilding: number }> {
-  const sets = (await db.query<CopyOptions>(
-    `select distinct on (o.calendar_row_id) o.* from copy_options o join calendar_rows r on r.id = o.calendar_row_id
-     where r.retired_at is null and r.status <> 'posted' order by o.calendar_row_id, o.created_at desc, o.id desc`)).rows;
   let posts = 0;
   let rebuilding = 0;
-  for (const set of sets) {
+  for (const set of await unpostedSets(db)) {
     const main = set.options[0]?.caption ?? '';
     const changes = set.options.map((o) => optionAfterSloganEdit(o, before, after, main));
     if (!changes.some(Boolean)) continue;

@@ -72,9 +72,14 @@ function SeriesStep({ opts, value, suggested, onChange }: { opts: CreateOptions;
   );
 }
 
-function WordingStep({ product, bank, value, onChange }: { product: string; bank: Wording[]; value: WordingChoice | null; onChange: (v: WordingChoice) => void }) {
-  const mine = bank.filter((w) => w.itemKey !== 'all' && (key(w.item) === key(product) || key(product).includes(w.itemKey) || w.itemKey.includes(key(product))));
-  const house = bank.filter((w) => w.itemKey === 'all');
+/** The server's rule for a link's name: whole words, a plural counts. */
+const namedIn = (itemKey: string, about: string) => itemKey.length >= 3 && new RegExp(`(^|[^a-z0-9])${itemKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?($|[^a-z0-9])`).test(about);
+const once = (list: Wording[]) => list.filter((w, i) => list.findIndex((o) => o.id === w.id) === i);
+
+function WordingStep({ product, group, bank, value, onChange }: { product: string; group: string; bank: Wording[]; value: WordingChoice | null; onChange: (v: WordingChoice) => void }) {
+  const about = `${key(product)} | ${group.toLowerCase()}`;
+  const mine = once(bank.filter((w) => w.itemKey !== 'all' && (namedIn(w.itemKey, about) || w.itemKey.includes(key(product)))));
+  const house = once(bank.filter((w) => w.itemKey === 'all')).filter((w) => !mine.some((m) => m.id === w.id));
   // The title starts as the product's name; the owner's words are the line under it (the title can still be changed).
   const own: WordingInput = value?.kind === 'own' ? value.w : { headline: product.trim(), line: '', caption: '' };
   const setOwn = (patch: Partial<WordingInput>) => onChange({ kind: 'own', w: { ...own, ...patch } });
@@ -237,6 +242,8 @@ export function Create() {
   if (options.error && !opts) return <><PageHeader title="New design" /><ErrorCard message={options.error} onRetry={() => void options.reload()} /></>;
   if (!opts) return <><PageHeader title="New design" /><Loading what="Getting the menu and the captions" /></>;
   // One entry per link, for the product's own and the house lists; a caption on no product is offered nowhere.
+  const chosenProduct = options.data?.products.find((p) => key(p.name) === key(product));
+  const productGroup = [chosenProduct?.category, chosenProduct?.series].filter(Boolean).join(' | ');
   const wordings = bank.data?.reusable.flatMap((w) => w.items.map((i) => ({ ...w, item: i.item, itemKey: i.itemKey }))) ?? [];
   const theDate = date || opts.today;
 
@@ -295,7 +302,7 @@ export function Create() {
       <div className="sa-stack">
         {step === 0 ? <ProductStep opts={opts} value={product} onChange={(v) => { pickProduct(v); if (wording?.kind === 'bank') setWording(null); }} /> : null}
         {step === 1 ? <SeriesStep opts={opts} value={template} suggested={suggestionFor(product)} onChange={setTemplate} /> : null}
-        {step === 2 ? <WordingStep product={product} bank={wordings} value={wording} onChange={setWording} /> : null}
+        {step === 2 ? <WordingStep product={product} group={productGroup} bank={wordings} value={wording} onChange={setWording} /> : null}
         {step === 3 ? <StyleStep opts={opts} template={template} value={style} onChange={setStyle} /> : null}
         {step === 4 ? <OutputStep opts={opts} formats={formats} date={theDate} time={time} onFormats={setFormats} onDate={setDate} onTime={setTime} /> : null}
         {step === 5 ? (

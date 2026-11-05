@@ -171,8 +171,10 @@ leaves those fields alone; the owner's wordings carry into the next writer run.
 **The Captions tab.** (Called wordings in the code and the Telegram commands.) Every caption first, with the posts and
 products it belongs to under it, and all of it editable (`src/wordings-view.ts`): reusable captions, every post's own
 words and the benefit captions, then the hook, CTA and hashtag libraries by series, goal or tag group. A post keeps only
-its words, so a library row's posts are found by matching its text. A post's words or a hook can be saved as a reusable
-caption, which is what can be linked. A reusable wording links to any number of items
+its words, so a library row's posts are found by matching its text. Captions and products are many to many
+(`slogan_items`): every caption card can be linked to any products, or to a group of them (a category or a series), and
+is offered only on the posts they reach, matched on whole words. Adding a product to a post's words or a hook saves them
+as one reusable caption. Posts not yet posted follow a link at once; one using the caption keeps it. A reusable wording links to any number of items
 (`slogan_items`), so one change reaches them all; taken off its last item it is kept as not linked. Moving a library row
 is editing its series. An edited library row survives loading the same workbook again (`reference_sheets.owner_rows`).
 Changing a reusable wording also reaches every post written but not yet posted that offers it (`spreadSloganEdit`): a

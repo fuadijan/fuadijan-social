@@ -69,17 +69,37 @@ function PostChips({ posts, none }: { posts: PostRef[]; none: string }) {
   );
 }
 
-/** What a caption is linked to: tap × to take it off a product, or add another. One caption, so a change reaches them all. */
-function WordingLinks({ w, listId, onChanged }: { w: Wording; listId: string; onChanged: () => Promise<void> }) {
+/** Words not yet a reusable caption: the items they are on now, kept as links once one is added. */
+interface OwnWords { label: string; items: string[]; headline: string; caption: string }
+
+const linkNote = (posts: number, verb: string) => (posts ? `${verb} ${posts} post${posts === 1 ? '' : 's'} not yet posted.` : null);
+
+/**
+ * What a caption is linked to, on every caption card: a caption has many products and a product many captions. Tap × to
+ * take it off one, or add a product or a group of them. Words not yet reusable become so with the first one added, so one
+ * caption then serves them all and a change reaches them all.
+ */
+function WordingLinks({ w, own, listId, onChanged }: { w: Wording | null; own?: OwnWords; listId: string; onChanged: () => Promise<void> }) {
   const [item, setItem] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
-  async function run(fn: () => Promise<unknown>) {
+  async function add(name: string) {
+    if (w) return linkNote((await linkWording(w.id, name)).posts, 'Now offered on');
+    const [first, ...rest] = [...own!.items, name];
+    const made = await addWording(first!, { headline: own!.headline, line: '', caption: own!.caption });
+    let posts = made.posts;
+    for (const other of rest) posts += (await linkWording(made.wording.id, other)).posts;
+    return linkNote(posts, 'Now offered on');
+  }
+
+  async function run(fn: () => Promise<string | null>) {
     setBusy(true);
     setError(null);
+    setNote(null);
     try {
-      await fn();
+      setNote(await fn());
       setItem('');
       await onChanged();
     } catch (e) {
@@ -91,43 +111,22 @@ function WordingLinks({ w, listId, onChanged }: { w: Wording; listId: string; on
 
   return (
     <div className="sa-word-links">
-      <div className="sa-eyebrow">{w.items.length ? 'Linked to' : 'Not linked to anything yet'}</div>
+      <div className="sa-eyebrow">{w ? (w.items.length ? 'Linked to' : 'Not linked to anything yet') : own!.label}</div>
       <div className="sa-chips">
-        {w.items.map((i) => (
+        {w ? w.items.map((i) => (
           <span key={i.itemKey} className="sa-word-link">
-            {i.item}
-            <button type="button" aria-label={`Take this caption off ${i.item}`} disabled={busy} onClick={() => void run(() => unlinkWording(w.id, i.itemKey))}>×</button>
+            {i.item}{i.products ? ` · ${i.products} product${i.products === 1 ? '' : 's'}` : ''}
+            <button type="button" aria-label={`Take this caption off ${i.item}`} disabled={busy} onClick={() => void run(async () => linkNote((await unlinkWording(w.id, i.itemKey)).posts, 'Taken off'))}>×</button>
           </span>
-        ))}
+        )) : own!.items.map((i) => <span key={i} className="sa-word-link">{i}</span>)}
       </div>
-      <form className="sa-word-link-add" onSubmit={(e) => { e.preventDefault(); if (item.trim()) void run(() => linkWording(w.id, item.trim())); }}>
-        <input className="sa-input" list={listId} value={item} onChange={(e) => setItem(e.target.value)} placeholder="Add a product" aria-label="Add this caption to another product" disabled={busy} autoComplete="off" />
+      <form className="sa-word-link-add" onSubmit={(e) => { e.preventDefault(); if (item.trim()) void run(() => add(item.trim())); }}>
+        <input className="sa-input" list={listId} value={item} onChange={(e) => setItem(e.target.value)} placeholder="Add a product or group" aria-label="Add this caption to a product or a group of products" disabled={busy || (!w && !own!.headline.trim())} autoComplete="off" />
         <Button type="submit" variant="secondary" size="sm" disabled={busy || !item.trim()}>Add</Button>
       </form>
+      {note ? <div className="sa-note" role="status">{note}</div> : null}
       {error ? <div className="sa-result sa-result--error" role="alert">{error}</div> : null}
     </div>
-  );
-}
-
-/** Saves a post's or a library's words as a reusable caption, which can then be linked to any product. */
-function ReuseButton({ item, headline, caption, onChanged }: { item: string; headline: string; caption: string; onChanged: () => Promise<void> }) {
-  const [state, setState] = useState<'idle' | 'busy' | 'done' | string>('idle');
-  async function reuse() {
-    setState('busy');
-    try {
-      await addWording(item, { headline, line: '', caption });
-      setState('done');
-      await onChanged();
-    } catch (e) {
-      setState(e instanceof Error ? e.message : String(e));
-    }
-  }
-  if (state === 'done') return <span className="sa-note" role="status">Saved at the top of the list. Link it to more products there.</span>;
-  return (
-    <>
-      <Button variant="ghost" size="sm" disabled={state === 'busy' || !headline.trim()} onClick={() => void reuse()}>{state === 'busy' ? 'Saving…' : 'Use on other products'}</Button>
-      {state !== 'idle' && state !== 'busy' ? <span className="sa-result sa-result--error" role="alert">{state}</span> : null}
-    </>
   );
 }
 
@@ -201,7 +200,7 @@ function WordingCard({ w, listId, onChanged }: { w: Wording; listId: string; onC
 const STATUS_WORD: Record<string, string> = { planned: 'planned', 'photo-needed': 'needs a photo', ready: 'ready', posted: 'posted' };
 
 /** One post's own words, with its post under them. Edit opens every text, as on the Day page. */
-function PostCard({ p, onChanged }: { p: PostWording; onChanged: () => Promise<void> }) {
+function PostCard({ p, reusable, listId, onChanged }: { p: PostWording; reusable: Map<number, Wording>; listId: string; onChanged: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
   const edit: PostEdit = { dayNo: p.dayNo, reload: onChanged, onRebuild: () => setRebuilding(true) };
@@ -237,17 +236,17 @@ function PostCard({ p, onChanged }: { p: PostWording; onChanged: () => Promise<v
       {p.hashtags ? <div className="sa-wording-caption sa-hashtags">{p.hashtags}</div> : null}
       {building}
       <PostChips posts={[post]} none="" />
-      <div className="sa-note">{p.items.join(', ')} · {STATUS_WORD[p.status] ?? p.status}</div>
+      <div className="sa-note">{STATUS_WORD[p.status] ?? p.status}</div>
+      <WordingLinks w={(p.reusableId && reusable.get(p.reusableId)) || null} own={{ label: 'On this post only', items: p.items, headline: p.line || p.headline, caption: p.caption }} listId={listId} onChanged={onChanged} />
       <div className="sa-wording-actions sa-actions">
         <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>Edit</Button>
-        <ReuseButton item={p.items[0] ?? p.series} headline={p.line || p.headline} caption={p.caption} onChanged={onChanged} />
       </div>
     </li>
   );
 }
 
 /** One library row: its words, then its posts. What it belongs to (series, goal, tag group) is a field like the rest, so moving a row is an edit. */
-function LibraryRow({ lib, index, row, item, groups, onChanged }: { lib: WordingLibrary; index: number; row: string[]; item: string; groups: string[]; onChanged: () => Promise<void> }) {
+function LibraryRow({ lib, index, row, item, groups, reusable, linkList, onChanged }: { lib: WordingLibrary; index: number; row: string[]; item: string; groups: string[]; reusable: Map<number, Wording>; linkList: string; onChanged: () => Promise<void> }) {
   const [draft, setDraft] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -296,10 +295,9 @@ function LibraryRow({ lib, index, row, item, groups, onChanged }: { lib: Wording
     <li className="sa-wording-option">
       {shown.map((c) => <div key={c.i}><span className="sa-eyebrow">{c.h}</span><div className="sa-wording-caption">{c.v}</div></div>)}
       <PostChips posts={lib.posts[index] ?? []} none="No post uses it yet." />
-      <div className="sa-note">{item}</div>
+      {hook ? <WordingLinks w={reusable.get(lib.reusable[index] ?? 0) ?? null} own={{ label: 'Belongs to', items: item ? [item] : [], headline: hook, caption: cell(/caption/i) }} listId={linkList} onChanged={onChanged} /> : <div className="sa-note">{item}</div>}
       <div className="sa-wording-actions sa-actions">
         <Button variant="secondary" size="sm" onClick={() => setDraft(lib.header.map((_, i) => row[i] ?? ''))}>Edit</Button>
-        {hook ? <ReuseButton item={item} headline={hook} caption={cell(/caption/i)} onChanged={onChanged} /> : null}
       </div>
     </li>
   );
@@ -311,7 +309,7 @@ const benefitName = (lib: WordingLibrary, row: string[]) => {
   return lib.belongsTo[id.toUpperCase()] ?? id;
 };
 
-function Library({ lib, query, onChanged }: { lib: WordingLibrary; query: string; onChanged: () => Promise<void> }) {
+function Library({ lib, query, reusable, linkList, onChanged }: { lib: WordingLibrary; query: string; reusable: Map<number, Wording>; linkList: string; onChanged: () => Promise<void> }) {
   const rows = lib.rows.map((row, index) => ({ row, index })).filter(({ row }) => !query || row.join(' ').toLowerCase().includes(query));
   if (!rows.length) return null;
   const groups = libraryGroups(lib);
@@ -325,7 +323,7 @@ function Library({ lib, query, onChanged }: { lib: WordingLibrary; query: string
           <details key={g} className="sa-word-group" open={Boolean(query) || undefined}>
             <summary><strong>{g || 'Not grouped'}</strong><span className="sa-note"> {inGroup.length}{belongs ? ` · ${belongs}` : ''}</span></summary>
             <ul className="sa-wording-list" style={{ marginTop: 8 }}>
-              {inGroup.map(({ row, index }) => <LibraryRow key={index} lib={lib} index={index} row={row} item={g} groups={groups} onChanged={onChanged} />)}
+              {inGroup.map(({ row, index }) => <LibraryRow key={index} lib={lib} index={index} row={row} item={g} groups={groups} reusable={reusable} linkList={linkList} onChanged={onChanged} />)}
             </ul>
           </details>
         );
@@ -338,7 +336,7 @@ type Show = 'all' | 'reusable' | 'posts' | 'benefit';
 const SHOW: { key: Show; label: string }[] = [{ key: 'all', label: 'All' }, { key: 'reusable', label: 'Reusable' }, { key: 'posts', label: 'Posts' }, { key: 'benefit', label: 'Benefits' }];
 
 /**
- * Every caption in one list, each with the posts and products it belongs to under it, and all of it editable: the
+ * Every caption in one list, each with the posts and the products it is linked to under it, and all of it editable: the
  * reusable captions (the same bank the Slogans sheet and /slogan feed), the words of every post in the plan and the
  * benefit captions, then the hook, CTA and hashtag libraries from the planning documents.
  */
@@ -355,6 +353,7 @@ export function Wordings() {
   const query = search.trim().toLowerCase();
   const hit = (v: unknown) => !query || JSON.stringify(v).toLowerCase().includes(query);
 
+  const byId = new Map((data?.reusable ?? []).map((w) => [w.id, w]));
   const benefit = data?.libraries.find((l) => l.name === BENEFIT_CAPTIONS) ?? null;
   const reusable = show === 'all' || show === 'reusable' ? (data?.reusable ?? []).filter((w) => hit([w.headline, w.line, w.caption, w.items])) : [];
   const posts = show === 'all' || show === 'posts' ? (data?.posts ?? []).filter((p) => hit([p.title, p.items, p.headline, p.line, p.caption, p.cta, p.hashtags])) : [];
@@ -382,19 +381,20 @@ export function Wordings() {
 
   return (
     <>
-      <PageHeader title="Captions" subtitle="Every caption, with the posts and products it belongs to under it." />
+      <PageHeader title="Captions" subtitle="Every caption, with its posts and products under it. Link a caption to as many products as it suits, and it is offered only on those." />
+      <datalist id={listId}>
+        <option value="all">Every post</option>
+        {(data?.groups ?? []).map((g) => <option key={g} value={g}>Group</option>)}
+        {(data?.products ?? []).map((p) => <option key={p} value={p} />)}
+      </datalist>
       <div className="sa-stack">
         <Card>
           <details>
             <summary className="sa-word-add"><strong>+ Add a reusable caption</strong></summary>
             <div className="sa-form">
               <div>
-                <label className="sa-eyebrow" htmlFor={itemId}>Product</label>
-                <input id={itemId} className="sa-input" list={listId} value={item} onChange={(e) => setItem(e.target.value)} placeholder="Chicken Karahi — or “all” for every post" autoComplete="off" disabled={adding} />
-                <datalist id={listId}>
-                  <option value="all" />
-                  {(data?.products ?? []).map((p) => <option key={p} value={p} />)}
-                </datalist>
+                <label className="sa-eyebrow" htmlFor={itemId}>Product or group</label>
+                <input id={itemId} className="sa-input" list={listId} value={item} onChange={(e) => setItem(e.target.value)} placeholder="Chicken Karahi, a group, or “all” for every post" autoComplete="off" disabled={adding} />
               </div>
               <div className="sa-note">After adding it you can link it to more products.</div>
               <WordingForm key={formKey} initial={EMPTY} submitLabel="Add caption" busy={adding} onSubmit={(w) => void add(w)} />
@@ -419,17 +419,17 @@ export function Wordings() {
         ) : null}
         {posts.length ? (
           <Card title={`Post captions (${posts.length})`}>
-            <ul className="sa-wording-list">{posts.map((p) => <PostCard key={p.dayNo} p={p} onChanged={reload} />)}</ul>
+            <ul className="sa-wording-list">{posts.map((p) => <PostCard key={p.dayNo} p={p} reusable={byId} listId={listId} onChanged={reload} />)}</ul>
           </Card>
         ) : null}
         {benefit && benefitRows.length ? (
           <Card title={`Benefit captions (${benefitRows.length})`}>
-            <ul className="sa-wording-list">{benefitRows.map(({ row, index }) => <LibraryRow key={index} lib={benefit} index={index} row={row} item={benefitName(benefit, row)} groups={libraryGroups(benefit)} onChanged={reload} />)}</ul>
+            <ul className="sa-wording-list">{benefitRows.map(({ row, index }) => <LibraryRow key={index} lib={benefit} index={index} row={row} item={benefitName(benefit, row)} groups={libraryGroups(benefit)} reusable={byId} linkList={listId} onChanged={reload} />)}</ul>
           </Card>
         ) : null}
         {nothing && (query || show !== 'all') ? <Empty>Nothing matches.</Empty> : null}
         {nothing && !query && show === 'all' ? <Empty>No captions yet. Add one above, or load the planning documents on the Strategy tab.</Empty> : null}
-        {show === 'all' ? data?.libraries.filter((l) => l.name !== BENEFIT_CAPTIONS).map((lib) => <Library key={lib.name} lib={lib} query={query} onChanged={reload} />) : null}
+        {show === 'all' ? data?.libraries.filter((l) => l.name !== BENEFIT_CAPTIONS).map((lib) => <Library key={lib.name} lib={lib} query={query} reusable={byId} linkList={listId} onChanged={reload} />) : null}
         {data ? <p className="sa-note">Ready to use one? <Link to="/create">Create a design</Link>.</p> : null}
       </div>
     </>

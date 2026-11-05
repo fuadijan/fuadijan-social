@@ -245,8 +245,8 @@ export interface Wording {
   line: string | null;
   caption: string | null;
   source: string;
-  /** Every item this wording is linked to. */
-  items: { item: string; itemKey: string }[];
+  /** Every product or group this wording is linked to; `products` says how many a group holds. */
+  items: { item: string; itemKey: string; products?: number }[];
   /** The posts it reaches. */
   posts: PostRef[];
 }
@@ -270,10 +270,12 @@ export interface PostWording {
   platforms: PlatformVersions | null;
   set: WordingSet | null;
   waiting: boolean;
+  /** The reusable caption with these words, once they are saved as one. */
+  reusableId?: number;
 }
-/** A planning library of wordings; `belongsTo` says what a group's value stands for, `posts` what uses each row. */
-export interface WordingLibrary { name: string; title: string; header: string[]; rows: string[][]; groupColumn: number; belongsTo: Record<string, string>; posts: Record<number, PostRef[]> }
-export interface WordingsResponse { reusable: Wording[]; posts: PostWording[]; libraries: WordingLibrary[]; products: string[] }
+/** A planning library of wordings; `belongsTo` says what a group's value stands for, `posts` what uses each row, `reusable` the reusable caption with its words. */
+export interface WordingLibrary { name: string; title: string; header: string[]; rows: string[][]; groupColumn: number; belongsTo: Record<string, string>; posts: Record<number, PostRef[]>; reusable: Record<number, number> }
+export interface WordingsResponse { reusable: Wording[]; posts: PostWording[]; libraries: WordingLibrary[]; products: string[]; groups: string[] }
 export interface WordingInput { headline: string; line: string; caption: string }
 
 export interface RecentPhoto {
@@ -289,7 +291,7 @@ export interface CreateOptions {
   today: string;
   postTimeDefault: string;
   /** `template` is the series suggested for the product (its menu category: drinks pour, sweets save room, karahis from the karahi). */
-  products: { name: string; category: string | null; status: string; wordings: number; template: string }[];
+  products: { name: string; category: string | null; series: string | null; status: string; wordings: number; template: string }[];
   templates: { template: string; label: string; footer: 'brand' | 'address'; style: StyleKey | null }[];
   styles: { key: StyleKey; name: string; blurb: string; needsCutout: boolean; story: boolean }[];
   photos: RecentPhoto[];

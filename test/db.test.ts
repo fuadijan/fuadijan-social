@@ -665,6 +665,53 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     await pool.query("update calendar_rows set status = 'ready' where id = $1", [posted.id]);
   });
 
+  it('offers a caption only on what it is linked to, and posts not yet posted follow a link', async () => {
+    const { addSlogan, linkSlogan, slogansFor, unlinkSlogan } = await import('../src/slogans.js');
+    const { upsertProduct } = await import('../src/products.js');
+    const { spreadSloganLink } = await import('../src/pipeline/post-text.js');
+    const { markChosen, latestCopyOptions, storeCopyOptions } = await import('../src/pipeline/wording.js');
+    const { wordingsView } = await import('../src/wordings-view.js');
+    await upsertProduct(pool, { name: 'Seekh Platter', category: 'BBQ' });
+    await upsertProduct(pool, { name: 'Goat Karahi', category: 'Karahi' });
+    const s = await addSlogan(pool, { item: 'BBQ', headline: 'Smoke and salt', caption: 'Off the coals.', source: 'owner-web' });
+    expect((await slogansFor(pool, ['Seekh Platter'])).map((x) => x.id)).toContain(s.id);
+    expect((await slogansFor(pool, ['Goat Karahi'])).map((x) => x.id)).not.toContain(s.id);
+
+    const bbq = (await rowByDay(pool, 101))!;
+    const karahi = (await rowByDay(pool, 102))!;
+    const was = [bbq.dish, karahi.dish];
+    await pool.query('update calendar_rows set dish = $2 where id = $1', [bbq.id, 'Seekh Platter']);
+    await pool.query('update calendar_rows set dish = $2 where id = $1', [karahi.id, 'Goat Karahi']);
+    const copy = { headline: 'T', line: 'L', caption: 'C', variants: [] } as unknown as import('../src/brain/schemas.js').ResolvedCopy;
+    for (const row of [bbq, karahi]) await storeCopyOptions(pool, row.id, null, copy);
+    const holds = async (rowId: number) => (await latestCopyOptions(pool, rowId))!.options.some((o) => o.sloganId === s.id);
+
+    expect(await spreadSloganLink(pool, s.id, 'BBQ', true)).toBe(1);
+    expect([await holds(bbq.id), await holds(karahi.id)]).toEqual([true, false]);
+    expect(await spreadSloganLink(pool, s.id, 'BBQ', true)).toBe(0); // already there
+
+    await linkSlogan(pool, s.id, 'Goat Karahi');
+    expect(await spreadSloganLink(pool, s.id, 'Goat Karahi', true)).toBe(1);
+    expect(await holds(karahi.id)).toBe(true);
+    const card = (await wordingsView(pool)).reusable.find((w) => w.id === s.id)!;
+    expect(card.items.map((i) => i.itemKey)).toEqual(['bbq', 'goat karahi']);
+    expect(card.posts.map((p) => p.dayNo)).toEqual(expect.arrayContaining([101, 102]));
+
+    // Taken off: the post loses it from its list, unless it is the one in use.
+    await unlinkSlogan(pool, s.id, 'goat karahi');
+    expect(await spreadSloganLink(pool, s.id, 'goat karahi', false)).toBe(1);
+    expect(await holds(karahi.id)).toBe(false);
+    const inUse = (await latestCopyOptions(pool, bbq.id))!;
+    await markChosen(pool, inUse.id, inUse.options.findIndex((o) => o.sloganId === s.id));
+    await unlinkSlogan(pool, s.id, 'bbq');
+    expect(await spreadSloganLink(pool, s.id, 'bbq', false)).toBe(0);
+    expect(await holds(bbq.id)).toBe(true);
+
+    await pool.query('delete from copy_options where calendar_row_id = any($1) and id >= $2', [[bbq.id, karahi.id], inUse.id]);
+    await pool.query('update calendar_rows set dish = $2 where id = $1', [bbq.id, was[0]]);
+    await pool.query('update calendar_rows set dish = $2 where id = $1', [karahi.id, was[1]]);
+  });
+
   it('lists every wording with what it belongs to, and an edit to a library row survives loading the workbook again', async () => {
     const { wordingsView } = await import('../src/wordings-view.js');
     const { addSlogan, linkSlogan } = await import('../src/slogans.js');
