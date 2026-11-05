@@ -11,12 +11,18 @@ export const REBUILD_FIELDS: ReadonlySet<EditableField> = new Set<EditableField>
 export const FIELD_LABEL: Record<string, string> = {
   dish: 'Dish', theme: 'Theme', objective: 'Objective', creative_instructions: 'Creative instructions', on_screen_text: 'On-screen text',
   caption: 'Caption', cta: 'CTA', hashtags: 'Hashtags', story_ideas: 'Story ideas', confirmation_notes: 'Confirmation notes',
-  post_time: 'Post time', status: 'Status', date: 'Date',
+  post_time: 'Post time', status: 'Status', date: 'Date', design_photos: 'Photos in the design',
+  'content.alt_text': 'Alt text', 'content.story_text': 'Story text', 'content.facebook_caption': 'Facebook caption', 'content.facebook_cta': 'Facebook CTA', 'content.facebook_hashtags': 'Facebook hashtags',
+  'content.tiktok_opening': 'TikTok opening text', 'content.tiktok_hook': 'TikTok hook', 'content.tiktok_script': 'TikTok script', 'content.tiktok_caption': 'TikTok caption', 'content.tiktok_cta': 'TikTok CTA', 'content.tiktok_hashtags': 'TikTok hashtags',
+  'content.story_sequence': 'Story sequence', 'content.reel_cover_text': 'Reel cover', 'content.canva_headline': 'Headline on the design', 'content.canva_subheading': 'Label on the design',
 };
 
 interface Props {
   dayNo: number;
-  field: EditableField;
+  /** A row column, saved through PATCH /api/rows/:dayNo; leave it out when `save` does the saving. */
+  field?: EditableField;
+  /** Saves the text its own way, instead of PATCHing the row column. */
+  save?: (value: string) => Promise<unknown>;
   label: string;
   /** The row's stored text, which is what the editor starts from and what Save replaces. */
   value: string | null | undefined;
@@ -37,7 +43,7 @@ interface Props {
  * A row field with its Edit affordance. Editing swaps the text for an input with Save / Cancel; a save goes through
  * PATCH /api/rows/:dayNo, which also records the edit in the history. Errors from the server show inline.
  */
-export function EditableText({ dayNo, field, label, value, children, copyText, kind = 'textarea', hint, placeholder, bodyClassName, onSaved }: Props) {
+export function EditableText({ dayNo, field, save: saveWith, label, value, children, copyText, kind = 'textarea', hint, placeholder, bodyClassName, onSaved }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [rebuild, setRebuild] = useState(true);
@@ -55,7 +61,7 @@ export function EditableText({ dayNo, field, label, value, children, copyText, k
   }, [dayNo]);
 
   const stored = value?.trim() ?? '';
-  const offersRebuild = REBUILD_FIELDS.has(field);
+  const offersRebuild = Boolean(field && REBUILD_FIELDS.has(field));
 
   function start() {
     setDraft(kind === 'time' ? stored.slice(0, 5) : stored);
@@ -73,7 +79,8 @@ export function EditableText({ dayNo, field, label, value, children, copyText, k
     setBusy(true);
     setError(null);
     try {
-      await patchRow(dayNo, field, draft.trim(), offersRebuild && rebuild);
+      if (saveWith) await saveWith(draft.trim());
+      else await patchRow(dayNo, field!, draft.trim(), offersRebuild && rebuild);
       setEditing(false);
       setSaved(true);
       window.clearTimeout(timer.current);

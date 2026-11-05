@@ -16,6 +16,7 @@ import type { Critique, DesignSpec, MatchResult } from '../brain/schemas.js';
 import { loadBrand } from '../render/brand.js';
 import type { Cutout } from '../render/compose.js';
 import { renderPost, type RenderInput, type RenderOutput } from '../render/index.js';
+import { pairRatio } from '../render/pair.js';
 import { templateEntry } from '../render/registry.js';
 import { STYLES, feasibleStyle } from '../render/styles.js';
 import { allSettings } from '../settings.js';
@@ -92,7 +93,12 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   const entry = templateEntry(row.template);
 
   const assets = (await ctx.pool.query<Asset>("select * from assets where calendar_row_id = $1 and kind in ('photo','document') and prepped is not null order by created_at", [row.id])).rows;
-  const hero = (ctx.asset?.prepped ? ctx.asset : assets.at(-1)) ?? null;
+  // The photos the owner picked come first: two make the two-dish design, one is the hero.
+  const picked = (row.design_photos ?? []).flatMap((p) => { const a = assets.find((x) => x.id === p.assetId); return a ? [{ asset: a, name: p.name }] : []; });
+  const hero = picked[0]?.asset ?? (ctx.asset?.prepped ? ctx.asset : assets.at(-1)) ?? null;
+  // What the job remembers (its upright photo, its read) is about the job's own photo, which may not be the hero.
+  const ownPhoto = hero?.id === ctx.asset?.id;
+  const jobJpeg = ownPhoto ? ctx.job.state.jpegFileId ?? null : null;
   const heroPhoto = hero?.prepped?.['4x5'] ? (await getFile(ctx.pool, hero.prepped['4x5']))?.bytes ?? null : null;
   const storyPhoto = hero?.prepped?.['9x16'] ? (await getFile(ctx.pool, hero.prepped['9x16']))?.bytes ?? null : null;
   const others = assets.filter((a) => a.id !== hero?.id);
@@ -103,7 +109,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   }
 
   // The photo read lives on the asset too, so a /redo (a fresh job with no state) still knows the composition.
-  const read: MatchResult | null = ctx.job.state.match ?? hero?.match ?? null;
+  const read: MatchResult | null = (ownPhoto ? ctx.job.state.match : null) ?? hero?.match ?? null;
   const composition = read?.composition;
   // A custom post's chosen style reads like a note ("poster style"), unless this run's note names another.
   const note = customNote(row.custom, ctx.job.state.note ?? null);
@@ -115,7 +121,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   const styleNeedsCutout = STYLES[askedStyle].needsCutout;
   // A scene with a located dish still gets the cutout try: the remover works on the region around the dish.
   const wantCutout = entry.key === 'hero-photo' && hero && heroPhoto && !forceB && (forceA || styleNeedsCutout || (composition !== 'people' && (composition !== 'scene' || Boolean(read?.subject_box))));
-  const cut: CutoutResult = wantCutout ? await cutoutForAsset(ctx, hero, ctx.job.state.jpegFileId ?? null, read) : { cutout: null, coverage: null };
+  const cut: CutoutResult = wantCutout ? await cutoutForAsset(ctx, hero, jobJpeg, read) : { cutout: null, coverage: null };
 
   // Reviews: the quote is what the owner sent (an asset of kind text, "review -- AB …"), never generated.
   let quote: string | null = null;
@@ -134,8 +140,21 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   const base: RenderInput = {
     sheetTemplate: row.template, slot: row.slot, label: copy.label || entry.label, headline: copy.headline, line: copy.line,
     quote, reviewer, slides, hook: row.content?.reel_cover_text?.trim() || copy.versions?.reel_cover_text?.trim() || (copy.on_screen_text[0] ?? null),
-    photo: heroPhoto, storyPhoto, slidePhotos, cutout: cut.cutout, busyPhoto: read?.background_clutter === 'high', settings, date: row.date,
+    photo: heroPhoto, storyPhoto, slidePhotos, cutout: cut.cutout, busyPhoto: read?.background_clutter === 'high', settings, date: row.date, dish: row.dish,
   };
+
+  // Two dishes in one design: its layout is fixed, so the art director and the critic have nothing to decide.
+  if (entry.key === 'hero-photo' && picked.length === 2 && picked.every((p) => p.name)) {
+    const panels = await Promise.all(picked.map(async ({ asset, name }) => {
+      const source = (await sourcePhoto(ctx, null, asset.original_file_id))?.bytes;
+      if (!source) throw new Error(`The photo for ${name} is missing.`);
+      const [fw, fh] = brand.canvas.feed;
+      const [sw, sh] = brand.canvas.story;
+      const box = asset.match?.subject_box ?? null;
+      return { name: name!, feed: await cropAround(source, box, pairRatio(fw, fh), { focusY: 0.5, width: 1074 }), tall: await cropAround(source, box, pairRatio(sw, sh), { focusY: 0.5, width: 2160 }) };
+    }));
+    return { outputs: await renderPost({ ...base, pair: panels }, brand), design: null };
+  }
 
   // Templates without a directed design still get the legibility band: the photo under the text decides it.
   if (entry.key !== 'hero-photo' || !heroPhoto || !hero) {
@@ -159,7 +178,7 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   spec = feasible(spec);
   const source = locked.length ? 'owner' : directed.source;
 
-  const original = (await sourcePhoto(ctx, ctx.job.state.jpegFileId, hero.original_file_id))?.bytes ?? null;
+  const original = (await sourcePhoto(ctx, jobJpeg, hero.original_file_id))?.bytes ?? null;
   const dish = read?.dish_canonical ?? row.dish;
 
   /** Layout A, poster and flat need the cutout; without one they become B / band. */

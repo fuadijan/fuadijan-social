@@ -97,6 +97,18 @@ describe('render templates', () => {
     await expectSnapshot('story', out[1]!.png, 1080, 1920);
   });
 
+  it('two dishes in one design: side by side on the feed, stacked on the story and the reel cover', async () => {
+    const panel = (photo: Buffer, name: string) => ({ name, feed: photo, tall: photo });
+    const input = { ...SAMPLE_INPUTS['hero-photo'], photo: karahi, cutout: null, settings: SAMPLE_SETTINGS, pair: [panel(karahi, 'Lamb Karahi'), panel(tikka, 'Chicken Karahi')] };
+    const feed = await renderPost(input, brand);
+    expect(feed.map((o) => o.format)).toEqual(['feed', 'story']);
+    await expectSnapshot('pair-feed', feed[0]!.png, 1080, 1350);
+    await expectSnapshot('pair-story', feed[1]!.png, 1080, 1920);
+    const reel = await renderPost({ ...input, slot: 'reel', hook: 'PICK A SIDE' }, brand);
+    expect(reel.map((o) => o.format)).toEqual(['reel-cover', 'story']);
+    await expectSnapshot('pair-reel-cover', reel[0]!.png, 1080, 1920);
+  });
+
   it('hero-photo layout B (full bleed, address footer)', async () => {
     const out = await renderPost({ ...SAMPLE_INPUTS['hero-photo'], sheetTemplate: 'snack-pack', label: 'HOUSE SPECIAL', headline: 'Built for\nCravings', line: 'Chicken tikka over hot crispy chips.', photo: tikka, cutout: null, settings: SAMPLE_SETTINGS }, brand);
     await expectSnapshot('hero-photo-B', out[0]!.png, 1080, 1350);

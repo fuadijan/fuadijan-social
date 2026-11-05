@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ResolvedCopy } from '../src/brain/schemas.js';
 import { applyRecord, listLines, platformVersions, platformsTxt, shotsAsInstructions } from '../src/calendar/record.js';
-import { brandLineOn, shotList } from '../src/pipeline/packs.js';
+import { brandLineOn, isKarahiPost, shotList } from '../src/pipeline/packs.js';
 import { readWorkbook } from '../calendar/seed.js';
 import { sheetDate } from '../calendar/layouts.js';
 import { stripAddressLine } from '../calendar/calendar.schema.js';
@@ -75,6 +75,13 @@ describe('the brand line', () => {
     expect(brandLineOn('2026-12-14')).toBe('GRILLED. ROOTED IN TRADITION.');
     expect(brandLineOn('2026-12-15')).toBe('SMOKED. GRILLED. ROOTED IN TRADITION.');
     expect(brandLineOn(null)).toBe('SMOKED. GRILLED. ROOTED IN TRADITION.');
+    // A karahi is neither smoked nor grilled, before the charcoal launch or after it.
+    expect(brandLineOn('2026-11-04', undefined, true)).toBe('ROOTED IN TRADITION.');
+    expect(brandLineOn('2027-01-04', undefined, true)).toBe('ROOTED IN TRADITION.');
+    expect(isKarahiPost({ template: 'from-the-karahi' })).toBe(true);
+    expect(isKarahiPost({ template: 'customer-favourite', label: 'FROM THE KARAHI' })).toBe(true);
+    expect(isKarahiPost({ template: 'family-feast', dish: 'Lamb Karahi, Naan' })).toBe(true);
+    expect(isKarahiPost({ template: 'family-feast', dish: 'Seekh Kebab, Lamb Karahi' })).toBe(false);
   });
 });
 

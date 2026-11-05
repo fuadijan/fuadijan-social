@@ -2,7 +2,7 @@
  * Same-origin JSON client. A 401 means no hub session: the page goes to the hub's login and comes back here.
  * A 403 carrying `hub` means signed in but not granted Social: the page goes to the hub.
  */
-import type { CreateOptions, CreateRequest, CreateResponse, DayResponse, CampaignsResponse, EditableField, ImportCalendarResponse, Me, MonthResponse, PlanningResponse, StatusResponse, UploadResponse, WeekResponse, Wording, WordingInput, WordingsResponse } from './types';
+import type { CreateOptions, CreateRequest, CreateResponse, DayResponse, CampaignsResponse, EditableField, ImportCalendarResponse, Me, MonthResponse, PlanningResponse, PostTextField, StatusResponse, UploadResponse, WeekResponse, Wording, WordingInput, WordingsResponse } from './types';
 
 export const DEFAULT_HUB = 'https://apps.nutrimeals.au';
 
@@ -75,7 +75,12 @@ export const getDay = (dayNo: number) => apiFetch<DayResponse>(`/api/day/${dayNo
 export const getStatus = () => apiFetch<StatusResponse>('/api/status');
 
 export const answerQuestion = (id: number, answer: string) => post<{ ok: true; message: string }>(`/api/questions/${id}/answer`, { answer });
-export const chooseWording = (dayNo: number, setId: number, index: number) => post<{ ok: true; message: string }>(`/api/rows/${dayNo}/wording`, { setId, index });
+export interface RebuildResult { ok: true; message: string; rebuilding: boolean }
+export const chooseWording = (dayNo: number, setId: number, index: number) => post<RebuildResult>(`/api/rows/${dayNo}/wording`, { setId, index });
+export const addPostWording = (dayNo: number, w: WordingInput, use: boolean) => post<RebuildResult>(`/api/rows/${dayNo}/wordings`, { ...w, use });
+export const editPostWording = (dayNo: number, setId: number, index: number, w: WordingInput) => apiFetch<RebuildResult>(`/api/rows/${dayNo}/wordings/${setId}/${index}`, { method: 'PATCH', body: JSON.stringify(w) });
+export const patchPostText = (dayNo: number, field: PostTextField, value: string) => apiFetch<{ ok: true; rebuilding: boolean }>(`/api/rows/${dayNo}/text`, { method: 'PATCH', body: JSON.stringify({ field, value }) });
+export const setDesignPhotos = (dayNo: number, photos: { assetId: number; name: string | null }[]) => post<RebuildResult>(`/api/rows/${dayNo}/photos`, { photos });
 export const markPosted = (dayNo: number) => post<{ ok: true }>(`/api/rows/${dayNo}/status`, { status: 'posted' });
 export const skipDay = (dayNo: number, mode: 'push-all' | 'just-this') => post<{ ok: true; date: string }>(`/api/rows/${dayNo}/skip`, { mode });
 export const pushDay = (dayNo: number, days: number) => post<{ ok: true; date: string }>(`/api/rows/${dayNo}/push`, { days });

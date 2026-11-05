@@ -18,8 +18,16 @@ export const BRAND_LINE = 'SMOKED. GRILLED. ROOTED IN TRADITION.';
 
 /** Charcoal arrives on this date, and only then is "smoked" literally true: until it, the line starts at "Grilled". */
 export const SMOKED_FROM = '2026-12-15';
-export function brandLineOn(date: string | null | undefined, line: string = BRAND_LINE): string {
+export function brandLineOn(date: string | null | undefined, line: string = BRAND_LINE, karahi = false): string {
+  // A karahi is cooked in the wok, neither smoked nor grilled, so its post keeps only the last part of the line.
+  if (karahi) return line.replace(/^.*?(?=rooted in tradition)/i, '');
   return date && date < SMOKED_FROM ? line.replace(/^\s*smoked\.\s*/i, '') : line;
+}
+
+/** A post about a karahi: its series or template says so, or its main dish is one. */
+export function isKarahiPost(post: { template?: string | null; label?: string | null; dish?: string | null }): boolean {
+  const mainDish = post.dish?.split(/[,+]/)[0] ?? '';
+  return /karahi/i.test(`${post.template ?? ''} ${post.label ?? ''} ${mainDish}`);
 }
 
 export function postTimeFor(row: CalendarRow, defaults: { post: string; story: string }): string {
@@ -96,7 +104,7 @@ export function canvaBriefTxt(row: CalendarRow, copy: ResolvedCopy, s: PackSetti
   const key = templateKeyFor(row.template);
   const entry = templateEntry(row.template);
   const footer = entry.footer === 'brand'
-    ? `thin Sand rule with ✻ · ${brandLineOn(row.date)}`
+    ? `thin Sand rule with ✻ · ${brandLineOn(row.date, undefined, isKarahiPost({ template: row.template, label: copy.label, dish: row.dish }))}`
     : `${s.storeAddress.toUpperCase()}\n  OPEN ${s.openHours.toUpperCase()}`;
   return [
     `CANVA BRIEF — Day ${row.day_no} · ${formatDay(row.date)} · ${row.slot}`,

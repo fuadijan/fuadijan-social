@@ -78,6 +78,8 @@ export interface Row {
   confirmation_notes: string | null;
   /** Set on a one-off post made in the Create flow. */
   custom: CustomSpec | null;
+  /** The photos the owner picked for the design; null means the newest. */
+  design_photos: { assetId: number; name: string | null }[] | null;
   posted_at: string | null;
   updated_at: string;
 }
@@ -134,6 +136,13 @@ export type EditableField =
   | 'dish' | 'caption' | 'cta' | 'hashtags' | 'story_ideas' | 'post_time'
   | 'on_screen_text' | 'creative_instructions' | 'theme' | 'objective' | 'confirmation_notes';
 
+/** The finished texts of a post that PATCH /api/rows/:dayNo/text accepts (POST_TEXT_FIELDS in src/pipeline/post-text.ts). */
+export type PostTextField =
+  | 'caption' | 'cta' | 'hashtags' | 'alt_text' | 'story_text'
+  | 'facebook_caption' | 'facebook_cta' | 'facebook_hashtags'
+  | 'tiktok_opening' | 'tiktok_hook' | 'tiktok_script' | 'tiktok_caption' | 'tiktok_cta' | 'tiktok_hashtags'
+  | 'story_sequence' | 'reel_cover_text' | 'canva_headline' | 'canva_subheading';
+
 /** Who made an edit: the owner from the web app or Telegram, the agent, or the seed import. */
 export type EditSource = 'owner-web' | 'owner-telegram' | 'agent' | 'seed' | string;
 
@@ -177,7 +186,7 @@ export interface MonthResponse {
   settings: { storeAddress: string | null; openHours: string | null };
 }
 
-export interface WordingOption { name: string; headline: string; line: string; caption: string }
+export interface WordingOption { name: string; headline: string; line: string; caption: string; owner?: boolean }
 export interface WordingSet { id: number; options: WordingOption[]; chosen: number | null; createdAt: string }
 
 /** Every platform's version of one post, from one record. */
@@ -197,6 +206,7 @@ export interface PlatformVersions {
 
 export interface DayResponse extends DayView {
   row: Row;
+  canPair: boolean;
   questions: Question[];
   wording: WordingSet[];
   wordingWaiting: boolean;

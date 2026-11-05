@@ -156,6 +156,21 @@ day number, and nothing is erased (rows, photos, designs and packs stay). The St
 documents, the old plan can no longer be re-applied, and `brand/strategy.json` supplies only the voice rules once
 they are loaded.
 
+**Two photos in one design.** Two different dishes that look alike once cooked can share a design: on the Day page the
+owner picks two received photos and names each (`calendar_rows.design_photos`, `src/render/pair.ts`). The feed shows
+them side by side, the story and reel cover stacked, each with its dish's name on it and the words below, off the food.
+The layout is fixed, so the art director and the critic are skipped. Picking one photo makes it the hero; a new photo
+sent later clears the pick.
+
+**Editing a finished post.** Every text on the Day page can be changed there, and a wording can be changed or added
+(`src/pipeline/post-text.ts`). An edit goes on the row, into the job's copy, into the wording in use and straight into
+the pack, with no writer run and no question. Only text printed on the design (headline, label, reel cover, a wording's
+title and line) makes the designs again. The owner's record edits are logged as `content.<field>`, and loading a workbook
+leaves those fields alone; the owner's wordings carry into the next writer run.
+
+**The karahi brand line.** A karahi post's footer reads only "ROOTED IN TRADITION.", before and after the charcoal launch
+(`brandLineOn`, `isKarahiPost`).
+
 **The slogan bank.** Keep several slogans per menu item and they are offered among the wordings whenever a post is
 about that item. Load them with the monthly plan: a sheet named `Slogans` in the plan workbook, or the separate
 `calendar/Fuadijan-Slogans.xlsx` (a template with a Read Me is in the repo), columns `Item | Slogan | Line | Caption`

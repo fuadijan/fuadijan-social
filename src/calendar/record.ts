@@ -32,6 +32,8 @@ export const RECORD_COLUMNS = {
   image_prompt: ['AI Image Prompt', 'Image Prompt'],
   photo_edit_prompt: ['AI Photo Edit Prompt', 'Photo Edit Prompt'],
   customer_message: ['Customer Message'],
+  alt_text: ['Alt Text'],
+  story_text: ['Story Text'],
 } as const;
 
 export type RecordField = keyof typeof RECORD_COLUMNS;
@@ -72,6 +74,8 @@ export function applyRecord(copy: ResolvedCopy, row: { content: PostRecord | nul
     cta: written(row.cta) ?? copy.cta,
     hashtags: tags.length ? tags : copy.hashtags,
     facebook_caption: r.facebook_caption?.trim() ? facebook : copy.facebook_caption,
+    alt_text: r.alt_text?.trim() || copy.alt_text,
+    story_text: r.story_text?.trim() || copy.story_text,
     variants: headline ? copy.variants.map((v) => ({ ...v, headline })) : copy.variants,
   };
 }

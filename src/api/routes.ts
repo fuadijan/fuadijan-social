@@ -6,17 +6,18 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import type { AppContext } from '../context.js';
-import { EDITABLE_FIELDS, allRows, currentPlan, editField, markPosted, plans, pushRow, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow, type EditableField } from '../calendar/rows.js';
+import { EDITABLE_FIELDS, allRows, currentPlan, editField, markPosted, plans, pushRow, recordEdit, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow, type EditableField } from '../calendar/rows.js';
 import { receiveAsset } from '../pipeline/worker.js';
 import { redoRow } from '../pipeline/worker.js';
 import { getFile } from '../files.js';
 import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
-import { allCopyOptions, copyOptionsById, markChosen, rerenderWithWording } from '../pipeline/wording.js';
+import { addOwnerOption, allCopyOptions, copyOptionsById, latestCopyOptions, markChosen, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from '../pipeline/wording.js';
+import { POST_TEXT_FIELDS, PostBusyError, rowIsBusy, rowIsWaiting, setPostText, type PostTextField } from '../pipeline/post-text.js';
 import { adoptAsset, createCustomPost, parseCustomInput, recentPhotos } from '../pipeline/custom.js';
 import { rowViews, type RowView } from '../reminders/brief.js';
-import { heroTemplates, suggestedTemplate } from '../render/registry.js';
+import { heroTemplates, suggestedTemplate, templateEntry } from '../render/registry.js';
 import { STYLE_KEYS, STYLES } from '../render/styles.js';
 import { allSettings } from '../settings.js';
 import { addSlogan, itemKey, listSlogans, removeSlogan, updateSlogan, type Slogan } from '../slogans.js';
@@ -82,6 +83,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     return {
       ...viewJson(v!),
       row: { ...row, post_time: row.post_time },
+      canPair: templateEntry(row.template).key === 'hero-photo',
       questions: qs.map(qJson),
       wording,
       wordingWaiting: qs.some((q) => q.field === 'wording'),
@@ -111,18 +113,94 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const set = await copyOptionsById(ctx.pool, Number(req.body?.setId));
     const index = Number(req.body?.index);
     if (!set || set.calendar_row_id !== row.id || !Number.isInteger(index) || !set.options[index]) return reply.code(400).send({ ok: false, error: 'No such wording' });
+    return { ok: true, ...await useWording(row, set, index) };
+  });
+
+  async function useWording(row: CalendarRow, set: CopyOptions, index: number): Promise<{ message: string; rebuilding: boolean }> {
     const open = (await openQuestions(ctx.pool, row.id)).find((q) => q.field === 'wording');
     if (open) {
       await markChosen(ctx.pool, set.id, index);
-      const message = await applyAnswer(ctx, open.id, String(index + 1), 'web');
-      return { ok: true, message };
+      return { message: await applyAnswer(ctx, open.id, String(index + 1), 'web'), rebuilding: true };
     }
     const job = await rerenderWithWording(ctx.pool, row.id, set, index);
     if (!job) {
       await markChosen(ctx.pool, set.id, index);
-      return { ok: true, message: 'Noted; it is used when the day is rendered.' };
+      return { message: 'Noted; it is used when the day is rendered.', rebuilding: false };
     }
-    return { ok: true, message: `Wording ${index + 1} — rebuilding the designs and the pack.` };
+    return { message: `Wording ${index + 1} — rebuilding the designs and the pack.`, rebuilding: true };
+  }
+
+  /** One of the post's finished texts, typed over: into the pack at once, with no writer run and no question. */
+  app.patch<{ Params: { dayNo: string }; Body: { field?: string; value?: string | null } }>('/api/rows/:dayNo/text', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const field = String(req.body?.field ?? '') as PostTextField;
+    if (!POST_TEXT_FIELDS.includes(field)) return reply.code(400).send({ ok: false, error: `field must be one of ${POST_TEXT_FIELDS.join(', ')}` });
+    try {
+      return { ok: true, ...await setPostText(ctx.pool, row, field, req.body?.value == null ? null : String(req.body.value), 'owner-web') };
+    } catch (e) {
+      return reply.code(e instanceof PostBusyError ? 409 : 400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /** The owner's own wording for this post, added to the list and, with `use`, used straight away. */
+  app.post<{ Params: { dayNo: string }; Body: Record<string, unknown> }>('/api/rows/:dayNo/wordings', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    try {
+      const w = wordingBody(req.body);
+      if (req.body?.use && await rowIsBusy(ctx.pool, row.id)) throw new PostBusyError();
+      const { set, index } = await addOwnerOption(ctx.pool, row.id, { headline: w.headline, line: w.line ?? '', caption: w.caption ?? '' });
+      if (!req.body?.use) return { ok: true, message: 'Added to this post’s wordings.', rebuilding: false };
+      return { ok: true, ...await useWording(row, set, index) };
+    } catch (e) {
+      return reply.code(e instanceof PostBusyError ? 409 : 400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /** Changes one of the post's wordings. If it is the one in use the post follows: the pack at once, or new designs when the words on them changed. */
+  app.patch<{ Params: { dayNo: string; setId: string; index: string }; Body: Record<string, unknown> }>('/api/rows/:dayNo/wordings/:setId/:index', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const latest = await latestCopyOptions(ctx.pool, row.id);
+    const index = Number(req.params.index);
+    const old = latest?.options[index];
+    if (!latest || !old || latest.id !== Number(req.params.setId)) return reply.code(400).send({ ok: false, error: 'No such wording' });
+    try {
+      const w = wordingBody(req.body);
+      const words = { headline: w.headline, line: w.line ?? '', caption: w.caption ?? '' };
+      if (await rowIsBusy(ctx.pool, row.id)) throw new PostBusyError();
+      const set = await updateOption(ctx.pool, latest, index, words);
+      if (latest.chosen !== index) return { ok: true, message: 'Saved.', rebuilding: false };
+      if (words.headline === old.headline && words.line === old.line) {
+        await setPostText(ctx.pool, row, 'caption', words.caption, 'owner-web');
+        return { ok: true, message: 'Saved. The caption in the pack is updated.', rebuilding: false };
+      }
+      return { ok: true, ...await useWording(row, set, index) };
+    } catch (e) {
+      return reply.code(e instanceof PostBusyError ? 409 : 400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /** Which photos the design uses: one, or two different dishes shown together with their names on them. */
+  app.post<{ Params: { dayNo: string }; Body: { photos?: { assetId?: number; name?: string | null }[] } }>('/api/rows/:dayNo/photos', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const photos = (req.body?.photos ?? []).map((p) => ({ assetId: Number(p.assetId), name: String(p.name ?? '').trim().slice(0, 28) || null }));
+    if (photos.length < 1 || photos.length > 2) return reply.code(400).send({ ok: false, error: 'Pick one photo or two.' });
+    const ids = new Set((await ctx.pool.query<{ id: number }>("select id from assets where calendar_row_id = $1 and kind in ('photo','document') and prepped is not null", [row.id])).rows.map((a) => a.id));
+    if (!photos.every((p) => ids.has(p.assetId)) || new Set(photos.map((p) => p.assetId)).size !== photos.length) return reply.code(400).send({ ok: false, error: 'That photo is not on this post.' });
+    if (photos.length === 2) {
+      if (templateEntry(row.template).key !== 'hero-photo') return reply.code(400).send({ ok: false, error: 'This kind of post has no two-photo design.' });
+      if (!photos.every((p) => p.name)) return reply.code(400).send({ ok: false, error: 'Name both dishes, so customers can tell which is which.' });
+      if (photos[0]!.name!.toLowerCase() === photos[1]!.name!.toLowerCase()) return reply.code(400).send({ ok: false, error: 'The two dishes need different names.' });
+    }
+    if (await rowIsBusy(ctx.pool, row.id)) return reply.code(409).send({ ok: false, error: new PostBusyError().message });
+    await ctx.pool.query('update calendar_rows set design_photos = $2, updated_at = now() where id = $1', [row.id, JSON.stringify(photos)]);
+    await recordEdit(ctx.pool, row.id, 'design_photos', row.design_photos ? row.design_photos.map((p) => p.name ?? `photo ${p.assetId}`).join(' + ') : null, photos.map((p) => p.name ?? `photo ${p.assetId}`).join(' + '), 'owner-web');
+    if (await rowIsWaiting(ctx.pool, row.id)) return { ok: true, message: 'Saved. The design uses these photos once your questions are answered.', rebuilding: false };
+    const job = await rerenderRow(ctx.pool, row.id, { assetId: photos[0]!.assetId });
+    return job ? { ok: true, message: 'Making the designs with your photos.', rebuilding: true } : { ok: true, message: 'Saved. The design uses these photos when it is made.', rebuilding: false };
   });
 
   app.post<{ Params: { dayNo: string }; Body: { status?: string } }>('/api/rows/:dayNo/status', async (req, reply) => {

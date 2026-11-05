@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql', '0012_design_photos.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -516,6 +516,93 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     await pool.query("insert into jobs (calendar_row_id, stage, status) values ($1, 'resolve', 'failed')", [rowId]);
     await pool.query("update calendar_rows set status = 'ready' where id = $1", [rowId]);
     expect(await words()).toBe("Ready to post, but your last change didn't finish. Send it again with /redo 1.");
+  });
+
+  it("takes the owner's text straight into the pack, and new designs only when the words on them change", async () => {
+    const { setPostText, PostBusyError } = await import('../src/pipeline/post-text.js');
+    const { latestCopyOptions, addOwnerOption, updateOption, rerenderRow } = await import('../src/pipeline/wording.js');
+    const row = (await rowByDay(pool, 2))!;
+    const worker = new Worker(ctx, 1000);
+    const pack = async () => (await pool.query<{ id: number; caption: string; caption_txt: string; hashtags: string[]; platforms: { tiktok: { script: string }; stories: string[] } }>('select id, caption, caption_txt, hashtags, platforms from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0]!;
+    const jobs = async () => Number((await pool.query<{ n: string }>('select count(*) n from jobs where calendar_row_id = $1', [row.id])).rows[0]!.n);
+    const before = await jobs();
+
+    // Text not on the design: into the pack at once, and no new job.
+    expect(await setPostText(pool, row, 'caption', 'Typed by the owner.', 'owner-web')).toEqual({ rebuilding: false });
+    expect(await setPostText(pool, row, 'hashtags', 'halal, #Karahi', 'owner-web')).toEqual({ rebuilding: false });
+    expect(await setPostText(pool, row, 'tiktok_script', 'Line one.\nLine two.', 'owner-web')).toEqual({ rebuilding: false });
+    expect(await setPostText(pool, row, 'story_sequence', 'Story 1\nStory 2', 'owner-web')).toEqual({ rebuilding: false });
+    const edited = await pack();
+    expect(edited.caption).toBe('Typed by the owner.');
+    expect(edited.caption_txt).toContain('Typed by the owner.');
+    expect(edited.hashtags).toEqual(['#halal', '#Karahi']);
+    expect(edited.platforms.tiktok.script).toBe('Line one.\nLine two.');
+    expect(edited.platforms.stories).toEqual(['Story 1', 'Story 2']);
+    expect(await jobs()).toBe(before);
+    expect((await rowByDay(pool, 2))!.content?.tiktok_script).toBe('Line one.\nLine two.');
+    expect((await latestCopyOptions(pool, row.id))!.options[1]).toMatchObject({ caption: 'Typed by the owner.', owner: true });
+    await expect(setPostText(pool, row, 'caption', '  ', 'owner-web')).rejects.toThrow(/cannot be empty/);
+
+    // Text on the design: new designs from the same words, with no writer run and no wording question.
+    const fresh = (await rowByDay(pool, 2))!;
+    expect(await setPostText(pool, fresh, 'canva_headline', 'Chapli\nKebab', 'owner-web')).toEqual({ rebuilding: true });
+    await expect(setPostText(pool, fresh, 'cta', 'Too soon', 'owner-web')).rejects.toBeInstanceOf(PostBusyError);
+    await worker.drain();
+    expect((await pool.query('select stage, status from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]).toEqual({ stage: 'done', status: 'done' });
+    expect((await openQuestions(pool, row.id)).filter((q) => q.field === 'wording')).toEqual([]);
+    const rebuilt = await pack();
+    expect(rebuilt.id).not.toBe(edited.id);
+    expect(rebuilt.caption).toBe('Typed by the owner.');
+    expect(rebuilt.hashtags).toEqual(['#halal', '#Karahi']);
+    expect(rebuilt.platforms.tiktok.script).toBe('Line one.\nLine two.');
+
+    // A wording of the owner's joins the list; changing another marks it as theirs.
+    const added = await addOwnerOption(pool, row.id, { headline: 'Chapli Kebab', line: 'My line.', caption: 'My caption.' });
+    expect(added.set.options[added.index]).toMatchObject({ name: 'Your words', owner: true });
+    const changed = await updateOption(pool, added.set, 0, { line: 'Better line.' });
+    expect(changed.options[0]).toMatchObject({ line: 'Better line.', owner: true, name: 'Calendar wording (edited)' });
+    expect(await rerenderRow(pool, -1)).toBeNull();
+
+    // A new workbook leaves what the owner typed in the record, and may change the rest of it.
+    const wb = await readWorkbook();
+    const sheet = { ...wb.rows.find((r) => r.day_no === 2)!, content: { tiktok_script: 'From the sheet', kpi: 'Saves' } };
+    await seedRows(pool, [sheet], wb.rows[0]!.date);
+    expect((await rowByDay(pool, 2))!.content).toMatchObject({ tiktok_script: 'Line one.\nLine two.', kpi: 'Saves' });
+  });
+
+  it('makes the design from the photos the owner picks, two with their names, and a new photo starts over', async () => {
+    const { rerenderRow } = await import('../src/pipeline/wording.js');
+    const row = (await rowByDay(pool, 2))!;
+    const worker = new Worker(ctx, 1000);
+    const { rows: [first] } = await pool.query<{ id: number; prepped: Record<string, string>; original_file_id: string }>("select id, prepped, original_file_id from assets where calendar_row_id = $1 and prepped is not null order by id limit 1", [row.id]);
+    const { rows: [second] } = await pool.query<{ id: number }>("insert into assets (kind, calendar_row_id, original_file_id, prepped) values ('document', $1, $2, $3) returning id", [row.id, first!.original_file_id, JSON.stringify(first!.prepped)]);
+    await pool.query('update calendar_rows set design_photos = $2 where id = $1', [row.id, JSON.stringify([{ assetId: first!.id, name: 'Lamb Karahi' }, { assetId: second!.id, name: 'Chicken Karahi' }])]);
+    await rerenderRow(pool, row.id, { assetId: first!.id });
+    const critiques = async () => Number((await pool.query<{ n: string }>('select count(*) n from claude_calls').catch(() => ({ rows: [{ n: '0' }] }))).rows[0]!.n);
+    const calls = await critiques();
+    await worker.drain();
+    expect((await pool.query('select stage, status from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]).toEqual({ stage: 'done', status: 'done' });
+    // The fixed layout asks nothing of the art director or the critic.
+    expect(await critiques()).toBe(calls);
+    expect((await pool.query<{ format: string }>('select format from renders where calendar_row_id = $1 order by format', [row.id])).rows.map((r) => r.format)).toEqual(['feed', 'story']);
+    // A post that was already out stays posted.
+    await pool.query("update calendar_rows set status = 'posted' where id = $1", [row.id]);
+    await rerenderRow(pool, row.id, { assetId: first!.id });
+    await worker.drain();
+    expect((await rowByDay(pool, 2))!.status).toBe('posted');
+    await pool.query("update calendar_rows set status = 'ready' where id = $1", [row.id]);
+    // A redo starts from the first photo picked.
+    const { redoRow } = await import('../src/pipeline/worker.js');
+    const redo = await redoRow(pool, row.id, null);
+    expect(redo!.asset_id).toBe(first!.id);
+    await pool.query("update jobs set status = 'done' where id = $1", [redo!.id]);
+    // A photo sent later, outside the set, is what the owner wants to see now.
+    await pool.query("update assets set set_key = null, created_at = now() - interval '1 hour' where calendar_row_id = $1", [row.id]);
+    await receiveAsset(pool, { kind: 'document', bytes: readFileSync('brand/reference/real-03.jpg'), mime: 'image/jpeg', filename: 'new.jpg', caption: 'chapli kebab #day2' });
+    await worker.drain();
+    expect((await rowByDay(pool, 2))!.design_photos).toBeNull();
+    for (const q of await openQuestions(pool, row.id)) await pool.query("update questions set answered_at = now(), answer = 'x' where id = $1", [q.id]);
+    await pool.query("update jobs set status = 'done' where calendar_row_id = $1 and status in ('waiting', 'queued')", [row.id]);
   });
 
   it('understands "posted 2" and "skip 3"', async () => {

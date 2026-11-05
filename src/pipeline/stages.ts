@@ -17,7 +17,7 @@ import * as fmt from '../messaging/formats.js';
 import { templateEntry } from '../render/registry.js';
 import { allSettings, dishFactsFor, getSetting } from '../settings.js';
 import { summarise, type DesignRun, type DesignSummary } from './design.js';
-import { addCustomOption, applyOption, latestCopyOptions, markChosen, storeCopyOptions } from './wording.js';
+import { PACKS_FOLDER, addCustomOption, applyOption, latestCopyOptions, markChosen, ownerOptions, storeCopyOptions } from './wording.js';
 import { applyCustomWording, customResolveNote, keepFormats, ownerEditsSince } from './custom.js';
 import { slogansFor } from '../slogans.js';
 import { copyBrief, voiceBrief, strategyIfAny } from '../strategy.js';
@@ -94,7 +94,7 @@ export interface StageContext extends AppContext {
   asset: Asset | null;
 }
 
-export const PACKS_DIR = join(process.cwd(), 'packs');
+export const PACKS_DIR = PACKS_FOLDER;
 
 async function loadJpeg(ctx: StageContext): Promise<Buffer> {
   const id = ctx.job.state.jpegFileId ?? ctx.asset?.original_file_id;
@@ -188,6 +188,8 @@ async function assignRow(ctx: StageContext, row: CalendarRow, match: MatchResult
   await ctx.pool.query('update jobs set calendar_row_id = $2 where id = $1', [ctx.job.id, row.id]);
   ctx.job.calendar_row_id = row.id;
   ctx.job.state.isSetFollower = Boolean(recent?.set_key);
+  // A new photo starts over: the owner's earlier pick of photos was among the old ones.
+  if (!recent?.set_key) await ctx.pool.query('update calendar_rows set design_photos = null where id = $1', [row.id]);
 }
 
 export async function match(ctx: StageContext): Promise<Outcome> {
@@ -335,7 +337,7 @@ export async function resolve(ctx: StageContext): Promise<Outcome> {
   }
   // The main copy and Claude's alternative wordings are kept; the render stage asks which to use.
   const original = redo && row.custom?.wording ? [{ name: 'Your original wording', headline: row.custom.wording.headline, line: row.custom.wording.line, caption: row.custom.wording.caption || copy.caption }] : [];
-  await storeCopyOptions(ctx.pool, row.id, ctx.job.id, copy, slogans, original);
+  await storeCopyOptions(ctx.pool, row.id, ctx.job.id, copy, slogans, [...original, ...ownerOptions(await latestCopyOptions(ctx.pool, row.id))]);
   return { kind: 'advance', stage: 'render', state: { copy } };
 }
 
@@ -476,7 +478,8 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
       row.slot === 'reel' ? (copy.on_screen_text[0] ?? copy.headline.split('\n')[0] ?? null) : null,
       row.slot === 'reel' ? copy.on_screen_text : null, row.slot === 'reel' ? reelText?.split('\n').filter((l) => /^\s+\d+\)/.test(l)).map((l) => l.replace(/^\s+\d+\)\s*/, '')) ?? null : null,
       brief, captionText, reelText, folderName, JSON.stringify(sources), JSON.stringify(platforms)]);
-  await setStatus(ctx.pool, row, 'ready');
+  // A post already out stays posted when the owner has its designs made again.
+  if (row.status !== 'posted') await setStatus(ctx.pool, row, 'ready');
   return { kind: 'advance', stage: 'notify', state: { packId: inserted.rows[0]!.id, packFolder: folderName } };
 }
 

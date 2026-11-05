@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ResolvedCopy } from '../src/brain/schemas.js';
 import type { Slogan } from '../src/slogans.js';
-import { asLine, optionsFrom } from '../src/pipeline/wording.js';
+import { asLine, optionsFrom, ownerOptions, type CopyOptions } from '../src/pipeline/wording.js';
+import { cleanHashtags, copyWith } from '../src/pipeline/post-text.js';
 
 const copy = {
   headline: 'Beef Seekh', line: 'Hand formed, special spices.', caption: 'Beef Seekh, hand formed and grilled.',
@@ -16,6 +17,25 @@ describe('wording options', () => {
     expect(opts.map((o) => o.name)).toEqual(['Calendar wording', 'Short and punchy', 'Slogan · house', 'Slogan · Beef Seekh']);
     expect(opts[2]).toMatchObject({ headline: 'Beef Seekh', line: 'Fresh off the grill. Halal, always.', caption: copy.caption });
     expect(opts[3]).toMatchObject({ headline: 'Beef Seekh', line: 'Over open flame Every evening.', caption: 'Seekh over flame.' });
+  });
+
+  it("carries only the owner's own wordings into the next set", () => {
+    const own = { name: 'Your words', headline: 'Lamb Karahi', line: 'Mine.', caption: 'My caption.', owner: true };
+    const set = { options: [{ name: 'Calendar wording', headline: 'A', line: 'B', caption: 'C' }, own] } as CopyOptions;
+    expect(ownerOptions(set)).toEqual([own]);
+    expect(ownerOptions(null)).toEqual([]);
+    expect(optionsFrom(copy, [], ownerOptions(set)).at(-1)).toEqual(own);
+  });
+
+  it('tidies typed hashtags and changes only the edited part of the copy', () => {
+    expect(cleanHashtags('halal, #Karahi  #halal\nSydney')).toBe('#halal #Karahi #Sydney');
+    const base = { ...copy, cta: 'Order', hashtags: ['#a'], alt_text: 'Alt', story_text: 'Story', label: 'L', facebook_caption: 'FB' } as unknown as ResolvedCopy;
+    expect(copyWith(base, 'hashtags', '#x #y').hashtags).toEqual(['#x', '#y']);
+    expect(copyWith(base, 'canva_headline', 'New').headline).toBe('New');
+    expect(copyWith(base, 'tiktok_script', 'Only the record holds this')).toEqual(base);
+    // Clearing a label or a Facebook caption goes back to what the writer drafted.
+    expect(copyWith(base, 'canva_subheading', null).label).toBe('L');
+    expect(copyWith(base, 'facebook_caption', null).facebook_caption).toBe('FB');
   });
 
   it('flattens a two-line wording into one line and does not repeat its own line', () => {

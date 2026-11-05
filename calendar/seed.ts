@@ -231,10 +231,21 @@ export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: s
         }
       }
       const edited = new Set((await c.query<{ field: string }>("select distinct field from calendar_edits where row_id = $1 and source <> 'seed'", [existing.id])).rows.map((x) => x.field));
+      // What the owner changed in a post's record stays theirs; the rest of the record follows the workbook.
+      const ownRecord = [...edited].filter((f) => f.startsWith('content.')).map((f) => f.slice('content.'.length));
+      const record = r.content && ownRecord.length ? { ...(r.content as Record<string, unknown>) } : r.content;
+      if (record && ownRecord.length) {
+        const had = (existing.content ?? {}) as Record<string, unknown>;
+        for (const k of ownRecord) {
+          if (had[k] === undefined) delete (record as Record<string, unknown>)[k];
+          else (record as Record<string, unknown>)[k] = had[k];
+        }
+        values.content = JSON.stringify(record);
+      }
       let changed = false;
       for (const [field, value] of Object.entries(values)) {
         const current = (field === 'content' ? (existing.content ? JSON.stringify(existing.content) : null) : existing[field] as string | number | null | undefined) ?? null;
-        const same = field === 'content' ? stableJson(existing.content) === stableJson(r.content) : (current ?? null) === (value ?? null);
+        const same = field === 'content' ? stableJson(existing.content) === stableJson(record) : (current ?? null) === (value ?? null);
         if (same) continue;
         if (edited.has(field) || (field === 'date' && edited.has('date')) || (field === 'status' && edited.has('status'))) {
           result.protectedFields.push({ day_no: r.day_no, field });

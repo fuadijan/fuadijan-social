@@ -25,6 +25,8 @@ export interface CustomSpec {
   sloganId: number | null;
 }
 
+export interface DesignPhoto { assetId: number; name: string | null }
+
 export interface CalendarRow {
   id: number;
   /** The month the row's workbook was for, YYYY-MM; day numbers restart each plan. */
@@ -56,6 +58,8 @@ export interface CalendarRow {
   benefit: string | null;
   /** The post record (src/calendar/record.ts): every platform's text the sheet supplied; null for a classic row. */
   content: PostRecord | null;
+  /** The photos the owner picked for the design: one, or two named dishes shown together. Null: the newest photo. */
+  design_photos: DesignPhoto[] | null;
   posted_at: Date | null;
   updated_at: Date;
 }
@@ -64,7 +68,7 @@ export interface CalendarRow {
 export const EDITABLE_FIELDS = ['dish', 'caption', 'cta', 'hashtags', 'story_ideas', 'post_time', 'on_screen_text', 'creative_instructions', 'theme', 'objective', 'confirmation_notes'] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
-const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, content, posted_at, updated_at';
+const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, content, design_photos, posted_at, updated_at';
 
 /** Every plan with its first and last date, oldest first. */
 export async function plans(db: Db): Promise<{ plan: string; first: IsoDate; last: IsoDate; rows: number }[]> {

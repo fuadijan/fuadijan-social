@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
-import { fileUrl, getDay, markPosted, packTextUrl, pushDay, skipDay } from '../api';
+import { fileUrl, getDay, markPosted, packTextUrl, patchPostText, pushDay, setDesignPhotos, skipDay } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { CopyButton } from '../components/CopyButton';
 import { EditableText, FIELD_LABEL } from '../components/EditableText';
@@ -11,7 +11,7 @@ import { StatusPill } from '../components/StatusPill';
 import { UploadPhotos } from '../components/UploadPhotos';
 import { WordingOptions } from '../components/WordingOptions';
 import { fmtDate, fmtDateTime, fmtTime, paragraphs, SLOT_LABEL, splitArrows } from '../format';
-import type { Asset, DayResponse, EditSource, Pack, Row } from '../types';
+import type { Asset, DayResponse, EditSource, Pack, PostTextField, Row } from '../types';
 import { useApi } from '../useApi';
 
 const FIRST_DAY = 1;
@@ -23,6 +23,27 @@ const BackLink = ({ href, children, className }: { href: string; children?: Reac
 );
 
 type Reload = () => Promise<void>;
+
+/** A finished text of the post: starts from what shows, and a save goes straight into the pack. */
+function PostText({ d, field, label, value, hint, reload, onRebuild, copy = true, className, kind }: { d: DayResponse; field: PostTextField; label: string; value: string | null | undefined; hint?: string; reload: Reload; onRebuild: () => void; copy?: boolean; className?: string; kind?: 'input' }) {
+  const text = value?.trim() ?? '';
+  return (
+    <EditableText
+      dayNo={d.dayNo}
+      label={label}
+      value={text}
+      copyText={copy ? text : null}
+      kind={kind}
+      hint={hint}
+      save={async (v) => {
+        if ((await patchPostText(d.dayNo, field, v)).rebuilding) onRebuild();
+      }}
+      onSaved={reload}
+    >
+      <Body text={text} className={className} />
+    </EditableText>
+  );
+}
 
 /** A read-only field (the pack's derived text, which has no row column to edit). */
 function Field({ label, value, copy, mono = false, className }: { label: string; value: string | null | undefined; copy?: boolean; mono?: boolean; className?: string }) {
@@ -125,27 +146,20 @@ function ShootSection({ d, reload }: { d: DayResponse; reload: Reload }) {
   );
 }
 
-function CopySection({ d, reload }: { d: DayResponse; reload: Reload }) {
+function CopySection({ d, reload, onRebuild }: { d: DayResponse; reload: Reload; onRebuild: () => void }) {
   const c = resolvedCopy(d.row, d.pack);
-  // With a pack, what shows is the pack's resolved text; the edit changes the sheet's draft the pack is made from.
-  const fromSheet = c.draft ? undefined : 'This edits the sheet’s text; the pack is rebuilt from it.';
+  const direct = c.draft ? undefined : 'Saved straight into the pack.';
   return (
     <Card title="Copy">
       {c.draft ? <span className="sa-draft">Draft — the pack isn't made yet</span> : null}
-      <EditableText dayNo={d.dayNo} field="caption" label="Caption" value={d.row.caption} copyText={c.caption} hint={fromSheet} onSaved={reload}>
-        <Body text={c.caption} />
-      </EditableText>
-      <EditableText dayNo={d.dayNo} field="cta" label="CTA" value={d.row.cta} copyText={c.cta} hint={fromSheet} onSaved={reload}>
-        <Body text={c.cta} />
-      </EditableText>
-      <EditableText dayNo={d.dayNo} field="hashtags" label="Hashtags" value={d.row.hashtags} copyText={c.hashtags} hint={fromSheet ?? 'Space separated, each with its #.'} onSaved={reload}>
-        <Body text={c.hashtags} className="sa-hashtags" />
-      </EditableText>
+      <PostText d={d} field="caption" label="Caption" value={c.caption} hint={direct} reload={reload} onRebuild={onRebuild} />
+      <PostText d={d} field="cta" label="CTA" value={c.cta} hint={direct} reload={reload} onRebuild={onRebuild} />
+      <PostText d={d} field="hashtags" label="Hashtags" value={c.hashtags} hint={direct ?? 'Space separated; a missing # is added.'} className="sa-hashtags" reload={reload} onRebuild={onRebuild} />
       {!c.draft ? (
         <>
-          <Field label="Alt text" value={c.alt} copy />
-          {d.platforms ? null : <Field label="Facebook caption" value={c.facebook} copy />}
-          <Field label="Story text" value={c.story} copy />
+          <PostText d={d} field="alt_text" label="Alt text" value={c.alt} reload={reload} onRebuild={onRebuild} />
+          {d.platforms ? null : <PostText d={d} field="facebook_caption" label="Facebook caption" value={c.facebook} reload={reload} onRebuild={onRebuild} />}
+          <PostText d={d} field="story_text" label="Story text" value={c.story} reload={reload} onRebuild={onRebuild} />
         </>
       ) : d.row.caption_hint ? (
         <Field label="Caption hint (from the sheet)" value={d.row.caption_hint} />
@@ -155,34 +169,42 @@ function CopySection({ d, reload }: { d: DayResponse; reload: Reload }) {
 }
 
 /** The other platforms' versions of this post. The Copy section above is Instagram. */
-function PlatformsSection({ d }: { d: DayResponse }) {
+function PlatformsSection({ d, reload, onRebuild }: { d: DayResponse; reload: Reload; onRebuild: () => void }) {
   const p = d.platforms;
   if (!p) return null;
   // "All" or blank means every platform; otherwise only those the record names.
   const wanted = p.notes.platform.toLowerCase();
   const wants = (name: string) => !wanted || wanted === 'all' || wanted.includes(name);
   const fb = [p.facebook.caption, p.facebook.cta, p.facebook.hashtags.join(' ')].filter(Boolean).join('\n\n');
+  const edit = { d, reload, onRebuild };
+  const onDesign = 'This is on the design, so saving makes the designs again.';
   const hasTikTok = p.tiktok.opening || p.tiktok.hook || p.tiktok.script;
   const n = p.notes;
   const hasNotes = n.goal || n.funnel || n.kpi || n.priority || n.objective || n.platform;
   return (
     <Card title="Every platform">
       {d.pack ? null : <span className="sa-draft">From the record. The writer fills the rest when the photo arrives.</span>}
-      {wants('facebook') && fb ? <Field label="Facebook" value={fb} copy /> : null}
-      {wants('tiktok') && hasTikTok ? (
+      {wants('facebook') && fb ? (
         <>
-          <Field label="TikTok opening text" value={p.tiktok.opening} copy />
-          <Field label="TikTok hook" value={p.tiktok.hook} copy />
-          <Field label="TikTok script" value={p.tiktok.script} copy />
-          {p.tiktok.caption ? <Field label="TikTok caption" value={p.tiktok.caption} copy /> : null}
-          <Field label="TikTok CTA" value={p.tiktok.cta} copy />
-          <Field label="TikTok hashtags" value={p.tiktok.hashtags.join(' ')} copy className="sa-hashtags" />
+          <PostText {...edit} field="facebook_caption" label="Facebook caption" value={p.facebook.caption} />
+          <PostText {...edit} field="facebook_cta" label="Facebook CTA" value={p.facebook.cta} />
+          <PostText {...edit} field="facebook_hashtags" label="Facebook hashtags" value={p.facebook.hashtags.join(' ')} className="sa-hashtags" />
         </>
       ) : null}
-      {p.stories.length ? <Field label="Story sequence" value={p.stories.join('\n')} copy /> : null}
-      {p.reel_cover ? <Field label="Reel cover" value={p.reel_cover} copy /> : null}
-      {p.canva.headline ? <Field label="Canva headline" value={p.canva.headline} copy /> : null}
-      {p.canva.subheading ? <Field label="Canva subheading" value={p.canva.subheading} copy /> : null}
+      {wants('tiktok') && hasTikTok ? (
+        <>
+          <PostText {...edit} field="tiktok_opening" label="TikTok opening text" value={p.tiktok.opening} />
+          <PostText {...edit} field="tiktok_hook" label="TikTok hook" value={p.tiktok.hook} />
+          <PostText {...edit} field="tiktok_script" label="TikTok script" value={p.tiktok.script} />
+          <PostText {...edit} field="tiktok_caption" label="TikTok caption" value={p.tiktok.caption} />
+          <PostText {...edit} field="tiktok_cta" label="TikTok CTA" value={p.tiktok.cta} />
+          <PostText {...edit} field="tiktok_hashtags" label="TikTok hashtags" value={p.tiktok.hashtags.join(' ')} className="sa-hashtags" />
+        </>
+      ) : null}
+      {p.stories.length ? <PostText {...edit} field="story_sequence" label="Story sequence" value={p.stories.join('\n')} hint="One story per line." /> : null}
+      {p.reel_cover ? <PostText {...edit} field="reel_cover_text" label="Reel cover" value={p.reel_cover} hint={onDesign} /> : null}
+      {p.canva.headline ? <PostText {...edit} field="canva_headline" label="Headline on the design" value={p.canva.headline} hint={onDesign} /> : null}
+      {p.canva.subheading ? <PostText {...edit} field="canva_subheading" label="Label on the design" value={p.canva.subheading} hint={onDesign} /> : null}
       {p.photo_edit_prompt ? <Field label="Photo edit prompt (use with a real photo of the food)" value={p.photo_edit_prompt} copy /> : null}
       {p.image_prompt ? <Field label="Image prompt (backgrounds, mock-ups and concepts only, never a dish you sell)" value={p.image_prompt} copy /> : null}
       {p.benefit || p.customer_message ? <Field label="Customer benefit" value={[p.benefit, p.customer_message].filter(Boolean).join('\n')} /> : null}
@@ -194,12 +216,11 @@ function PlatformsSection({ d }: { d: DayResponse }) {
   );
 }
 
-function WordingSection({ d, reload }: { d: DayResponse; reload: Reload }) {
-  if (d.wording.length === 0) return null;
+function WordingSection({ d, reload, onRebuild }: { d: DayResponse; reload: Reload; onRebuild: () => void }) {
   return (
     <Card title="Wording" id="wording">
-      <div className="sa-note" style={{ marginBottom: 10 }}>Every wording written for this day. Pick one and the designs and pack are made with it.</div>
-      <WordingOptions dayNo={d.dayNo} sets={d.wording} waiting={d.wordingWaiting} onChosen={reload} />
+      <div className="sa-note" style={{ marginBottom: 10 }}>{d.wording.length ? 'Every wording for this day. Pick one and the designs and pack are made with it; change any of them, or add your own.' : 'The writer’s wordings appear here when the photo arrives. You can add your own now.'}</div>
+      <WordingOptions dayNo={d.dayNo} sets={d.wording} waiting={d.wordingWaiting} onChosen={reload} onRebuild={onRebuild} />
     </Card>
   );
 }
@@ -253,7 +274,71 @@ function Thumb({ a }: { a: Asset }) {
   );
 }
 
-function ImagesSection({ d, reload }: { d: DayResponse; reload: Reload }) {
+/** The owner picks the photos the design uses: one, or two different dishes shown together with their names on them. */
+function DesignPhotos({ d, reload, onRebuild }: { d: DayResponse; reload: Reload; onRebuild: () => void }) {
+  const photos = d.assets.filter((a) => a.kind !== 'video' && a.kind !== 'text' && a.crops);
+  const saved = d.row.design_photos ?? [];
+  const [picked, setPicked] = useState<{ assetId: number; name: string }[]>(() => saved.map((p) => ({ assetId: p.assetId, name: p.name ?? '' })));
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ text: string; error?: boolean } | null>(null);
+  if (photos.length < 2) return null;
+  const max = d.canPair ? 2 : 1;
+  const nameFrom = (a: Asset) => (a.caption ?? '').replace(/#\S+/g, '').split(/\s+--\s+|\s+—\s+/)[0]!.trim().replace(/\b\p{L}/gu, (c) => c.toUpperCase()).slice(0, 28);
+
+  function toggle(a: Asset) {
+    setResult(null);
+    setPicked((now) => {
+      if (now.some((p) => p.assetId === a.id)) return now.filter((p) => p.assetId !== a.id);
+      const next = [...now, { assetId: a.id, name: nameFrom(a) }];
+      return next.slice(-max);
+    });
+  }
+
+  async function apply() {
+    setBusy(true);
+    setResult(null);
+    try {
+      // In the order they were received: the first goes on the left or the top.
+      const order = photos.map((a) => a.id);
+      const r = await setDesignPhotos(d.dayNo, [...picked].sort((x, y) => order.indexOf(x.assetId) - order.indexOf(y.assetId)).map((p) => ({ assetId: p.assetId, name: p.name.trim() || null })));
+      setResult({ text: r.message });
+      if (r.rebuilding) onRebuild();
+      await reload();
+    } catch (e) {
+      setResult({ text: e instanceof Error ? e.message : String(e), error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sa-field">
+      <div className="sa-eyebrow">Photos in the design</div>
+      <div className="sa-note">{d.canPair ? 'Tap one photo, or two for two different dishes shown together. Each of the two carries its dish’s name, so customers can tell them apart.' : 'Tap the photo the design should use.'}{saved.length ? '' : ' Until you pick, the design uses the newest photo.'}</div>
+      <div className="sa-photo-pick">
+        {photos.map((a) => {
+          const p = picked.find((x) => x.assetId === a.id);
+          return (
+            <div key={a.id} className={`sa-photo-choice${p ? ' sa-photo-choice--on' : ''}`}>
+              <button type="button" aria-pressed={Boolean(p)} disabled={busy} onClick={() => toggle(a)}>
+                {a.thumb ? <img src={fileUrl(a.thumb)} alt={a.caption ?? `Photo ${a.id}`} loading="lazy" /> : <span>Photo {a.id}</span>}
+              </button>
+              {p && picked.length === 2 ? (
+                <input className="sa-input" aria-label="Dish name on this photo" placeholder="Dish name" maxLength={28} value={p.name} disabled={busy} onChange={(e) => setPicked((now) => now.map((x) => (x.assetId === a.id ? { ...x, name: e.target.value } : x)))} />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="sa-actions sa-editor-actions">
+        <Button variant="secondary" size="sm" disabled={busy || picked.length === 0} onClick={() => void apply()}>{busy ? 'Saving…' : picked.length === 2 ? 'Make the design with these two' : 'Make the design with this photo'}</Button>
+      </div>
+      {result ? <div className={`sa-result${result.error ? ' sa-result--error' : ''}`} role="status">{result.text}</div> : null}
+    </div>
+  );
+}
+
+function ImagesSection({ d, reload, onRebuild }: { d: DayResponse; reload: Reload; onRebuild: () => void }) {
   const caption = resolvedCopy(d.row, d.pack).caption ?? '';
   const slug = `day${d.dayNo}`;
   // Cut 1 has no renders yet, so the pack's plain crops stand in for them.
@@ -277,6 +362,7 @@ function ImagesSection({ d, reload }: { d: DayResponse; reload: Reload }) {
           </div>
         </div>
       ) : null}
+      <DesignPhotos key={`photos-${d.dayNo}`} d={d} reload={reload} onRebuild={onRebuild} />
       {outputs.length > 0 ? (
         <div className="sa-field">
           <div className="sa-eyebrow">{d.renders.length > 0 ? 'Rendered' : 'Crops'}</div>
@@ -402,7 +488,7 @@ const GENERATE_FOR_MS = 150_000;
  * Arriving from the Create flow (`state.generating`): the page refetches every few seconds until the designs are
  * there, the pipeline has a question, or a couple of minutes have passed.
  */
-function useGenerating(data: DayResponse | null, reload: Reload): 'working' | 'slow' | null {
+function useGenerating(data: DayResponse | null, reload: Reload): { phase: 'working' | 'slow' | null; watch: () => void } {
   const { state } = useLocation();
   const [phase, setPhase] = useState<'working' | 'slow' | null>(() => ((state as { generating?: boolean } | null)?.generating ? 'working' : null));
   useEffect(() => {
@@ -414,10 +500,23 @@ function useGenerating(data: DayResponse | null, reload: Reload): 'working' | 's
     }, GENERATE_POLL_MS);
     return () => window.clearInterval(id);
   }, [phase, reload]);
+  // A rebuild is over when a new pack replaces the one it started from; the first design when anything has arrived.
+  const [fromPack, setFromPack] = useState<number | null | undefined>(undefined);
   useEffect(() => {
-    if (phase === 'working' && data && (data.renders.length > 0 || data.questions.length > 0 || data.status === 'ready')) setPhase(null);
-  }, [data, phase]);
-  return phase;
+    if (phase !== 'working' || !data) return;
+    const done = fromPack !== undefined ? (data.pack?.id ?? null) !== fromPack || data.questions.length > 0 : data.renders.length > 0 || data.questions.length > 0 || data.status === 'ready';
+    if (done) {
+      setPhase(null);
+      setFromPack(undefined);
+    }
+  }, [data, phase, fromPack]);
+  return {
+    phase,
+    watch: () => {
+      setFromPack(data?.pack?.id ?? null);
+      setPhase('working');
+    },
+  };
 }
 
 export function Day() {
@@ -425,7 +524,7 @@ export function Day() {
   const dayNo = Number(params.dayNo);
   const valid = Number.isInteger(dayNo) && dayNo >= FIRST_DAY;
   const { data, error, loading, reload } = useApi(() => getDay(dayNo), dayNo);
-  const generating = useGenerating(data, reload);
+  const { phase: generating, watch: onRebuild } = useGenerating(data, reload);
 
   // Custom posts are numbered from 101 and sit outside the month's run, so they get no previous / next links.
   const inPlan = dayNo <= LAST_DAY;
@@ -477,12 +576,12 @@ export function Day() {
           <HeadSection d={data} reload={reload} />
           <div className="sa-two">
             <ShootSection d={data} reload={reload} />
-            <CopySection d={data} reload={reload} />
+            <CopySection d={data} reload={reload} onRebuild={onRebuild} />
           </div>
-          <PlatformsSection d={data} />
-          <WordingSection d={data} reload={reload} />
+          <PlatformsSection d={data} reload={reload} onRebuild={onRebuild} />
+          <WordingSection d={data} reload={reload} onRebuild={onRebuild} />
           <ConfirmSection d={data} reload={reload} />
-          <ImagesSection d={data} reload={reload} />
+          <ImagesSection d={data} reload={reload} onRebuild={onRebuild} />
           <StatusSection d={data} onChanged={reload} />
           <HistorySection d={data} />
         </div>

@@ -2,13 +2,14 @@
  * renderPost: template key + copy + photo (and maybe a cutout) → PNGs. Feed 1080×1350, story 1080×1920, one PNG
  * per carousel page, reel cover 1080×1920. The pipeline's render stage and `npm run render-samples` both come here.
  */
-import { brandLineOn } from '../pipeline/packs.js';
+import { brandLineOn, isKarahiPost } from '../pipeline/packs.js';
 import type { z } from 'zod';
 import type { DesignSpec } from '../brain/schemas.js';
 import { loadBrand, type Brand } from './brand.js';
 import { composeLayoutA, composeLayoutB, composeTextOnly, type Cutout } from './compose.js';
 import { composeFlat, composeInvite, composePoster } from './compose-styles.js';
 import { templateEntry, templateKeyFor, type TemplateKey } from './registry.js';
+import { PairData, composePair, pairLayer } from './pair.js';
 import { FlatData, INVITE_PHOTO_SHARE, InviteData, PosterData, SplitData, flatLayer, flatPlate, inviteLayer, posterLayer, posterPlate, splitLayer } from './styled.js';
 import { STYLES, feasibleStyle, type Style } from './styles.js';
 import {
@@ -45,7 +46,13 @@ export interface RenderInput {
   storyPhoto?: Buffer | null;
   /** The post's date (YYYY-MM-DD), shown by the invite style. */
   date?: string | null;
+  /** The post's dish, for the brand line. */
+  dish?: string | null;
+  /** Two different dishes in one design, each cropped for the feed's and the taller canvases' panels (pair.ts). */
+  pair?: PairPhoto[] | null;
 }
+
+export interface PairPhoto { name: string; feed: Buffer; tall: Buffer }
 
 /** HeroData/StoryData fields from a design spec (undefined fields take the zod defaults). */
 function designFields(d: Partial<DesignSpec> | null | undefined) {
@@ -70,13 +77,27 @@ export function styleFor(input: Pick<RenderInput, 'photo' | 'cutout' | 'design'>
 export interface RenderOutput { format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; png: Buffer }
 
 export async function renderPost(input: RenderInput, baseBrand: Brand = loadBrand()): Promise<RenderOutput[]> {
-  const brand: Brand = { ...baseBrand, brandLine: brandLineOn(input.date, baseBrand.brandLine) };
   const key = templateKeyFor(input.sheetTemplate);
   const entry = templateEntry(input.sheetTemplate);
+  const brand: Brand = { ...baseBrand, brandLine: brandLineOn(input.date, baseBrand.brandLine, isKarahiPost({ template: input.sheetTemplate, label: input.label, dish: input.dish })) };
   const [fw, fh] = brand.canvas.feed;
   const [sw, sh] = brand.canvas.story;
   const out: RenderOutput[] = [];
   const footer = entry.footer;
+
+  if (input.pair?.length === 2 && key === 'hero-photo') {
+    const [a, b] = input.pair as [PairPhoto, PairPhoto];
+    const names = [a.name, b.name] as [string, string];
+    const pairOn = async (kind: 'feed' | 'story' | 'reel', w: number, h: number, photos: [Buffer, Buffer]) => {
+      const data = PairData.parse({ kind, label: input.label, headline: kind === 'reel' ? input.hook ?? input.headline : input.headline, line: input.line, names, footer });
+      return composePair(brand, w, h, photos, await layerToPng(brand, pairLayer(makeCtx(brand, w, h, input.settings), data), w, h));
+    };
+    const tall: [Buffer, Buffer] = [a.tall, b.tall];
+    if (input.slot === 'reel') out.push({ format: 'reel-cover', page: null, png: await pairOn('reel', sw, sh, tall) });
+    else out.push({ format: 'feed', page: null, png: await pairOn('feed', fw, fh, [a.feed, b.feed]) });
+    out.push({ format: 'story', page: null, png: await pairOn('story', sw, sh, tall) });
+    return out;
+  }
 
   const design = input.design ?? null;
   const lift = design?.lift_tone ?? 'auto';

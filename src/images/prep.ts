@@ -102,12 +102,16 @@ export interface Box { x: number; y: number; w: number; h: number }
  * `focusY` of the window's height (0.42 keeps it above a text band at the bottom). Falls back to the attention
  * crop when the box is missing or degenerate.
  */
-export async function cropAround(jpeg: Buffer, box: Box | null | undefined, ratio: number, opts: { focusY?: number; pad?: number; longEdge?: number } = {}): Promise<Buffer> {
+export async function cropAround(jpeg: Buffer, box: Box | null | undefined, ratio: number, opts: { focusY?: number; pad?: number; longEdge?: number; width?: number } = {}): Promise<Buffer> {
   const meta = await sharp(jpeg).metadata();
   const W = meta.width ?? 0;
   const H = meta.height ?? 0;
   const key: CropKey = Math.abs(ratio - 0.8) < 0.01 ? '4x5' : Math.abs(ratio - 0.5625) < 0.01 ? '9x16' : '1x1';
-  if (!box || !W || !H || box.w <= 0.05 || box.h <= 0.05) return crop(jpeg, key);
+  // A shape of its own (a panel of a two-photo design): this ratio at this width, not one of the standard crops.
+  const size = opts.width ? { w: opts.width, h: Math.round(opts.width / ratio) } : null;
+  if (!box || !W || !H || box.w <= 0.05 || box.h <= 0.05) {
+    return size ? sharp(jpeg).resize(size.w, size.h, { fit: 'cover', position: sharp.strategy.attention }).jpeg({ quality: 90, mozjpeg: true }).toBuffer() : crop(jpeg, key);
+  }
   const pad = opts.pad ?? 1.25;
   const focusY = opts.focusY ?? 0.42;
   const bx = box.x * W;
@@ -125,7 +129,7 @@ export async function cropAround(jpeg: Buffer, box: Box | null | undefined, rati
   let top = cy - winH * focusY;
   left = Math.min(Math.max(0, left), W - winW);
   top = Math.min(Math.max(0, top), H - winH);
-  const { w, h } = CROPS[key];
+  const { w, h } = size ?? CROPS[key];
   const area = { left: Math.max(0, Math.round(left)), top: Math.max(0, Math.round(top)), width: 0, height: 0 };
   area.width = Math.min(Math.round(winW), W - area.left);
   area.height = Math.min(Math.round(winH), H - area.top);

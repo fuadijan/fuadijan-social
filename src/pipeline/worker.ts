@@ -35,7 +35,8 @@ export async function receiveAsset(db: pg.Pool, input: IncomingAsset, note?: str
 
 /** /redo N <note>: a fresh resolve → pack → notify for the row's latest photo, with the note. */
 export async function redoRow(db: pg.Pool, rowId: number, note: string | null): Promise<Job | null> {
-  const asset = (await db.query<Asset>('select * from assets where calendar_row_id = $1 and prepped is not null order by created_at desc limit 1', [rowId])).rows[0]
+  const picked = (await db.query<{ asset: number | null }>("select (design_photos->0->>'assetId')::int asset from calendar_rows where id = $1", [rowId])).rows[0]?.asset ?? null;
+  const asset = (await db.query<Asset>('select * from assets where calendar_row_id = $1 and prepped is not null order by (id = $2) desc nulls last, created_at desc limit 1', [rowId, picked])).rows[0]
     ?? (await db.query<Asset>('select * from assets where calendar_row_id = $1 order by created_at desc limit 1', [rowId])).rows[0];
   // The upright JPEG the intake made for this photo, so the redo designs from the same picture, the same way up.
   const prior = asset ? (await db.query<{ jpeg: string | null }>("select state->>'jpegFileId' jpeg from jobs where asset_id = $1 and state ? 'jpegFileId' order by id desc limit 1", [asset.id])).rows[0] : undefined;
