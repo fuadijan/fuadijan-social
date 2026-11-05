@@ -173,7 +173,9 @@ leaves those fields alone; the owner's wordings carry into the next writer run.
 benefit caption libraries by series, goal, tag group or benefit. A reusable wording links to any number of items
 (`slogan_items`), so one change reaches them all; taken off its last item it is kept as not linked. Moving a library row
 is editing its series. An edited library row survives loading the same workbook again (`reference_sheets.owner_rows`).
-A post keeps its own copy of a reusable wording once written, until it is written again.
+Changing a reusable wording also reaches every post written but not yet posted that offers it (`spreadSloganEdit`): a
+post using it follows, the pack at once and new designs only if the printed line changed. A post already posted, or a
+wording the owner changed on the post, stays as it is.
 
 **The karahi brand line.** A karahi post's footer reads only "ROOTED IN TRADITION.", before and after the charcoal launch
 (`brandLineOn`, `isKarahiPost`).

@@ -89,8 +89,15 @@ function WordingLinks({ w, listId, onChanged }: { w: Wording; listId: string; on
   );
 }
 
+const spreadNote = (posts: number, rebuilding: number) => {
+  if (!posts) return 'Saved. No post waiting to go out uses it yet.';
+  const updated = `Saved, and updated on ${posts} post${posts === 1 ? '' : 's'} not yet posted.`;
+  return rebuilding ? `${updated} ${rebuilding} design set${rebuilding === 1 ? ' is' : 's are'} being made again, about a minute each, and sent to Telegram.` : updated;
+};
+
 function WordingCard({ w, listId, onChanged }: { w: Wording; listId: string; onChanged: () => Promise<void> }) {
   const [editing, setEditing] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +105,8 @@ function WordingCard({ w, listId, onChanged }: { w: Wording; listId: string; onC
     setBusy(true);
     setError(null);
     try {
-      await updateWording(w.id, input);
+      const r = await updateWording(w.id, input);
+      setNote(spreadNote(r.posts, r.rebuilding));
       setEditing(false);
       await onChanged();
     } catch (e) {
@@ -125,6 +133,7 @@ function WordingCard({ w, listId, onChanged }: { w: Wording; listId: string; onC
     return (
       <li className="sa-wording-option sa-wording-option--chosen">
         <WordingForm initial={{ headline: w.headline, line: w.line ?? '', caption: w.caption ?? '' }} submitLabel="Save" busy={busy} onSubmit={(input) => void save(input)} onCancel={() => setEditing(false)} />
+        <div className="sa-note">Saving changes this wording for every linked item and on every post not yet posted, unless you changed it on that post.</div>
         {error ? <div className="sa-result sa-result--error" role="alert">{error}</div> : null}
       </li>
     );
@@ -134,6 +143,7 @@ function WordingCard({ w, listId, onChanged }: { w: Wording; listId: string; onC
       <div className="sa-wording-headline">{w.headline.split('\n').map((l, k) => <span key={k}>{l}</span>)}</div>
       {w.line ? <div className="sa-wording-line">{w.line}</div> : null}
       {w.caption ? <div className="sa-wording-caption">{w.caption}</div> : <div className="sa-note">No caption of its own.</div>}
+      {note ? <div className="sa-result" role="status">{note}</div> : null}
       <WordingLinks w={w} listId={listId} onChanged={onChanged} />
       <div className="sa-wording-actions sa-actions">
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => setEditing(true)}>Edit</Button>

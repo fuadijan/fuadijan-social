@@ -14,14 +14,14 @@ import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
 import { addOwnerOption, allCopyOptions, copyOptionsById, latestCopyOptions, markChosen, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from '../pipeline/wording.js';
-import { POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostText, type PostTextField } from '../pipeline/post-text.js';
+import { POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostText, spreadSloganEdit, type PostTextField } from '../pipeline/post-text.js';
 import { WORDING_LIBRARIES, wordingsView } from '../wordings-view.js';
 import { adoptAsset, createCustomPost, parseCustomInput, recentPhotos } from '../pipeline/custom.js';
 import { rowViews, type RowView } from '../reminders/brief.js';
 import { heroTemplates, suggestedTemplate, templateEntry } from '../render/registry.js';
 import { STYLE_KEYS, STYLES } from '../render/styles.js';
 import { allSettings } from '../settings.js';
-import { addSlogan, itemKey, linkSlogan, listSlogans, removeSlogan, unlinkSlogan, updateSlogan, type Slogan } from '../slogans.js';
+import { addSlogan, itemKey, linkSlogan, listSlogans, removeSlogan, sloganById, unlinkSlogan, updateSlogan, type Slogan } from '../slogans.js';
 import { eventsOn, loadStrategy, ritualsOn } from '../strategy.js';
 import { campaignProgress } from '../campaigns.js';
 import { platformVersions, platformsTxt, type PlatformVersions } from '../calendar/record.js';
@@ -433,9 +433,10 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/wordings/:id', async (req, reply) => {
     try {
-      const s = await updateSlogan(ctx.pool, Number(req.params.id), wordingBody(req.body));
-      if (!s) return reply.code(404).send({ ok: false, error: 'No such wording' });
-      return { ok: true, wording: wordingJson(s) };
+      const before = await sloganById(ctx.pool, Number(req.params.id));
+      const s = before && await updateSlogan(ctx.pool, before.id, wordingBody(req.body));
+      if (!before || !s) return reply.code(404).send({ ok: false, error: 'No such wording' });
+      return { ok: true, wording: wordingJson(s), ...await spreadSloganEdit(ctx.pool, before, s) };
     } catch (e) {
       return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }

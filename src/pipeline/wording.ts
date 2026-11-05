@@ -12,6 +12,8 @@ import type { Job } from './stages.js';
 export interface WordingOption extends CopyVariant {
   /** The owner wrote or changed it, so a new writer run keeps it. */
   owner?: boolean;
+  /** The reusable wording it came from, so a change there reaches it. Older options have none and are matched by their words. */
+  sloganId?: number;
 }
 
 /** Where the pack folders live (stages.ts writes them). */
@@ -44,7 +46,7 @@ export function optionsFrom(copy: ResolvedCopy, slogans: Slogan[] = [], extra: W
   for (const v of copy.variants) push({ name: v.name || `Option ${out.length + 1}`, headline: v.headline, line: v.line, caption: v.caption });
   for (const e of extra) push(e);
   // A bank wording goes on the line under the product's name; its own line, if any, follows.
-  for (const s of slogans) push({ name: `Slogan · ${s.item_key === 'all' ? 'house' : s.item}`, headline: copy.headline, line: asLine(s.headline, s.line), caption: s.caption ?? copy.caption });
+  for (const s of slogans) push({ name: `Slogan · ${s.item_key === 'all' ? 'house' : s.item}`, headline: copy.headline, line: asLine(s.headline, s.line), caption: s.caption ?? copy.caption, sloganId: s.id });
   return out;
 }
 
@@ -89,6 +91,18 @@ export async function addCustomOption(db: Db, set: CopyOptions, text: string, mo
   const index = options.length - 1;
   await db.query('update copy_options set options = $2, chosen = $3 where id = $1', [set.id, JSON.stringify(options), index]);
   return { set: { ...set, options, chosen: index }, index };
+}
+
+/**
+ * A post's option after its reusable wording changed; null when it isn't that wording's, or when the owner has changed it
+ * on the post, which then stays theirs. The post's title stays. With no caption left, it borrows the post's main one.
+ */
+export function optionAfterSloganEdit(o: WordingOption, before: Slogan, after: Pick<Slogan, 'headline' | 'line' | 'caption'>, mainCaption: string): WordingOption | null {
+  if (o.owner) return null;
+  const fromIt = o.sloganId === before.id || (o.sloganId === undefined && o.name.startsWith('Slogan ·') && o.line === asLine(before.headline, before.line));
+  if (!fromIt) return null;
+  const borrowed = before.caption ? o.caption !== before.caption : true;
+  return { ...o, sloganId: before.id, line: asLine(after.headline, after.line), caption: after.caption ?? (borrowed ? o.caption : mainCaption) };
 }
 
 /** The owner's own wordings in the latest set, to carry into the next one. */

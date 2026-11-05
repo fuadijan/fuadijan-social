@@ -627,6 +627,44 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect((await unlinkedSlogans(pool)).map((x) => x.id)).not.toContain(s.id);
   });
 
+  it('carries a change to a reusable wording into posts not yet posted, and leaves posted ones and owner edits alone', async () => {
+    const { addSlogan, updateSlogan } = await import('../src/slogans.js');
+    const { spreadSloganEdit } = await import('../src/pipeline/post-text.js');
+    const { markChosen, storeCopyOptions, latestCopyOptions } = await import('../src/pipeline/wording.js');
+    const worker = new Worker(ctx, 1000);
+    const live = (await rowByDay(pool, 101))!;
+    const posted = (await rowByDay(pool, 102))!;
+    expect(live.slot).toBe('feed');
+    const copyOf = async (rowId: number) => (await pool.query<{ state: { copy: import('../src/brain/schemas.js').ResolvedCopy } }>("select state from jobs where calendar_row_id = $1 and state ? 'copy' order by id desc limit 1", [rowId])).rows[0]!.state.copy;
+    const s = await addSlogan(pool, { item: 'Spread Test', headline: 'Before line', caption: 'Before caption.', source: 'owner-web' });
+    for (const row of [live, posted]) {
+      const set = await storeCopyOptions(pool, row.id, null, await copyOf(row.id), [s]);
+      await markChosen(pool, set.id, set.options.findIndex((o) => o.sloganId === s.id));
+    }
+    await pool.query("update calendar_rows set status = 'posted' where id = $1", [posted.id]);
+    const jobs = async () => Number((await pool.query<{ n: string }>('select count(*) n from jobs where calendar_row_id = $1', [live.id])).rows[0]!.n);
+    const packCaption = async (rowId: number) => (await pool.query<{ caption: string }>('select caption from packs where calendar_row_id = $1 order by created_at desc limit 1', [rowId])).rows[0]!.caption;
+    const before = await jobs();
+    const postedCaption = await packCaption(posted.id);
+
+    // Only the caption: straight into the pack, no new designs.
+    const edited = (await updateSlogan(pool, s.id, { headline: 'Before line', caption: 'After caption.' }))!;
+    expect(await spreadSloganEdit(pool, s, edited)).toEqual({ posts: 1, rebuilding: 0 });
+    expect(await jobs()).toBe(before);
+    expect(await packCaption(live.id)).toBe('After caption.');
+    expect((await copyOf(live.id)).caption).toBe('After caption.');
+    expect(await packCaption(posted.id)).toBe(postedCaption);
+
+    // The printed line: new designs with it, and no question.
+    const relined = (await updateSlogan(pool, s.id, { headline: 'After line', caption: 'After caption.' }))!;
+    expect(await spreadSloganEdit(pool, edited, relined)).toEqual({ posts: 1, rebuilding: 1 });
+    await worker.drain();
+    expect((await copyOf(live.id)).line).toBe('After line');
+    expect((await openQuestions(pool, live.id)).filter((q) => q.field === 'wording')).toEqual([]);
+    expect((await latestCopyOptions(pool, posted.id))!.options.find((o) => o.sloganId === s.id)!.line).toBe('Before line');
+    await pool.query("update calendar_rows set status = 'ready' where id = $1", [posted.id]);
+  });
+
   it('lists every wording with what it belongs to, and an edit to a library row survives loading the workbook again', async () => {
     const { wordingsView } = await import('../src/wordings-view.js');
     const { addSlogan, linkSlogan } = await import('../src/slogans.js');

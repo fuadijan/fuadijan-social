@@ -111,7 +111,7 @@ export const getCreateOptions = () => apiFetch<CreateOptions>('/api/create/optio
 export const createCustom = (req: CreateRequest) => post<CreateResponse>('/api/create', req);
 export const getWordings = () => apiFetch<WordingsResponse>('/api/wordings');
 export const addWording = (item: string, w: WordingInput) => post<{ ok: true; wording: Wording }>('/api/wordings', { item, ...w });
-export const updateWording = (id: number, w: WordingInput) => apiFetch<{ ok: true; wording: Wording }>(`/api/wordings/${id}`, { method: 'PATCH', body: JSON.stringify(w) });
+export const updateWording = (id: number, w: WordingInput) => apiFetch<{ ok: true; wording: Wording; posts: number; rebuilding: number }>(`/api/wordings/${id}`, { method: 'PATCH', body: JSON.stringify(w) });
 export const deleteWording = (id: number) => apiFetch<{ ok: true }>(`/api/wordings/${id}`, { method: 'DELETE' });
 export const linkWording = (id: number, item: string) => post<{ ok: true }>(`/api/wordings/${id}/items`, { item });
 export const unlinkWording = (id: number, itemKey: string) => apiFetch<{ ok: true }>(`/api/wordings/${id}/items/${encodeURIComponent(itemKey)}`, { method: 'DELETE' });

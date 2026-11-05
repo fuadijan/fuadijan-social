@@ -60,6 +60,10 @@ export async function updateSlogan(db: Db, id: number, s: { headline: string; li
   }
 }
 
+export async function sloganById(db: Db, id: number): Promise<Slogan | null> {
+  return (await db.query<Slogan>('select * from slogans where id = $1', [id])).rows[0] ?? null;
+}
+
 export async function removeSlogan(db: Db, id: number): Promise<boolean> {
   return ((await db.query('delete from slogans where id = $1', [id])).rowCount ?? 0) > 0;
 }

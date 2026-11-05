@@ -11,7 +11,8 @@ import { editField, recordEdit, rowById, type CalendarRow, type EditSource } fro
 import type { Db } from '../db/pool.js';
 import { allSettings } from '../settings.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
-import { PACKS_FOLDER, latestCopyOptions, rerenderRow, updateOption } from './wording.js';
+import type { Slogan } from '../slogans.js';
+import { PACKS_FOLDER, applyOption, latestCopyOptions, optionAfterSloganEdit, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from './wording.js';
 
 const ROW_FIELDS = ['caption', 'cta', 'hashtags'] as const;
 const RECORD_FIELDS = [
@@ -92,6 +93,43 @@ async function refreshPack(db: Db, row: CalendarRow, copy: ResolvedCopy): Promis
     if (reelText) writeFileSync(join(folder, 'reel-pack.txt'), reelText);
   }
   return true;
+}
+
+/**
+ * A reusable wording changed: every post written but not yet posted that offers it gets the new words in its list. A post
+ * using it follows, the pack at once and new designs only if the words on them changed. A wording the owner changed on
+ * the post stays theirs. Returns how many posts changed and how many are having their designs made again.
+ */
+export async function spreadSloganEdit(db: Db, before: Slogan, after: Pick<Slogan, 'headline' | 'line' | 'caption'>): Promise<{ posts: number; rebuilding: number }> {
+  const sets = (await db.query<CopyOptions>(
+    `select distinct on (o.calendar_row_id) o.* from copy_options o join calendar_rows r on r.id = o.calendar_row_id
+     where r.retired_at is null and r.status <> 'posted' order by o.calendar_row_id, o.created_at desc, o.id desc`)).rows;
+  let posts = 0;
+  let rebuilding = 0;
+  for (const set of sets) {
+    const main = set.options[0]?.caption ?? '';
+    const changes = set.options.map((o) => optionAfterSloganEdit(o, before, after, main));
+    if (!changes.some(Boolean)) continue;
+    const options = set.options.map((o, i) => changes[i] ?? o);
+    await db.query('update copy_options set options = $2 where id = $1', [set.id, JSON.stringify(options)]);
+    posts++;
+    const inUse = set.chosen == null ? null : changes[set.chosen];
+    if (!inUse) continue;
+    const row = (await rowById(db, set.calendar_row_id))!;
+    const job = await latestJobWithCopy(db, row.id);
+    if (!job) continue;
+    const waiting = await rowIsWaiting(db, row.id);
+    const printed = inUse.line !== set.options[set.chosen!]!.line && row.slot !== 'reel';
+    // A rebuild already running would write its own pack over a change made in place, so it gets another after it.
+    if (!waiting && (printed || await rowIsBusy(db, row.id))) {
+      if (await rerenderWithWording(db, row.id, { ...set, options }, set.chosen!)) rebuilding++;
+      continue;
+    }
+    const copy = applyOption(job.copy, inUse);
+    await db.query("update jobs set state = jsonb_set(state, '{copy}', $2::jsonb) where id = $1", [job.id, JSON.stringify(copy)]);
+    await refreshPack(db, row, copy);
+  }
+  return { posts, rebuilding };
 }
 
 export async function setPostText(db: Db, row: CalendarRow, field: PostTextField, raw: string | null, source: EditSource): Promise<{ rebuilding: boolean }> {
