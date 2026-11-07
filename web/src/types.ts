@@ -338,7 +338,7 @@ export interface PreviewRequest {
   style: StyleKey | 'auto';
   dish: string | null;
   date: string | null;
-  photo: { assetId: number } | { dayNo: number } | { dataUrl: string } | null;
+  photo: { assetId: number } | { dayNo: number } | { dataUrl: string } | { blank: true } | null;
   invite?: InviteDetails | null;
 }
 export interface PreviewResponse { ok: true; images: { format: 'feed' | 'story' | 'reel-cover'; dataUrl: string }[]; style: StyleKey; note: string | null }

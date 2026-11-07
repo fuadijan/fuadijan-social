@@ -626,7 +626,12 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(invite).toMatchObject({ style: 'invite', note: null });
     expect(Number((await pool.query<{ n: string }>('select count(*) n from renders')).rows[0]!.n)).toBe(renders);
     expect(() => parsePreviewInput({ template: 'from-the-fire', headline: ' ' })).toThrow(/title/);
-    await expect(previewDesign(pool, parsePreviewInput({ template: 'from-the-fire', headline: 'X', photo: null }))).rejects.toThrow(/photo/);
+    // No photo, or a blank one asked for: a plain stand-in shows where the words sit.
+    const blank = await previewDesign(pool, parsePreviewInput({ template: 'from-the-fire', headline: 'X', photo: { blank: true } }));
+    expect(blank.images.map((i) => i.format)).toEqual(['feed', 'story']);
+    expect(blank.note).toMatch(/blank photo/);
+    expect((await previewDesign(pool, parsePreviewInput({ template: 'from-the-fire', headline: 'X', photo: null }))).note).toMatch(/blank photo/);
+    await expect(previewDesign(pool, parsePreviewInput({ template: 'from-the-fire', headline: 'X', photo: { assetId: 999999 } }))).rejects.toThrow(/not available/);
   });
 
   it('makes the design from the photos the owner picks, two with their names, and a new photo starts over', async () => {

@@ -145,7 +145,8 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
   // A part this kind of post does not have (a feed post's cover text) keeps what the post says.
   const valueOf = (k: PartKey): PartValue => values[k] ?? (defs[k] ? startValue(defs[k], now[k]) : { pick: 'own', text: now[k] });
   const allValues = Object.fromEntries(parts.map((k) => [k, valueOf(k)])) as PartValues;
-  const changedParts = parts.filter((k) => key(valueOf(k).text) !== key(now[k]));
+  // Only what the owner touched counts: an empty part shows its first choice on the sketch without being saved.
+  const changedParts = parts.filter((k) => values[k] !== undefined && key(values[k]!.text) !== key(now[k]));
   const lookChanged = !sameLook(look, lookNow);
   const changes = [...changedParts.map((k) => defs[k].name.toLowerCase()), ...(lookChanged ? ['the look'] : [])];
   const series = options.data?.templates.find((t) => t.label === d.series);
@@ -167,13 +168,14 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
     setResult(null);
   }
 
-  async function showPreview() {
+  /** The real preview, on the post's photo or on a blank one (to see where the words sit). */
+  async function showPreview(blank = false) {
     setBusy('preview');
     setResult(null);
     try {
       setPreview(await previewDesign({
         template: d.template, kind, label: valueOf('label').text, headline: valueOf('title').text.trim() || d.dish || d.series, line: valueOf('line').text,
-        hook: valueOf('cover').text, style: look.style, dish: d.dish, date: d.date, photo: { dayNo: d.dayNo }, invite: look.style === 'invite' ? inviteOut(look) : d.row.invite ?? null,
+        hook: valueOf('cover').text, style: look.style, dish: d.dish, date: d.date, photo: blank ? { blank: true } : { dayNo: d.dayNo }, invite: look.style === 'invite' ? inviteOut(look) : d.row.invite ?? null,
       }));
     } catch (e) {
       setResult({ text: e instanceof Error ? e.message : String(e), error: true });
@@ -245,13 +247,13 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
               {missing.length ? <div className="sa-result sa-result--error">{missing.map((k) => defs[k].name).join(' and ')} cannot be empty.</div> : null}
               {d.pack ? <div style={{ marginTop: 10 }}><NoteField value={note} onChange={setNote} disabled={busy !== null} /></div> : null}
               <div className="sa-field" style={{ marginTop: 12 }}>
-                <div className="sa-eyebrow">See it on the photo</div>
-                {photo ? (
-                  <>
-                    <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => void showPreview()}>{busy === 'preview' ? 'Drawing…' : preview ? 'Draw it again' : 'Preview on the photo'}</Button>
-                    {preview ? <div style={{ marginTop: 10 }}><PreviewImages images={preview.images} note={preview.note} /></div> : null}
-                  </>
-                ) : <div className="sa-note">The preview needs the photo: add it under Images, or send it to the bot.</div>}
+                <div className="sa-eyebrow">See it before it is made</div>
+                <div className="sa-actions">
+                  <Button variant="secondary" size="sm" disabled={busy !== null || !photo} onClick={() => void showPreview()}>{busy === 'preview' ? 'Drawing…' : 'Preview on the photo'}</Button>
+                  <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => void showPreview(true)}>Preview on a blank photo</Button>
+                </div>
+                {photo ? null : <div className="sa-note" style={{ marginTop: 6 }}>No photo yet: the blank preview shows where the words will sit.</div>}
+                {preview ? <div style={{ marginTop: 10 }}><PreviewImages images={preview.images} note={preview.note} /></div> : null}
               </div>
             </>
           )}

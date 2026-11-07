@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import { cleanInvite, rowByDay, type InviteDetails } from '../calendar/rows.js';
 import type { Db } from '../db/pool.js';
 import { getFile } from '../files.js';
-import { crop, decode } from '../images/prep.js';
+import { CROPS, crop, decode } from '../images/prep.js';
 import { loadBrand } from '../render/brand.js';
 import { renderPost, styleFor } from '../render/index.js';
 import { templateEntry } from '../render/registry.js';
@@ -26,7 +26,8 @@ export interface PreviewInput {
   style: Style | 'auto';
   dish: string | null;
   date: string | null;
-  photo: { assetId: number } | { dayNo: number } | { dataUrl: string } | null;
+  /** null or `blank`: a plain placeholder, to see where the words sit before there is a photo. */
+  photo: { assetId: number } | { dayNo: number } | { dataUrl: string } | { blank: true } | null;
   /** What the Invite style prints; null means the post's date, the opening hours and FROM. */
   invite: InviteDetails | null;
 }
@@ -58,6 +59,7 @@ export function parsePreviewInput(body: unknown): PreviewInput {
     : Number.isInteger(p.assetId) ? { assetId: Number(p.assetId) }
     : Number.isInteger(p.dayNo) ? { dayNo: Number(p.dayNo) }
     : typeof p.dataUrl === 'string' ? { dataUrl: p.dataUrl }
+    : p.blank === true ? { blank: true as const }
     : null;
   return {
     template, kind: b.kind === 'reel' ? 'reel' : 'post', label: str(b.label, 40), headline, line: str(b.line, 140), hook: str(b.hook, 70),
@@ -75,9 +77,20 @@ async function preppedOf(db: Db, assetId: number): Promise<{ feed: Buffer; tall:
   return { feed, tall: tallId ? (await getFile(db, tallId))?.bytes ?? null : null };
 }
 
-/** The photo to draw on: one already received, the day's design photo, or one the owner has only just chosen. */
+/** A plain warm-grey stand-in for the photo, with a lighter plate in the middle, at a crop's size. */
+async function blankPhoto(w: number, h: number): Promise<Buffer> {
+  const r = Math.round(Math.min(w, h) * 0.34);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+    <rect width="100%" height="100%" fill="#7a7067"/>
+    <ellipse cx="${w / 2}" cy="${h * 0.42}" rx="${r}" ry="${Math.round(r * 0.8)}" fill="#958a80" stroke="#a89d92" stroke-width="${Math.round(w / 200)}" stroke-dasharray="${Math.round(w / 60)} ${Math.round(w / 90)}"/>
+    <text x="50%" y="${h * 0.42}" font-family="Inter, Arial, sans-serif" font-size="${Math.round(w / 22)}" fill="#e6ddd2" text-anchor="middle" dominant-baseline="middle" letter-spacing="${Math.round(w / 120)}">YOUR PHOTO</text>
+  </svg>`;
+  return sharp(Buffer.from(svg)).jpeg({ quality: 88 }).toBuffer();
+}
+
+/** The photo to draw on: one already received, the day's design photo, one the owner has only just chosen, or a blank. */
 async function photoFor(db: Db, photo: PreviewInput['photo']): Promise<{ feed: Buffer; tall: Buffer | null } | null> {
-  if (!photo) return null;
+  if (!photo || 'blank' in photo) return { feed: await blankPhoto(CROPS['4x5'].w / 2, CROPS['4x5'].h / 2), tall: await blankPhoto(CROPS['9x16'].w / 2, CROPS['9x16'].h / 2) };
   if ('assetId' in photo) return preppedOf(db, photo.assetId);
   if ('dayNo' in photo) {
     const row = await rowByDay(db, photo.dayNo);
@@ -99,7 +112,7 @@ const toJpegUrl = async (png: Buffer) => `data:image/jpeg;base64,${(await sharp(
 export async function previewDesign(db: Db, input: PreviewInput): Promise<PreviewResult> {
   const entry = templateEntry(input.template);
   const photo = await photoFor(db, input.photo);
-  if (!photo) throw new Error('Choose a photo first; the preview draws on it.');
+  if (!photo) throw new Error('That photo is not available any more; the preview on a blank photo still shows where the words go.');
   const s = await allSettings(db);
   const settings = { storeAddress: s.store_address ?? '', openHours: s.open_hours ?? '', handle: s.instagram_handle ?? '@fuadijan', website: s.website_url ?? '' };
   const asked: Style = input.style === 'auto' ? entry.style ?? 'band' : input.style;
@@ -111,8 +124,11 @@ export async function previewDesign(db: Db, input: PreviewInput): Promise<Previe
   }, loadBrand());
   const wanted = outputs.filter((o) => (input.kind === 'reel' ? o.format === 'reel-cover' : o.format === 'feed' || o.format === 'story'));
   const images = await Promise.all(wanted.map(async (o) => ({ format: o.format as 'feed' | 'story' | 'reel-cover', dataUrl: await toJpegUrl(o.png) })));
-  const note = style !== asked
+  const blank = !input.photo || 'blank' in input.photo;
+  const blankNote = blank ? 'On a blank photo: the words sit where they will go. With your photo the art director may move them to keep the food clear.' : null;
+  const lookNote = style !== asked
     ? `${STYLES[asked].name} needs the plate cut out of the photo, which happens when the design is made; the preview shows ${STYLES[style].name}.`
-    : input.style === 'auto' ? 'The art director may move the words or pick another style when the design is made; the words stay as you see them.' : null;
+    : input.style === 'auto' && !blank ? 'The art director may move the words or pick another style when the design is made; the words stay as you see them.' : null;
+  const note = [blankNote, lookNote].filter(Boolean).join(' ') || null;
   return { images, style, note };
 }

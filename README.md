@@ -256,7 +256,7 @@ and benefit-caption libraries. "Write my own" and, in Create, "Let the agent wri
 chosen words can be edited. The Look step picks a style. For Invite it also sets the date shown, the time and the
 message over the time (`calendar_rows.invite`, migration 0015), printed on the feed post and the story. "Preview on the
 photo" (`POST /api/preview`, `src/pipeline/preview.ts`) draws the real design with those words, without Claude or the
-cutout, and stores nothing. On a day's page, saving sends only the changed parts (`POST /api/rows/:dayNo/parts`,
+cutout, and stores nothing. "Preview on a blank photo" draws it on a plain stand-in (also used when there is no photo yet), to show just where the words sit. On a day's page, saving sends only the changed parts (`POST /api/rows/:dayNo/parts`,
 `setPostParts`), and the design is made again once. With nothing changed, the same button makes the design again
 (`POST /api/rows/:dayNo/remake`) with an optional note for the art director. Carousels and reviews keep the full page.
 

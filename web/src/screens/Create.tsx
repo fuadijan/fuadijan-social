@@ -199,12 +199,12 @@ export function Create() {
     };
   }
 
-  async function showPreview() {
-    if (!photo) return;
+  /** The real preview, on the chosen photo or on a blank one (to see where the words sit). */
+  async function showPreview(blank = false) {
     setError(null);
     setBusy('Drawing the preview…');
     try {
-      const p = photo.kind === 'asset' ? { assetId: photo.assetId } : { dataUrl: await photoForPreview(photo.files[0]!) };
+      const p = blank || !photo ? { blank: true as const } : photo.kind === 'asset' ? { assetId: photo.assetId } : { dataUrl: await photoForPreview(photo.files[0]!) };
       setPreview(await previewDesign({ template, kind, label: '', headline: text('title') || product.trim(), line: text('line'), hook: text('cover'), style, dish: product.trim(), date: theDate, photo: p, invite: inviteOut }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -298,9 +298,12 @@ export function Create() {
                 </div>
               </div>
               <div className="sa-field" style={{ marginTop: 14 }}>
-                <div className="sa-eyebrow">See it on your photo</div>
-                <div className="sa-note" style={{ marginBottom: 8 }}>A real drawing of the design with these words, in about fifteen seconds. Nothing is made or saved.</div>
-                <Button variant="secondary" disabled={busy !== null || !photo} onClick={() => void showPreview()}>{busy === 'Drawing the preview…' ? busy : preview ? 'Draw it again' : 'Preview on my photo'}</Button>
+                <div className="sa-eyebrow">See it before it is made</div>
+                <div className="sa-note" style={{ marginBottom: 8 }}>A real drawing of the design with these words, in about fifteen seconds: on your photo, or on a blank one to see just where the words sit. Nothing is made or saved.</div>
+                <div className="sa-actions">
+                  <Button variant="secondary" disabled={busy !== null || !photo} onClick={() => void showPreview()}>{busy === 'Drawing the preview…' ? busy : 'Preview on my photo'}</Button>
+                  <Button variant="secondary" disabled={busy !== null} onClick={() => void showPreview(true)}>Preview on a blank photo</Button>
+                </div>
                 {preview ? <div style={{ marginTop: 10 }}><PreviewImages images={preview.images} note={preview.note} /></div> : null}
               </div>
               {error ? <div className="sa-result sa-result--error" role="alert">{error}</div> : null}
