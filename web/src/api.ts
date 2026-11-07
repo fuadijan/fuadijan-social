@@ -2,7 +2,7 @@
  * Same-origin JSON client. A 401 means no hub session: the page goes to the hub's login and comes back here.
  * A 403 carrying `hub` means signed in but not granted Social: the page goes to the hub.
  */
-import type { CreateOptions, CreateRequest, CreateResponse, DayResponse, CampaignsResponse, EditableField, ImportCalendarResponse, Me, MonthResponse, PlanningResponse, PostTextField, StatusResponse, UploadResponse, WeekResponse, Wording, WordingInput, WordingsResponse } from './types';
+import type { CreateOptions, CreateRequest, CreateResponse, DayResponse, CampaignsResponse, EditableField, ImportCalendarResponse, Me, MonthResponse, InviteDetails, PlanningResponse, PostPartField, PostTextField, PreviewRequest, PreviewResponse, StatusResponse, StyleKey, UploadResponse, WeekResponse, Wording, WordingInput, WordingsResponse } from './types';
 
 export const DEFAULT_HUB = 'https://apps.nutrimeals.au';
 
@@ -109,6 +109,9 @@ export const packTextUrl = (dayNo: number, name: 'caption.txt' | 'canva-brief.tx
 export const getCreateOptions = () => apiFetch<CreateOptions>('/api/create/options');
 /** Makes the custom post's row (and files an existing photo for it when `assetId` is set). */
 export const createCustom = (req: CreateRequest) => post<CreateResponse>('/api/create', req);
+export const remakeDesign = (dayNo: number, style: StyleKey | 'auto', note: string, invite?: InviteDetails | null) => post<RebuildResult>(`/api/rows/${dayNo}/remake`, { style, note, ...(invite !== undefined ? { invite } : {}) });
+export const previewDesign = (req: PreviewRequest) => post<PreviewResponse>('/api/preview', req);
+export const savePostParts = (dayNo: number, parts: Partial<Record<PostPartField, string | null>>, look?: { style: StyleKey | 'auto'; invite: InviteDetails | null; note?: string }) => post<RebuildResult>(`/api/rows/${dayNo}/parts`, { parts, ...(look ? { look } : {}) });
 export const getWordings = () => apiFetch<WordingsResponse>('/api/wordings');
 export const addWording = (item: string, w: WordingInput) => post<{ ok: true; wording: Wording; posts: number }>('/api/wordings', { item, ...w });
 export const updateWording = (id: number, w: WordingInput) => apiFetch<{ ok: true; wording: Wording; posts: number; rebuilding: number }>(`/api/wordings/${id}`, { method: 'PATCH', body: JSON.stringify(w) });

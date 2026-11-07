@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql', '0012_design_photos.sql', '0013_reference_edits.sql', '0014_slogan_items.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql', '0012_design_photos.sql', '0013_reference_edits.sql', '0014_slogan_items.sql', '0015_invite.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -582,6 +582,51 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const sheet = { ...wb.rows.find((r) => r.day_no === 2)!, content: { tiktok_script: 'From the sheet', kpi: 'Saves' } };
     await seedRows(pool, [sheet], wb.rows[0]!.date);
     expect((await rowByDay(pool, 2))!.content).toMatchObject({ tiktok_script: 'Line one.\nLine two.', kpi: 'Saves' });
+  });
+
+  it("saves the builder's parts together: only what changed, and the designs made again once", async () => {
+    const { setPostParts } = await import('../src/pipeline/post-text.js');
+    const row = (await rowByDay(pool, 2))!;
+    const jobs = async () => Number((await pool.query<{ n: string }>('select count(*) n from jobs where calendar_row_id = $1', [row.id])).rows[0]!.n);
+    const before = await jobs();
+    // The same words are left alone; a call to action is not on the design, so nothing is made again.
+    expect(await setPostParts(pool, row, { canva_headline: row.content?.canva_headline ?? 'Chapli\nKebab', hashtags: '#halal #Karahi', cta: 'Come hungry.' }, 'owner-web')).toEqual({ rebuilding: false, changed: ['cta'] });
+    expect(await jobs()).toBe(before);
+    // Three parts at once, two on the design: one new job, not two.
+    const r = await setPostParts(pool, (await rowByDay(pool, 2))!, { canva_subheading: 'SMOKE AND FIRE', hook: 'Hand-formed every evening.', on_screen_text: 'One → Two' }, 'owner-web');
+    expect(r).toEqual({ rebuilding: true, changed: ['canva_subheading', 'hook', 'on_screen_text'] });
+    expect(await jobs()).toBe(before + 1);
+    await new Worker(ctx, 1000).drain();
+    const job = (await pool.query<{ state: { copy: { label: string; line: string; cta: string; on_screen_text: string[] } } }>('select state from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]!;
+    expect(job.state.copy).toMatchObject({ label: 'SMOKE AND FIRE', line: 'Hand-formed every evening.', cta: 'Come hungry.', on_screen_text: ['One', 'Two'] });
+    expect(await setPostParts(pool, (await rowByDay(pool, 2))!, { canva_subheading: 'SMOKE AND FIRE', cta: 'Come hungry.' }, 'owner-web')).toEqual({ rebuilding: false, changed: [] });
+    // A new look makes the design again with nothing else changed, and the invite's details go on the post.
+    const { setInvite, cleanInvite } = await import('../src/calendar/rows.js');
+    expect(await setInvite(pool, (await rowByDay(pool, 2))!, cleanInvite({ date: '2026-11-14', time: '7AM - 10PM', message: 'All day' }), 'owner-web')).toBe(true);
+    expect((await rowByDay(pool, 2))!.invite).toEqual({ date: '2026-11-14', time: '7AM - 10PM', message: 'All day' });
+    expect(await setPostParts(pool, (await rowByDay(pool, 2))!, {}, 'owner-web', { note: 'invite style, words at the top', force: true })).toEqual({ rebuilding: true, changed: [] });
+    expect((await pool.query<{ state: { note: string } }>('select state from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]!.state.note).toBe('invite style, words at the top');
+    await new Worker(ctx, 1000).drain();
+    expect((await pool.query('select stage, status from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]).toEqual({ stage: 'done', status: 'done' });
+    await setInvite(pool, (await rowByDay(pool, 2))!, null, 'owner-web');
+  });
+
+  it('previews the words on a photo without making or keeping anything', async () => {
+    const { parsePreviewInput, previewDesign } = await import('../src/pipeline/preview.js');
+    const renders = Number((await pool.query<{ n: string }>('select count(*) n from renders')).rows[0]!.n);
+    const dataUrl = `data:image/jpeg;base64,${(await sharp(readFileSync(join(process.cwd(), 'samples', 'karahi.jpg'))).resize({ width: 800 }).jpeg().toBuffer()).toString('base64')}`;
+    const post = await previewDesign(pool, parsePreviewInput({ template: 'from-the-karahi', kind: 'post', headline: 'Chicken\nKarahi', line: 'Cooked to order.', style: 'poster', photo: { dataUrl } }));
+    expect(post.images.map((i) => i.format)).toEqual(['feed', 'story']);
+    expect(post.images[0]!.dataUrl).toMatch(/^data:image\/jpeg;base64,/);
+    // Poster needs the plate cut out, which only happens when the design is made.
+    expect(post).toMatchObject({ style: 'band', note: expect.stringMatching(/Poster needs the plate cut out/) });
+    const reel = await previewDesign(pool, parsePreviewInput({ template: 'from-the-fire', kind: 'reel', headline: 'Chapli Kebab', hook: 'Hear that sizzle', photo: { dayNo: 2 } }));
+    expect(reel.images.map((i) => i.format)).toEqual(['reel-cover']);
+    const invite = await previewDesign(pool, parsePreviewInput({ template: 'from-the-fire', headline: 'Lahori\nParathas', style: 'invite', photo: { dayNo: 2 }, invite: { date: '2026-11-14', time: '7AM', message: 'Launch day' } }));
+    expect(invite).toMatchObject({ style: 'invite', note: null });
+    expect(Number((await pool.query<{ n: string }>('select count(*) n from renders')).rows[0]!.n)).toBe(renders);
+    expect(() => parsePreviewInput({ template: 'from-the-fire', headline: ' ' })).toThrow(/title/);
+    await expect(previewDesign(pool, parsePreviewInput({ template: 'from-the-fire', headline: 'X', photo: null }))).rejects.toThrow(/photo/);
   });
 
   it('makes the design from the photos the owner picks, two with their names, and a new photo starts over', async () => {

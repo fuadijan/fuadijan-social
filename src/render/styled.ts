@@ -162,6 +162,8 @@ export const InviteData = z.object({
   day: z.string().max(12).default(''),
   date: z.string().max(12).default(''),
   hours: z.string().max(24).default(''),
+  /** The small words over the time; empty means FROM (or OPEN with no date). */
+  message: z.string().max(24).default(''),
   address: z.string().max(80).default(''),
   website: z.string().max(60).default(''),
   textSide: designFields.textSide,
@@ -196,7 +198,8 @@ export function inviteLayer(ctx: Ctx, d: z.infer<typeof InviteData>): El {
   const top = safeTop(ctx);
   const details: El[] = [];
   if (d.day || d.date) details.push(detail(ctx, d.day || 'DATE', d.date || d.day));
-  if (d.hours) details.push(detail(ctx, d.day || d.date ? 'FROM' : 'OPEN', d.hours));
+  if (d.hours) details.push(detail(ctx, d.message || (d.day || d.date ? 'FROM' : 'OPEN'), d.hours));
+  else if (d.message) details.push(detail(ctx, d.message, ''));
   const rsvp: El[] = [];
   if (d.address) rsvp.push(detail(ctx, 'FIND US', d.address, false));
   if (d.website) rsvp.push(el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 26, letterSpacing: '0.12em', color: brand.colors.sand, paddingLeft: 25 }, d.website.replace(/^https?:\/\//, '')));

@@ -19,13 +19,41 @@ export interface CustomSpec {
   product: string;
   /** A style key, or `auto` for the art director's choice. */
   style: 'band' | 'split' | 'poster' | 'flat' | 'invite' | 'auto';
-  formats: ('feed' | 'story')[];
+  /** A reel is made alone: its cover (with the hook) and the reel pack. */
+  formats: ('feed' | 'story' | 'reel')[];
   /** null: the agent writes the headline and line. */
   wording: CustomWording | null;
   sloganId: number | null;
+  /** The owner's call to action and hashtags; empty or missing, the agent writes them. */
+  cta?: string | null;
+  hashtags?: string | null;
+  /** A reel's cover text and the text cards over the video, in order. */
+  hook?: string | null;
+  onScreen?: string[] | null;
 }
 
 export interface DesignPhoto { assetId: number; name: string | null }
+
+/** What the Invite style prints, as the owner set it: the date shown, the time, and the short message over the time. */
+export interface InviteDetails { date: string | null; time: string; message: string }
+
+/** The owner's invite details, cleaned: an empty set is null (the post's date, the opening hours and "FROM"). */
+export function cleanInvite(v: unknown): InviteDetails | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  const s = (x: unknown, max: number) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(s(o.date, 10)) ? s(o.date, 10) : null;
+  const out = { date, time: s(o.time, 24), message: s(o.message, 24) };
+  return out.date || out.time || out.message ? out : null;
+}
+
+/** Saves what the Invite style prints for a post, and notes the change. */
+export async function setInvite(db: Db, row: CalendarRow, invite: InviteDetails | null, source: EditSource): Promise<boolean> {
+  if (JSON.stringify(row.invite ?? null) === JSON.stringify(invite)) return false;
+  await db.query('update calendar_rows set invite = $2, updated_at = now() where id = $1', [row.id, invite ? JSON.stringify(invite) : null]);
+  await recordEdit(db, row.id, 'invite', row.invite ? JSON.stringify(row.invite) : null, invite ? JSON.stringify(invite) : null, source);
+  return true;
+}
 
 export interface CalendarRow {
   id: number;
@@ -60,6 +88,8 @@ export interface CalendarRow {
   content: PostRecord | null;
   /** The photos the owner picked for the design: one, or two named dishes shown together. Null: the newest photo. */
   design_photos: DesignPhoto[] | null;
+  /** What the Invite style prints, when the owner set it. */
+  invite?: InviteDetails | null;
   posted_at: Date | null;
   updated_at: Date;
 }
@@ -68,7 +98,7 @@ export interface CalendarRow {
 export const EDITABLE_FIELDS = ['dish', 'caption', 'cta', 'hashtags', 'story_ideas', 'post_time', 'on_screen_text', 'creative_instructions', 'theme', 'objective', 'confirmation_notes'] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
-const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, content, design_photos, posted_at, updated_at';
+const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, content, design_photos, invite, posted_at, updated_at';
 
 /** Every plan with its first and last date, oldest first. */
 export async function plans(db: Db): Promise<{ plan: string; first: IsoDate; last: IsoDate; rows: number }[]> {

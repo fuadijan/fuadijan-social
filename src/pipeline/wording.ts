@@ -164,6 +164,12 @@ export async function rerenderWithWording(db: Db, rowId: number, set: CopyOption
  * The designs and the pack made again from the copy the post already has, with no writer run and no wording question.
  * `assetId` starts from another photo. Null when the post has never been written.
  */
+/** The note a remade design runs with: the look asked for, then anything the owner wants changed. */
+export function remakeNote(style: string | null | undefined, note: string | null | undefined): string | null {
+  const parts = [style && style !== 'auto' ? `${style} style` : null, note?.trim().slice(0, 300) || null].filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
+}
+
 export async function rerenderRow(db: Db, rowId: number, opts: { wording?: { option: WordingOption; index: number }; note?: string; assetId?: number } = {}): Promise<Job | null> {
   const prior = (await db.query<{ asset_id: number | null; state: { copy?: ResolvedCopy; jpegFileId?: string; wordingChosen?: number } }>(
     "select asset_id, state from jobs where calendar_row_id = $1 and state ? 'copy' order by id desc limit 1", [rowId])).rows[0];

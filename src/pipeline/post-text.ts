@@ -172,7 +172,8 @@ export async function spreadSloganEdit(db: Db, before: Slogan, after: Pick<Sloga
   return { posts, rebuilding };
 }
 
-export async function setPostText(db: Db, row: CalendarRow, field: PostTextField, raw: string | null, source: EditSource): Promise<{ rebuilding: boolean }> {
+/** With `rerender: false` the designs are left as they are and `printed` says whether they would have been made again. */
+export async function setPostText(db: Db, row: CalendarRow, field: PostTextField, raw: string | null, source: EditSource, opts: { rerender?: boolean } = {}): Promise<{ rebuilding: boolean; printed?: boolean }> {
   if (!POST_TEXT_FIELDS.includes(field)) throw new Error(`field must be one of ${POST_TEXT_FIELDS.join(', ')}`);
   if (await rowIsBusy(db, row.id)) throw new PostBusyError();
   const trimmed = raw?.trim() || null;
@@ -207,6 +208,49 @@ export async function setPostText(db: Db, row: CalendarRow, field: PostTextField
   await refreshPack(db, fresh, copy);
   // A reel's cover and story don't print the line.
   const printed = ON_THE_DESIGN.includes(field) && !(field === 'hook' && row.slot === 'reel');
+  if (opts.rerender === false) return { rebuilding: false, printed };
   if (!printed || await rowIsWaiting(db, row.id)) return { rebuilding: false };
   return { rebuilding: Boolean(await rerenderRow(db, row.id)) };
+}
+
+/** The parts of a post the step-by-step builder saves at once, in the order they are applied. */
+export const POST_PARTS = ['canva_subheading', 'canva_headline', 'hook', 'reel_cover_text', 'on_screen_text', 'caption', 'cta', 'hashtags'] as const;
+export type PostPart = (typeof POST_PARTS)[number];
+
+/**
+ * Several parts of one post, as the builder sends them: each saved like a single edit, and the designs made again
+ * once at the end when anything printed on them changed. Parts that say what they already say are left alone.
+ */
+export async function setPostParts(db: Db, row: CalendarRow, parts: Partial<Record<PostPart, string | null>>, source: EditSource, look?: { note: string | null; force: boolean }): Promise<{ rebuilding: boolean; changed: PostPart[] }> {
+  if (await rowIsBusy(db, row.id)) throw new PostBusyError();
+  const changed: PostPart[] = [];
+  let printed = false;
+  for (const field of POST_PARTS) {
+    if (!(field in parts)) continue;
+    const value = parts[field]?.trim() || null;
+    const now = (await rowById(db, row.id))!;
+    if (field === 'on_screen_text') {
+      if ((now.on_screen_text?.trim() || null) === value) continue;
+      await editField(db, now, 'on_screen_text', value, source);
+      const job = await latestJobWithCopy(db, row.id);
+      if (job) {
+        const copy = { ...job.copy, on_screen_text: (value ?? '').split(/\s*(?:→|\n)\s*/).filter(Boolean) };
+        await db.query("update jobs set state = jsonb_set(state, '{copy}', $2::jsonb) where id = $1", [job.id, JSON.stringify(copy)]);
+        await refreshPack(db, (await rowById(db, row.id))!, copy);
+      }
+      changed.push(field);
+      continue;
+    }
+    const was = (ROW_FIELDS as readonly string[]).includes(field) ? (now as unknown as Record<string, string | null>)[field] : now.content?.[field as RecordField];
+    const same = field === 'hashtags' ? cleanHashtags(was ?? '') === cleanHashtags(value ?? '') : (was?.trim() || null) === value;
+    if (same) continue;
+    const r = await setPostText(db, now, field, value, source, { rerender: false });
+    printed ||= Boolean(r.printed);
+    changed.push(field);
+  }
+  // A new look (a style, the invite's details) makes the design again even when no words on it changed.
+  if (!(printed || look?.force) || await rowIsWaiting(db, row.id)) return { rebuilding: false, changed };
+  const made = ((await db.query('select 1 from packs where calendar_row_id = $1 limit 1', [row.id])).rowCount ?? 0) > 0;
+  if (!made) return { rebuilding: false, changed };
+  return { rebuilding: Boolean(await rerenderRow(db, row.id, { note: look?.note ?? undefined })), changed };
 }

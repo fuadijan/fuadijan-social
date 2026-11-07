@@ -80,6 +80,10 @@ export interface Row {
   custom: CustomSpec | null;
   /** The photos the owner picked for the design; null means the newest. */
   design_photos: { assetId: number; name: string | null }[] | null;
+  /** The calendar record's own words (Canva Headline, Hook, Reel Cover Text …), when the workbook had one. */
+  content?: Record<string, string | null> | null;
+  /** What the Invite style prints, when the owner set it. */
+  invite?: InviteDetails | null;
   posted_at: string | null;
   updated_at: string;
 }
@@ -215,7 +219,7 @@ export interface DayResponse extends DayView {
   pack: Pack | null;
   renders: Render[];
   edits: Edit[];
-  settings: { storeAddress: string | null; openHours: string | null; websiteUrl: string | null; postTimeDefault: string | null };
+  settings: { storeAddress: string | null; openHours: string | null; websiteUrl: string | null; postTimeDefault: string | null; brandLine?: string };
 }
 
 export interface StatusResponse {
@@ -225,7 +229,10 @@ export interface StatusResponse {
 // ─── the Create flow (custom designs) and the wording bank ──────────────────────────────────────────────
 
 export type StyleKey = 'band' | 'split' | 'poster' | 'flat' | 'invite';
-export type CustomFormat = 'feed' | 'story';
+export type CustomFormat = 'feed' | 'story' | 'reel';
+
+/** What the Invite style prints: the date shown (YYYY-MM-DD), the time, and the short message over the time. */
+export interface InviteDetails { date: string | null; time: string; message: string }
 
 /** What the owner chose for a one-off post; stored on the row (`row.custom`). */
 export interface CustomSpec {
@@ -234,6 +241,10 @@ export interface CustomSpec {
   formats: CustomFormat[];
   wording: { headline: string; line: string; caption: string } | null;
   sloganId: number | null;
+  cta?: string | null;
+  hashtags?: string | null;
+  hook?: string | null;
+  onScreen?: string[] | null;
 }
 
 export interface Wording {
@@ -290,6 +301,8 @@ export interface RecentPhoto {
 export interface CreateOptions {
   today: string;
   postTimeDefault: string;
+  /** The footer's two texts: the brand line and the store address. */
+  footers: { brand: string; address: string };
   /** `template` is the series suggested for the product (its menu category: drinks pour, sweets save room, karahis from the karahi). */
   products: { name: string; category: string | null; series: string | null; status: string; wordings: number; template: string }[];
   templates: { template: string; label: string; footer: 'brand' | 'address'; style: StyleKey | null }[];
@@ -307,7 +320,31 @@ export interface CreateRequest {
   date: string;
   postTime: string | null;
   assetId: number | null;
+  cta?: string | null;
+  hashtags?: string | null;
+  hook?: string | null;
+  onScreen?: string[] | null;
+  invite?: InviteDetails | null;
 }
+
+/** The builder's real preview (POST /api/preview): the words drawn on the photo, nothing stored. */
+export interface PreviewRequest {
+  template: string;
+  kind: 'post' | 'reel';
+  label: string;
+  headline: string;
+  line: string;
+  hook: string;
+  style: StyleKey | 'auto';
+  dish: string | null;
+  date: string | null;
+  photo: { assetId: number } | { dayNo: number } | { dataUrl: string } | null;
+  invite?: InviteDetails | null;
+}
+export interface PreviewResponse { ok: true; images: { format: 'feed' | 'story' | 'reel-cover'; dataUrl: string }[]; style: StyleKey; note: string | null }
+
+/** The parts of a post the builder saves together (POST_PARTS in src/pipeline/post-text.ts). */
+export type PostPartField = 'canva_subheading' | 'canva_headline' | 'hook' | 'reel_cover_text' | 'on_screen_text' | 'caption' | 'cta' | 'hashtags';
 
 export interface CreateResponse { ok: true; dayNo: number; date: string; plan: string }
 

@@ -6,15 +6,17 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import type { AppContext } from '../context.js';
-import { EDITABLE_FIELDS, allRows, currentPlan, editField, markPosted, plans, pushRow, recordEdit, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow, type EditableField } from '../calendar/rows.js';
+import { EDITABLE_FIELDS, allRows, cleanInvite, setInvite, currentPlan, editField, markPosted, plans, pushRow, recordEdit, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow, type EditableField } from '../calendar/rows.js';
 import { receiveAsset } from '../pipeline/worker.js';
 import { redoRow } from '../pipeline/worker.js';
 import { getFile } from '../files.js';
 import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
-import { addOwnerOption, allCopyOptions, copyOptionsById, latestCopyOptions, markChosen, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from '../pipeline/wording.js';
-import { POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostText, spreadSloganEdit, spreadSloganLink, type PostTextField } from '../pipeline/post-text.js';
+import { addOwnerOption, allCopyOptions, copyOptionsById, latestCopyOptions, markChosen, remakeNote, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from '../pipeline/wording.js';
+import { POST_PARTS, POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostParts, setPostText, spreadSloganEdit, spreadSloganLink, type PostPart, type PostTextField } from '../pipeline/post-text.js';
+import { parsePreviewInput, previewDesign } from '../pipeline/preview.js';
+import { loadBrand } from '../render/brand.js';
 import { WORDING_LIBRARIES, wordingsView } from '../wordings-view.js';
 import { adoptAsset, createCustomPost, parseCustomInput, recentPhotos } from '../pipeline/custom.js';
 import { rowViews, type RowView } from '../reminders/brief.js';
@@ -94,7 +96,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       pack: pack && { ...pack, crops: pack.sources.crops ?? {} },
       renders,
       edits,
-      settings: { storeAddress: settings.store_address, openHours: settings.open_hours, websiteUrl: settings.website_url, postTimeDefault: settings.post_time_default },
+      settings: { storeAddress: settings.store_address, openHours: settings.open_hours, websiteUrl: settings.website_url, postTimeDefault: settings.post_time_default, brandLine: loadBrand().brandLine },
     };
   });
 
@@ -141,6 +143,53 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       return { ok: true, ...await setPostText(ctx.pool, row, field, req.body?.value == null ? null : String(req.body.value), 'owner-web') };
     } catch (e) {
       return reply.code(e instanceof PostBusyError ? 409 : 400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /** The builder's parts of a post, saved together: the designs are made again once, when the words on them changed. */
+  app.post<{ Params: { dayNo: string }; Body: { parts?: Record<string, unknown>; look?: { style?: string; note?: string; invite?: unknown } } }>('/api/rows/:dayNo/parts', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const body = req.body?.parts ?? {};
+    const parts: Partial<Record<PostPart, string | null>> = {};
+    for (const k of POST_PARTS) if (k in body) parts[k] = body[k] == null ? null : String(body[k]).slice(0, 2200);
+    const look = req.body?.look;
+    const style = String(look?.style ?? 'auto');
+    if (style !== 'auto' && !(STYLE_KEYS as readonly string[]).includes(style)) return reply.code(400).send({ ok: false, error: 'Pick a style.' });
+    try {
+      if (look && await rowIsBusy(ctx.pool, row.id)) throw new PostBusyError();
+      const inviteChanged = look && 'invite' in look ? await setInvite(ctx.pool, row, cleanInvite(look.invite), 'owner-web') : false;
+      const r = await setPostParts(ctx.pool, (await rowByDay(ctx.pool, row.day_no, row.plan))!, parts, 'owner-web', look ? { note: remakeNote(style, look.note), force: true } : undefined);
+      if (inviteChanged && !r.changed.length && !r.rebuilding) return { ok: true, message: 'Saved. The invite uses these details when the design is made.', rebuilding: false };
+      const message = !r.changed.length && !r.rebuilding ? 'Nothing changed.' : !r.changed.length ? 'Making the design again with the new look.' : r.rebuilding ? 'Saved. The designs are being made again with these words.' : 'Saved. The post uses these words.';
+      return { ok: true, message, rebuilding: r.rebuilding };
+    } catch (e) {
+      return reply.code(e instanceof PostBusyError ? 409 : 400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  /**
+   * The design made again from the same words and photo: the art director and the critic run afresh, with the look
+   * asked for (a style) and anything the owner wants changed ("words at the top, bigger").
+   */
+  app.post<{ Params: { dayNo: string }; Body: { style?: string; note?: string; invite?: unknown } }>('/api/rows/:dayNo/remake', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const style = String(req.body?.style ?? 'auto');
+    if (style !== 'auto' && !(STYLE_KEYS as readonly string[]).includes(style)) return reply.code(400).send({ ok: false, error: 'Pick a style.' });
+    if (await rowIsBusy(ctx.pool, row.id)) return reply.code(409).send({ ok: false, error: new PostBusyError().message });
+    if (req.body && 'invite' in req.body) await setInvite(ctx.pool, row, cleanInvite(req.body.invite), 'owner-web');
+    const job = await rerenderRow(ctx.pool, row.id, { note: remakeNote(style, req.body?.note) ?? undefined });
+    if (!job) return reply.code(400).send({ ok: false, error: 'There is no design to make again yet: it is made when the photo arrives.' });
+    return { ok: true, message: 'Making the design again with the same words. About a minute.', rebuilding: true };
+  });
+
+  /** The real preview: the chosen words on the chosen photo, drawn the way the design draws them; nothing is stored. */
+  app.post<{ Body: Record<string, unknown> }>('/api/preview', async (req, reply) => {
+    try {
+      return { ok: true, ...await previewDesign(ctx.pool, parsePreviewInput(req.body)) };
+    } catch (e) {
+      return reply.code(400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
   });
 
@@ -313,6 +362,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     return {
       today: sydneyDate(ctx.now()),
       postTimeDefault: settings.post_time_default ?? '18:00',
+      footers: { brand: loadBrand().brandLine, address: settings.store_address ?? '' },
       products: await products(),
       templates: heroTemplates(),
       styles: STYLE_KEYS.map((k) => ({ key: k, name: STYLES[k].name, blurb: STYLES[k].blurb, needsCutout: STYLES[k].needsCutout, story: STYLES[k].story })),

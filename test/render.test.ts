@@ -191,6 +191,22 @@ describe('render templates', () => {
   });
 });
 
+describe('the invite style', () => {
+  it("prints the owner's date, time and message on the feed post and on the story", async () => {
+    const templates = await import('../src/render/templates.js');
+    const styled = await import('../src/render/styled.js');
+    const brand = loadBrand();
+    const story = JSON.stringify(templates.storyLayer(templates.makeCtx(brand, 1080, 1920, SAMPLE_SETTINGS), templates.StoryData.parse({ label: 'X', headline: 'Paratha', details: [{ head: 'SATURDAY', value: '14 NOV' }, { head: 'All day', value: '7AM' }] })));
+    expect(story).toContain('ALL DAY');
+    expect(story).toContain('14 NOV');
+    const feed = JSON.stringify(styled.inviteLayer(templates.makeCtx(brand, 1080, 1350, SAMPLE_SETTINGS), styled.InviteData.parse({ label: 'X', headline: 'Paratha', line: '', day: 'SATURDAY', date: '14 NOV', hours: '7AM', message: 'All day', textSide: 'left', typeScale: 1 })));
+    expect(feed).toContain('ALL DAY');
+    const photo = await crop(await sharp({ create: { width: 1200, height: 1500, channels: 3, background: '#553322' } }).jpeg().toBuffer(), '4x5');
+    const outs = await renderPost({ sheetTemplate: 'from-the-karahi', slot: 'feed', label: 'X', headline: 'Paratha', line: 'Soft inside.', photo, cutout: null, design: { style: 'invite' }, settings: SAMPLE_SETTINGS, date: '2026-11-14', invite: { date: '2026-11-14', time: '7AM', message: 'All day' } });
+    expect(outs.map((o) => o.format)).toEqual(['feed', 'story']);
+  });
+});
+
 describe('dish-centred crops', () => {
   it('crops around the located dish at the requested ratio and falls back without a box', async () => {
     const meta = await sharp(karahiFull).metadata();

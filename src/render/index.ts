@@ -44,6 +44,8 @@ export interface RenderInput {
   design?: Partial<DesignSpec> | null;
   /** A 9:16 crop for the story; the feed photo is re-cropped when it is missing. */
   storyPhoto?: Buffer | null;
+  /** What the invite style prints instead of the post's date, the opening hours and FROM. */
+  invite?: { date?: string | null; time?: string; message?: string } | null;
   /** The post's date (YYYY-MM-DD), shown by the invite style. */
   date?: string | null;
   /** The post's dish, for the brand line. */
@@ -125,7 +127,7 @@ export async function renderPost(input: RenderInput, baseBrand: Brand = loadBran
       }
       case 'invite': {
         const side = design?.text_side ?? 'left';
-        const layer = await layerToPng(brand, inviteLayer(ctx, InviteData.parse({ ...common, ...inviteDate(input.date), hours: input.settings.openHours.slice(0, 24), address: input.settings.storeAddress.slice(0, 80), website: (input.settings.website ?? '').slice(0, 60), textSide: side, typeScale })), w, h);
+        const layer = await layerToPng(brand, inviteLayer(ctx, InviteData.parse({ ...common, ...inviteDate(input.invite?.date || input.date), hours: (input.invite?.time || input.settings.openHours).slice(0, 24), message: input.invite?.message ?? '', address: input.settings.storeAddress.slice(0, 80), website: (input.settings.website ?? '').slice(0, 60), textSide: side, typeScale })), w, h);
         return composeInvite(brand, w, h, photo, layer, side === 'right' ? 'left' : 'right', INVITE_PHOTO_SHARE, { lift });
       }
       default:
@@ -194,7 +196,15 @@ export async function renderPost(input: RenderInput, baseBrand: Brand = loadBran
     if (styled) out.push({ format: 'story', page: null, png: styled });
     else {
       const ctx = makeCtx(brand, sw, sh, input.settings);
-      const layer = await layerToPng(brand, storyLayer(ctx, StoryData.parse({ label: input.label, headline: input.headline, ...designFields(design) })), sw, sh);
+      // An invite's story carries its day and date, and the message over the time, like the feed post.
+      const when = inviteDate(input.invite?.date || input.date);
+      const hours = (input.invite?.time || input.settings.openHours).slice(0, 24);
+      const message = input.invite?.message ?? '';
+      const details = style === 'invite' ? [
+        ...(when.day || when.date ? [{ head: when.day || 'DATE', value: when.date || when.day }] : []),
+        ...(hours ? [{ head: message || (when.day || when.date ? 'FROM' : 'OPEN'), value: hours }] : message ? [{ head: message, value: '' }] : []),
+      ] : [];
+      const layer = await layerToPng(brand, storyLayer(ctx, StoryData.parse({ label: input.label, headline: input.headline, details, ...designFields(design) })), sw, sh);
       out.push({ format: 'story', page: null, png: await composeLayoutB(brand, sw, sh, input.storyPhoto ?? input.photo, layer, { lift }) });
     }
   }

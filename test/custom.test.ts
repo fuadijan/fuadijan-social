@@ -48,7 +48,11 @@ describe('the Create flow', () => {
     expect(input.wording).toEqual({ headline: 'Time to\nSavour the Karahi', line: 'Cooked to order.', caption: '' });
     expect(parseCustomInput({ ...good, wording: { headline: 'One\n\nTwo\nThree' } }).wording?.headline).toBe('One\nTwo');
     expect(parseCustomInput({ ...good, wording: null, style: undefined, postTime: '' })).toMatchObject({ wording: null, style: 'auto', postTime: null });
-    expect(parseCustomInput({ ...good, formats: ['story', 'story', 'reel'] }).formats).toEqual(['story']);
+    expect(parseCustomInput({ ...good, formats: ['story', 'story', 'square'] }).formats).toEqual(['story']);
+    // A reel is made on its own, with its cover text and the text cards over the video; a post keeps neither.
+    const reel = parseCustomInput({ ...good, formats: ['feed', 'reel'], hook: 'Hear that sizzle', onScreen: 'One\n \nTwo', cta: 'Comment aloo or mooli.', hashtags: 'paratha, #Paratha #FromTheTawa' });
+    expect(reel).toMatchObject({ formats: ['reel'], hook: 'Hear that sizzle', onScreen: ['One', 'Two'], cta: 'Comment aloo or mooli.', hashtags: '#paratha #Paratha #FromTheTawa' });
+    expect(parseCustomInput({ ...good, hook: 'x', onScreen: ['a'] })).toMatchObject({ hook: null, onScreen: null, cta: null, hashtags: null });
     expect(() => parseCustomInput({ ...good, product: ' ' })).toThrow(/product/);
     expect(() => parseCustomInput({ ...good, template: 'customer-review' })).toThrow(/photo series/);
     expect(() => parseCustomInput({ ...good, template: 'nope' })).toThrow(/series/);
@@ -76,14 +80,36 @@ describe('the Create flow', () => {
     const own = applyCustomWording(copy, { ...spec, wording: { headline: 'H', line: 'my line', caption: 'my caption' } });
     expect(own).toMatchObject({ headline: 'H', line: 'my line', caption: 'my caption', facebook_caption: 'my caption Order now.' });
     expect(applyCustomWording(copy, { ...spec, wording: null })).toBe(copy);
+    // The call to action, hashtags and text cards the owner picked are kept word for word, with or without a wording.
+    const picked = applyCustomWording(copy, { ...spec, wording: null, cta: 'Save this.', hashtags: '#one #two', onScreen: ['A', 'B'] });
+    expect(picked).toMatchObject({ headline: 'Chapli\nKebab', cta: 'Save this.', hashtags: ['#one', '#two'], on_screen_text: ['A', 'B'], facebook_caption: 'agent caption Save this.' });
     expect(customResolveNote(spec)).toMatch(/exactly as given.*Karahi \/ First.*leave unresolved empty/s);
     expect(customResolveNote({ ...spec, wording: null })).toMatch(/Write the headline, line and caption/);
+  });
+
+  it("cleans the invite's details: a date, a time and a short message, or nothing", async () => {
+    const { cleanInvite } = await import('../src/calendar/rows.js');
+    expect(cleanInvite({ date: '2026-11-14', time: ' 7AM – 10PM ', message: 'All day' })).toEqual({ date: '2026-11-14', time: '7AM – 10PM', message: 'All day' });
+    expect(cleanInvite({ date: '14/11', time: '', message: '' })).toBeNull();
+    expect(cleanInvite({ message: 'A message much longer than the column allows' })).toEqual({ date: null, time: '', message: 'A message much longer th' });
+    expect(cleanInvite(null)).toBeNull();
+    expect(parseCustomInput({ ...good, style: 'invite', invite: { time: 'From 7AM' } }).invite).toEqual({ date: null, time: 'From 7AM', message: '' });
+  });
+
+  it('notes the look and the change asked for when a design is made again', async () => {
+    const { remakeNote } = await import('../src/pipeline/wording.js');
+    expect(remakeNote('invite', ' words at the top ')).toBe('invite style, words at the top');
+    expect(remakeNote('auto', '')).toBeNull();
+    expect(remakeNote(null, 'bigger title')).toBe('bigger title');
   });
 
   it('keeps only the formats asked for', () => {
     const outs = [{ format: 'feed' as const }, { format: 'story' as const }];
     expect(keepFormats(outs, { product: 'x', style: 'auto', formats: ['story'], wording: null, sloganId: null }).map((o) => o.format)).toEqual(['story']);
     expect(keepFormats(outs, null)).toBe(outs);
+    const reel = [...outs, { format: 'reel-cover' as const }];
+    expect(keepFormats(reel, { product: 'x', style: 'auto', formats: ['reel'], wording: null, sloganId: null }).map((o) => o.format)).toEqual(['reel-cover']);
+    expect(keepFormats(reel, { product: 'x', style: 'auto', formats: ['feed'], wording: null, sloganId: null }).map((o) => o.format)).toEqual(['feed']);
   });
 
   it('reads the three-digit day tags custom posts use', () => {

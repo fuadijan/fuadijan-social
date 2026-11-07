@@ -9,7 +9,7 @@
  */
 import type { Db } from '../db/pool.js';
 import type { ResolvedCopy } from '../brain/schemas.js';
-import { currentPlan, recordEdit, rowById, type CalendarRow, type CustomSpec, type CustomWording } from '../calendar/rows.js';
+import { cleanInvite, currentPlan, recordEdit, rowById, type CalendarRow, type CustomSpec, type CustomWording, type InviteDetails } from '../calendar/rows.js';
 import { heroTemplates, suggestedTemplate, templateEntry } from '../render/registry.js';
 import type { RenderOutput } from '../render/index.js';
 import { STYLE_KEYS, styleFromNote, type Style } from '../render/styles.js';
@@ -17,7 +17,7 @@ import { addDays, sydneyDate, type IsoDate } from '../time.js';
 import type { Job } from './stages.js';
 
 export const CUSTOM_FIRST_DAY = 101;
-export const CUSTOM_FORMATS = ['feed', 'story'] as const;
+export const CUSTOM_FORMATS = ['feed', 'story', 'reel'] as const;
 export type CustomFormat = (typeof CUSTOM_FORMATS)[number];
 
 export interface CustomInput {
@@ -29,6 +29,12 @@ export interface CustomInput {
   sloganId: number | null;
   date: IsoDate;
   postTime: string | null;
+  cta?: string | null;
+  hashtags?: string | null;
+  hook?: string | null;
+  onScreen?: string[] | null;
+  /** What the Invite style prints. */
+  invite?: InviteDetails | null;
 }
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -49,7 +55,9 @@ export function parseCustomInput(body: unknown): CustomInput {
   const style = str(b.style, 10) || 'auto';
   if (style !== 'auto' && !(STYLE_KEYS as readonly string[]).includes(style)) throw new Error('Pick a style.');
   const formats = Array.isArray(b.formats) ? (b.formats.filter((f): f is CustomFormat => (CUSTOM_FORMATS as readonly string[]).includes(f as string))) : [];
-  if (!formats.length) throw new Error('Pick at least one format (feed or story).');
+  if (!formats.length) throw new Error('Pick at least one format (feed or story), or a reel.');
+  // A reel is made on its own: its cover and its pack.
+  if (formats.includes('reel')) formats.splice(0, formats.length, 'reel');
   const date = str(b.date, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) throw new Error('Pick a date.');
   const postTime = str(b.postTime, 5) || null;
@@ -62,20 +70,29 @@ export function parseCustomInput(body: unknown): CustomInput {
     wording = { headline, line: str(w.line, 140), caption: str(w.caption, 2200) };
   }
   const sloganId = Number.isInteger(b.sloganId) ? Number(b.sloganId) : null;
-  return { product, template, style: style as Style | 'auto', formats: [...new Set(formats)], wording, sloganId, date, postTime };
+  const tags = str(b.hashtags, 600).split(/[\s,]+/).filter(Boolean).map((t) => (t.startsWith('#') ? t : `#${t}`));
+  const cards = (Array.isArray(b.onScreen) ? b.onScreen : typeof b.onScreen === 'string' ? b.onScreen.split('\n') : []).map((c) => str(c, 80)).filter(Boolean).slice(0, 8);
+  const reel = formats.includes('reel');
+  return {
+    product, template, style: style as Style | 'auto', formats: [...new Set(formats)], wording, sloganId, date, postTime,
+    cta: str(b.cta, 300) || null, hashtags: tags.length ? [...new Set(tags)].join(' ') : null,
+    hook: reel ? str(b.hook, 70) || null : null, onScreen: reel && cards.length ? cards : null, invite: cleanInvite(b.invite),
+  };
 }
 
 /** The row for a custom post, in the running plan (as of `today`), numbered from 101. */
 export async function createCustomPost(db: Db, input: CustomInput, today: IsoDate = sydneyDate(new Date()), source: 'owner-web' | 'owner-telegram' = 'owner-web'): Promise<CalendarRow> {
   const plan = (await currentPlan(db, today)) ?? input.date.slice(0, 7);
-  const spec: CustomSpec = { product: input.product, style: input.style, formats: input.formats, wording: input.wording, sloganId: input.sloganId };
+  const spec: CustomSpec = { product: input.product, style: input.style, formats: input.formats, wording: input.wording, sloganId: input.sloganId, cta: input.cta ?? null, hashtags: input.hashtags ?? null, hook: input.hook ?? null, onScreen: input.onScreen ?? null };
+  const slot = input.formats.includes('reel') ? 'reel' : 'feed';
   const { rows } = await db.query<{ id: number }>(
-    `insert into calendar_rows (plan, day_no, date, slot, type, dish, post_time, template, status, objective, caption, custom)
-     values ($1, (select greatest(coalesce(max(day_no), 0), $2::int - 1) + 1 from calendar_rows where plan = $1), $3, 'feed', 'custom', $4, $5, $6, 'planned', $7, $8, $9)
+    `insert into calendar_rows (plan, day_no, date, slot, type, dish, post_time, template, status, objective, caption, custom, cta, hashtags, on_screen_text, invite)
+     values ($1, (select greatest(coalesce(max(day_no), 0), $2::int - 1) + 1 from calendar_rows where plan = $1), $3, $10, 'custom', $4, $5, $6, 'planned', $7, $8, $9, $11, $12, $13, $14)
      returning id`,
-    [plan, CUSTOM_FIRST_DAY, input.date, input.product, input.postTime, input.template, `Custom design: ${input.product}, made ${source === 'owner-web' ? 'in the web app' : 'from Telegram'}.`, input.wording?.caption || null, JSON.stringify(spec)]);
+    [plan, CUSTOM_FIRST_DAY, input.date, input.product, input.postTime, input.template, `Custom ${slot === 'reel' ? 'reel' : 'design'}: ${input.product}, made ${source === 'owner-web' ? 'in the web app' : 'from Telegram'}.`, input.wording?.caption || null, JSON.stringify(spec),
+      slot, input.cta ?? null, input.hashtags ?? null, input.onScreen?.join(' → ') ?? null, input.invite ? JSON.stringify(input.invite) : null]);
   const id = rows[0]!.id;
-  await recordEdit(db, id, 'created', null, `custom design · ${input.style === 'auto' ? 'style by the art director' : `${input.style} style`} · ${input.formats.join(' + ')}`, source);
+  await recordEdit(db, id, 'created', null, `custom ${slot === 'reel' ? 'reel' : 'design'} · ${input.style === 'auto' ? 'style by the art director' : `${input.style} style`} · ${input.formats.join(' + ')}`, source);
   return (await rowById(db, id))!;
 }
 
@@ -227,14 +244,22 @@ export function customResolveNote(spec: CustomSpec, redo?: RedoContext): string 
 
 /** The owner's words in place of the agent's; nothing left to ask. */
 export function applyCustomWording(copy: ResolvedCopy, spec: CustomSpec | null | undefined): ResolvedCopy {
-  if (!spec?.wording) return copy;
-  const w = spec.wording;
-  const caption = w.caption.trim() || copy.caption;
-  return { ...copy, headline: w.headline.trim(), line: w.line.trim() || copy.line, caption, facebook_caption: `${caption.trim()} ${copy.cta.trim()}`.trim(), unresolved: [] };
+  if (!spec) return copy;
+  let out = copy;
+  if (spec.wording) {
+    const w = spec.wording;
+    out = { ...out, headline: w.headline.trim(), line: w.line.trim() || out.line, caption: w.caption.trim() || out.caption, unresolved: [] };
+  }
+  // The call to action, hashtags and a reel's text cards the owner picked are theirs, word for word.
+  if (spec.cta?.trim()) out = { ...out, cta: spec.cta.trim() };
+  if (spec.hashtags?.trim()) out = { ...out, hashtags: spec.hashtags.split(/\s+/).filter(Boolean) };
+  if (spec.onScreen?.length) out = { ...out, on_screen_text: spec.onScreen };
+  if (out === copy) return copy;
+  return { ...out, facebook_caption: `${out.caption.trim()} ${out.cta.trim()}`.trim() };
 }
 
-/** Only the formats the owner asked for (carousel pages and reel covers are never custom). */
+/** Only the formats the owner asked for: the feed post, the story, or a reel's cover (carousel pages are never custom). */
 export function keepFormats<T extends Pick<RenderOutput, 'format'>>(outputs: T[], spec: CustomSpec | null | undefined): T[] {
   if (!spec) return outputs;
-  return outputs.filter((o) => (o.format === 'feed' || o.format === 'story' ? spec.formats.includes(o.format) : true));
+  return outputs.filter((o) => (o.format === 'feed' || o.format === 'story' ? spec.formats.includes(o.format) : o.format === 'reel-cover' ? spec.formats.includes('reel') : true));
 }

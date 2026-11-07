@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router';
 import { fileUrl, getDay, markPosted, packTextUrl, pushDay, setDesignPhotos, skipDay } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { CopyButton } from '../components/CopyButton';
+import { DayBuilder, RemakeDesign, canBuild } from '../components/DayBuilder';
 import { EditableText, FIELD_LABEL } from '../components/EditableText';
 import { Body, PlatformTexts, PostText, type PostEdit } from '../components/PostTexts';
 import { QuestionButtons } from '../components/QuestionButtons';
@@ -80,7 +81,7 @@ function HeadSection({ d, reload }: { d: DayResponse; reload: Reload }) {
             <>
               <dt>Custom</dt>
               <dd>
-                {row.custom.style === 'auto' ? 'style by the art director' : `${row.custom.style} style`} · {row.custom.formats.map((f) => (f === 'feed' ? 'feed' : 'story')).join(' + ')}
+                {row.custom.style === 'auto' ? 'style by the art director' : `${row.custom.style} style`} · {row.custom.formats.map((f) => (f === 'reel' ? 'reel cover' : f)).join(' + ')}
                 {row.custom.wording ? ' · your caption' : ' · caption by the agent'}
               </dd>
             </>
@@ -334,6 +335,8 @@ function ImagesSection({ d, reload, onRebuild }: { d: DayResponse; reload: Reloa
           </div>
         </div>
       ) : null}
+      {/* A post built part by part remakes its design from the builder's last step. */}
+      {d.renders.length > 0 && !canBuild(d) ? <RemakeDesign d={d} reload={reload} onRebuild={onRebuild} /> : null}
       {d.pack ? (
         <div className="sa-field">
           <div className="sa-eyebrow">Files</div>
@@ -525,17 +528,43 @@ export function Day() {
               <Button variant="secondary" size="sm" onClick={() => void reload()}>Refresh</Button>
             </div>
           ) : null}
-          <HeadSection d={data} reload={reload} />
-          <div className="sa-two">
-            <ShootSection d={data} reload={reload} />
-            <CopySection d={data} reload={reload} onRebuild={onRebuild} />
-          </div>
-          <PlatformsSection d={data} reload={reload} onRebuild={onRebuild} />
-          <WordingSection d={data} reload={reload} onRebuild={onRebuild} />
-          <ConfirmSection d={data} reload={reload} />
-          <ImagesSection d={data} reload={reload} onRebuild={onRebuild} />
-          <StatusSection d={data} onChanged={reload} />
-          <HistorySection d={data} />
+          {canBuild(data) ? (
+            <>
+              {/* The post part by part first; everything else about it is one tap away. */}
+              <DayBuilder key={data.dayNo} d={data} reload={reload} onRebuild={onRebuild} />
+              <ImagesSection d={data} reload={reload} onRebuild={onRebuild} />
+              {data.slot === 'reel' ? <ShootSection d={data} reload={reload} /> : null}
+              <ConfirmSection d={data} reload={reload} />
+              <StatusSection d={data} onChanged={reload} />
+              <details className="sa-more">
+                <summary>More about this post: details, {data.slot === 'reel' ? '' : 'shoot, '}every platform, all captions, history</summary>
+                <div className="sa-stack">
+                  <HeadSection d={data} reload={reload} />
+                  <div className="sa-two">
+                    {data.slot === 'reel' ? null : <ShootSection d={data} reload={reload} />}
+                    <CopySection d={data} reload={reload} onRebuild={onRebuild} />
+                  </div>
+                  <PlatformsSection d={data} reload={reload} onRebuild={onRebuild} />
+                  <WordingSection d={data} reload={reload} onRebuild={onRebuild} />
+                  <HistorySection d={data} />
+                </div>
+              </details>
+            </>
+          ) : (
+            <>
+              <HeadSection d={data} reload={reload} />
+              <div className="sa-two">
+                <ShootSection d={data} reload={reload} />
+                <CopySection d={data} reload={reload} onRebuild={onRebuild} />
+              </div>
+              <PlatformsSection d={data} reload={reload} onRebuild={onRebuild} />
+              <WordingSection d={data} reload={reload} onRebuild={onRebuild} />
+              <ConfirmSection d={data} reload={reload} />
+              <ImagesSection d={data} reload={reload} onRebuild={onRebuild} />
+              <StatusSection d={data} onChanged={reload} />
+              <HistorySection d={data} />
+            </>
+          )}
         </div>
       ) : null}
     </>

@@ -44,7 +44,12 @@ export const HeroData = z.object({
 export const ReviewData = z.object({ quote: z.string().max(260), reviewer: z.string().max(12), label: z.string().default('CUSTOMER LOVE'), footer: z.enum(['brand', 'address']).default('address'), hasPhoto: z.boolean().default(true), bandStrength: designFields.bandStrength });
 export const CarouselCoverData = z.object({ cover_title: z.string().max(60), label: z.string().max(40), bandStrength: designFields.bandStrength });
 export const CarouselSlideData = z.object({ title: z.string().max(80), index: z.number(), total: z.number(), hasPhoto: z.boolean().default(false), closing: z.boolean().default(false) });
-export const StoryData = z.object({ label: z.string().max(40), headline: z.string().max(60), ...designFields });
+export const StoryData = z.object({
+  label: z.string().max(40), headline: z.string().max(60),
+  /** An invite's story: the day and date, and the message over the time, in columns under the headline. */
+  details: z.array(z.object({ head: z.string().max(24), value: z.string().max(24) })).max(3).default([]),
+  ...designFields,
+});
 export const ReelCoverData = z.object({ hook: z.string().max(70), label: z.string().max(40), bandStrength: designFields.bandStrength });
 export const TextOnlyData = z.object({ label: z.string().max(40), headline: z.string().max(60), line: z.string().max(140), footer: z.enum(['brand', 'address']).default('brand') });
 
@@ -276,7 +281,11 @@ export function storyLayer(ctx: Ctx, d: z.infer<typeof StoryData>): El {
   const atTop = d.textPosition === 'top';
   const h = headline(ctx, d.headline, 760, false, undefined, d.typeScale, 'left', d.accentWord);
   const brandLine = el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 28, letterSpacing: '0.2em', color: brand.colors.sand }, brand.brandLine);
-  const block = [label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx)];
+  const details = d.details.length ? [el('div', { display: 'flex', gap: 44, marginBottom: 30 }, d.details.map((x) => el('div', { display: 'flex', flexDirection: 'column', paddingLeft: 20, borderLeft: `3px solid ${brand.colors.ember}`, gap: 6 }, [
+    el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 26, letterSpacing: '0.22em', color: brand.colors.saffron }, uc(x.head)),
+    ...(x.value ? [el('div', { display: 'flex', fontFamily: brand.fonts.heading.family, fontSize: 50, lineHeight: 1.1, color: brand.colors.cream }, uc(x.value))] : []),
+  ])))] : [];
+  const block = [label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx), ...details];
   return canvas(ctx, [
     gradient(ctx, atTop ? 0.5 : 0.48, d.bandStrength, atTop ? 'top' : 'bottom'),
     ...(atTop ? [gradient(ctx, 0.16, Math.min(1, d.bandStrength), 'bottom')] : []),

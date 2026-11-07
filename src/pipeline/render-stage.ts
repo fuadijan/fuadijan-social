@@ -139,8 +139,8 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
 
   const base: RenderInput = {
     sheetTemplate: row.template, slot: row.slot, label: copy.label || entry.label, headline: copy.headline, line: copy.line,
-    quote, reviewer, slides, hook: row.content?.reel_cover_text?.trim() || copy.versions?.reel_cover_text?.trim() || (copy.on_screen_text[0] ?? null),
-    photo: heroPhoto, storyPhoto, slidePhotos, cutout: cut.cutout, busyPhoto: read?.background_clutter === 'high', settings, date: row.date, dish: row.dish,
+    quote, reviewer, slides, hook: row.content?.reel_cover_text?.trim() || row.custom?.hook?.trim() || copy.versions?.reel_cover_text?.trim() || (copy.on_screen_text[0] ?? null),
+    photo: heroPhoto, storyPhoto, slidePhotos, cutout: cut.cutout, busyPhoto: read?.background_clutter === 'high', settings, date: row.date, dish: row.dish, invite: row.invite,
   };
 
   // Two dishes in one design: its layout is fixed, so the art director and the critic have nothing to decide.

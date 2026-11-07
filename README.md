@@ -247,12 +247,26 @@ also shapes the story (invite's story is the band story).
 The pack's `design.json` and the Telegram line "🎨 Layout B · text bottom-left · type ×1.10 · …" say what was
 decided and why. `DESIGN_CRITIQUE=0` turns the critic off.
 
+**The step-by-step builder** (`web/src/components/PostBuilder.tsx`, used by Create → New design and by each day's
+page through `DayBuilder.tsx`). A post is six named parts: series label, title and line under it (on the design), then
+caption, call to action and hashtags (posted with it). A reel is series label, cover text and the text over the video,
+then the same three. Each part is one step, numbered on a sketch of the design. Its dropdown lists the words that belong
+to the product: the post's own (calendar and writer), the product's saved captions, the series' hooks, the CTA, hashtag
+and benefit-caption libraries. "Write my own" and, in Create, "Let the agent write it" are also in the list, and the
+chosen words can be edited. The Look step picks a style. For Invite it also sets the date shown, the time and the
+message over the time (`calendar_rows.invite`, migration 0015), printed on the feed post and the story. "Preview on the
+photo" (`POST /api/preview`, `src/pipeline/preview.ts`) draws the real design with those words, without Claude or the
+cutout, and stores nothing. On a day's page, saving sends only the changed parts (`POST /api/rows/:dayNo/parts`,
+`setPostParts`), and the design is made again once. With nothing changed, the same button makes the design again
+(`POST /api/rows/:dayNo/remake`) with an optional note for the art director. Carousels and reviews keep the full page.
+
 **Custom designs** (web app, Create → New design): a one-off post outside the monthly plan. The flow asks for the
 product (the menu plus every item in the wording bank), the series (the hero-photo templates: label and footer; the product's menu category suggests one, FRESH POUR for
 drinks and SAVE ROOM for sweets),
 the title and writing (the product's wordings from the bank, the house ones, your own words, or let the agent
 write it), the style (the art director's choice or one of the five, locked), feed and/or story with the date and
-time, and the photo (a new upload or one already received, which keeps its crops and cut-out). It becomes a
+time, and the photo (a new upload or one already received, which keeps its crops and cut-out); a reel makes only its
+cover and pack, with the cover text and text cards the owner chose. It becomes a
 calendar row in the running plan numbered from 101 (`type` custom, `custom` jsonb, `src/pipeline/custom.ts`), so
 the ordinary pipeline, Day page, reminders, `/redo 101 …` and the Telegram pack all apply; the owner's wording is
 used as given with no wording question, and only the formats asked for are kept. The title of a design is the
