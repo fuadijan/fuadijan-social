@@ -177,13 +177,21 @@ export async function seedRows(pool: pg.Pool, rows: SheetRow[], calendarStart: s
     const onDate = new Map<string, number>();
     for (const sheetRow of rows) {
       const date = offset ? addDays(sheetRow.date, offset) : sheetRow.date;
-      // A sheet with only dates: the post already on that date (the nth of that date), else the next free day.
+      // A sheet with only dates: the post with the same PostID, else the post already on that date (the nth of that
+      // date) that no other PostID holds, else the next free day. So a second post on a date is added beside the first.
       let dayNo = sheetRow.day_no;
       if (sheetRow.by_date) {
-        const nth = onDate.get(date) ?? 0;
-        onDate.set(date, nth + 1);
-        const same = (await c.query<{ day_no: number }>("select day_no from calendar_rows where plan = $1 and date = $2 and custom is null order by (status = 'planned') desc, day_no", [plan, date])).rows[nth];
-        dayNo = same?.day_no ?? (await c.query<{ n: number }>('select coalesce(max(day_no), 0)::int + 1 as n from calendar_rows where plan = $1 and day_no < 101', [plan])).rows[0]!.n;
+        const postId = (sheetRow.content as { content_id?: string } | null)?.content_id?.trim() || null;
+        const named = postId ? (await c.query<{ day_no: number }>("select day_no from calendar_rows where plan = $1 and custom is null and content->>'content_id' = $2 order by day_no", [plan, postId])).rows[0] : undefined;
+        if (named) dayNo = named.day_no;
+        else {
+          const nth = onDate.get(date) ?? 0;
+          onDate.set(date, nth + 1);
+          const same = (await c.query<{ day_no: number }>(
+            "select day_no from calendar_rows where plan = $1 and date = $2 and custom is null and ($3::text is null or coalesce(content->>'content_id', '') = '') order by (status = 'planned') desc, day_no",
+            [plan, date, postId])).rows[nth];
+          dayNo = same?.day_no ?? (await c.query<{ n: number }>('select coalesce(max(day_no), 0)::int + 1 as n from calendar_rows where plan = $1 and day_no < 101', [plan])).rows[0]!.n;
+        }
       }
       const r = { ...sheetRow, day_no: dayNo };
       const existing = (await c.query<Record<string, unknown> & { id: number }>(

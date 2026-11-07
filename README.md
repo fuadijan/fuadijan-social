@@ -121,7 +121,8 @@ names the post's campaign. `Products` (ProductID | Product Name | Category | Sta
 including what is not on the menu yet (active, coming soon, planned, retired): a roster product is offered in
 Create and `/custom` with its series, so a launch can be posted about before the dish reaches the website, and a
 row's `dish` may be a ProductID. Series are the hero-photo labels (FROM THE FIRE, FROM THE KARAHI, MODERN
-FUADIJAN, ROOTED IN TRADITION, FRESH POUR, SAVE ROOM, FROM THE CHARCOAL SEA for seafood). `npm run
+FUADIJAN, ROOTED IN TRADITION, FRESH POUR, SAVE ROOM, FROM THE CHARCOAL SEA for seafood, FROM THE TAWA for
+parathas). `npm run
 template-workbook` brings the template's sheets, dropdowns and notes up to date with the code.
 
 **The planning documents.** The owner's planning pack arrives as separate workbooks and each loads on its own:
@@ -142,7 +143,9 @@ Goal, Funnel Stage, KPI, Priority). What the owner wrote is used as written, inc
 product's name and more than five hashtags; what is blank the writer drafts from the same facts when the photo
 arrives, with no new claims. The Day page shows the set under "Every platform" and the pack adds `platforms.txt`.
 `Day` may be a number or a weekday: a weekday is checked against the date, and a sheet with only dates finds each
-post by its date, so a partial sheet never lands on the wrong day (an unstarted post on that date first).
+post by its PostID, else by its date, so a partial sheet never lands on the wrong day (an unstarted post on that
+date first). A record with a new PostID on a date that already has a post (a launch teaser, `POST-20261111-T`) is
+added beside that post, never laid over it.
 A sheet called `Operational Calendar` is read as the Calendar, ids may be hyphenated (`PRD-07`), and a product's
 launch date and notes reach the writer, so an upcoming dish is never written up as on sale. The planning
 sheets (Business Vision, Brand Positioning, Content Pillars, Annual Roadmap, 12-Week Roadmap, the hook, CTA, hashtag

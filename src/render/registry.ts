@@ -27,6 +27,7 @@ const REGISTRY: Record<string, Entry> = {
   'save-room': { key: 'hero-photo', footer: 'address', label: 'SAVE ROOM' },
   'fresh-pour': { key: 'hero-photo', footer: 'brand', label: 'FRESH POUR' },
   'from-the-charcoal-sea': { key: 'hero-photo', footer: 'brand', label: 'FROM THE CHARCOAL SEA' },
+  'from-the-tawa': { key: 'hero-photo', footer: 'brand', label: 'FROM THE TAWA' },
   'what-we-ate-today': { key: 'hero-photo', footer: 'brand', label: 'WHAT WE ATE TODAY' },
   'for-our-customers': { key: 'hero-photo', footer: 'address', label: 'FOR OUR CUSTOMERS' },
   'you-said-it-photo': { key: 'hero-photo', footer: 'address', label: 'YOU SAID IT' },
@@ -79,13 +80,14 @@ const DRINK = /juice|lassi|chai|shake|drink|beverage|cola|soda|mocktail|coconut 
 const SWEET = /kheer|gulab|jamun|dessert|sweet|mithai|nutella|halwa|falooda|ice cream|rasmalai/i;
 const KARAHI = /karahi|curr|nihari|haleem|daal|\bdal\b/i;
 const MODERN = /burger|wrap|\broll\b|snack|shami/i;
+const TAWA = /paratha|\btawa\b/i;
 
-/** The series a custom post starts from: seafood from the charcoal sea, drinks pour, sweets save room, karahis and curries from the karahi, burgers and snacks modern, else the first hero series. */
+/** The series a custom post starts from: seafood from the charcoal sea, drinks pour, sweets save room (a Nutella Paratha too), other parathas from the tawa, karahis and curries from the karahi, burgers and snacks modern, else the first hero series. */
 export function suggestedTemplate(product: string, category?: string | null): string {
   const hay = `${category ?? ''} ${product}`;
   const all = heroTemplates();
   const by = (re: RegExp, label: string) => (re.test(hay) ? all.find((t) => t.label === label)?.template ?? null : null);
-  return by(SEAFOOD, 'FROM THE CHARCOAL SEA') ?? by(DRINK, 'FRESH POUR') ?? by(SWEET, 'SAVE ROOM') ?? by(KARAHI, 'FROM THE KARAHI') ?? by(MODERN, 'MODERN FUADIJAN') ?? all[0]!.template;
+  return by(SEAFOOD, 'FROM THE CHARCOAL SEA') ?? by(DRINK, 'FRESH POUR') ?? by(SWEET, 'SAVE ROOM') ?? by(TAWA, 'FROM THE TAWA') ?? by(KARAHI, 'FROM THE KARAHI') ?? by(MODERN, 'MODERN FUADIJAN') ?? all[0]!.template;
 }
 
 /**

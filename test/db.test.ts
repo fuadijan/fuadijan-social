@@ -341,6 +341,20 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     const c26 = (await rowByDay(pool, 1, '2027-05'))!;
     expect([c26.dish, c26.benefit, c26.template, c26.content?.content_id, c26.content?.facebook_hashtags]).toEqual(['BBQ Prawns', 'More choice', 'you-said-it-photo', 'C26', '#Fuadijan #Seafood']);
     expect(c26.campaign_id).toBe((await findCampaign(pool, 'CMP-03'))!.id);
+    // A second post on the same date, with its own PostID, is added beside the first and never laid over it, whatever
+    // order the sheet gives them in and whichever has started.
+    const twoHead = ['ContentID', 'Date', 'Day', 'ProductID', 'Series', 'Format', 'Hook'];
+    const c26row = ['C26', '2027-05-04', 'Tuesday', 'PRD-08', 'YOU SAID IT', 'Reel', 'Coming soon.'];
+    const teaser = ['C26-T', '2027-05-04', 'Tuesday', 'PRD-08', 'FROM THE TAWA', 'Reel', 'Guess what.'];
+    await writeWorkbook(ops, [{ name: 'Operational Calendar', rows: [twoHead, c26row, teaser] }]);
+    expect(await loadWorkbook(pool, ops, { keepStarted: true })).toMatchObject({ inserted: 1 });
+    const t = (await rowByDay(pool, 2, '2027-05'))!;
+    expect([t.date, t.content?.content_id, t.theme, t.template]).toEqual(['2027-05-04', 'C26-T', 'Guess what.', 'from-the-tawa']);
+    expect((await rowByDay(pool, 1, '2027-05'))!.content?.content_id).toBe('C26');
+    await pool.query("update calendar_rows set status = 'ready' where id = $1", [c26.id]);
+    await writeWorkbook(ops, [{ name: 'Operational Calendar', rows: [twoHead, teaser, c26row] }]);
+    expect(await loadWorkbook(pool, ops, { keepStarted: true })).toMatchObject({ inserted: 0, kept: [1] });
+    expect([(await rowByDay(pool, 1, '2027-05'))!.theme, (await rowByDay(pool, 2, '2027-05'))!.theme]).toEqual(['Coming soon.', 'Guess what.']);
     // A retired post is gone from every list, its day number is free, and its plan is no longer a plan.
     const { plans, rowsBetween: between, rowsOnDate } = await import('../src/calendar/rows.js');
     await pool.query("update calendar_rows set retired_at = now(), plan = 'retired-' || plan where plan = '2027-04'");
