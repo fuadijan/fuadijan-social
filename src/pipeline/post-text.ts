@@ -7,7 +7,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ResolvedCopy } from '../brain/schemas.js';
 import { platformVersions, platformsTxt, type RecordField } from '../calendar/record.js';
-import { editField, postAbout, recordEdit, rowById, type CalendarRow, type EditSource } from '../calendar/rows.js';
+import { editField, postAbout, recordEdit, reelClips, rowById, setClips, type CalendarRow, type EditSource } from '../calendar/rows.js';
 import type { Db } from '../db/pool.js';
 import { allSettings } from '../settings.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
@@ -77,10 +77,10 @@ async function refreshPack(db: Db, row: CalendarRow, copy: ResolvedCopy): Promis
   const s = await allSettings(db);
   const settings = { storeAddress: s.store_address ?? '', openHours: s.open_hours ?? '', websiteUrl: s.website_url ?? '', instagramHandle: s.instagram_handle ?? '@fuadijan' };
   const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
-  const clips = Number((await db.query<{ n: string }>("select count(*) n from assets where calendar_row_id = $1 and kind = 'video'", [row.id])).rows[0]!.n);
+  const clips = await reelClips(db, row);
   const captionText = captionTxt(row, copy, settings, postTime);
   const brief = canvaBriefTxt(row, copy, settings, pack.sources.layout ?? 'B', { feed: 'crop-4x5.jpg', story: 'crop-9x16.jpg' });
-  const reelText = row.slot === 'reel' ? reelPackTxt(row, copy, clips) : null;
+  const reelText = row.slot === 'reel' ? reelPackTxt(row, copy, clips.received, clips.picked) : null;
   const platforms = platformVersions(row, copy);
   await db.query(
     'update packs set caption = $2, cta = $3, hashtags = $4, alt_text = $5, story_text = $6, facebook_caption = $7, caption_txt = $8, canva_brief = $9, reel_pack_txt = $10, platforms = $11 where id = $1',
@@ -253,4 +253,12 @@ export async function setPostParts(db: Db, row: CalendarRow, parts: Partial<Reco
   const made = ((await db.query('select 1 from packs where calendar_row_id = $1 limit 1', [row.id])).rowCount ?? 0) > 0;
   if (!made) return { rebuilding: false, changed };
   return { rebuilding: Boolean(await rerenderRow(db, row.id, { note: look?.note ?? undefined })), changed };
+}
+
+/** The clips picked for a reel, saved in order; the reel pack lists them at once (no design is made again). */
+export async function setReelClips(db: Db, row: CalendarRow, ids: number[], source: EditSource): Promise<number[] | null> {
+  const clips = await setClips(db, row, ids, source);
+  const job = await latestJobWithCopy(db, row.id);
+  if (job) await refreshPack(db, (await rowById(db, row.id))!, job.copy);
+  return clips;
 }

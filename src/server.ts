@@ -33,7 +33,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
  */
 export function contentSecurityPolicy(inlineScriptHashes: string[]): string {
   const scripts = ["'self'", ...inlineScriptHashes.map((h) => `'sha256-${h}'`)].join(' ');
-  return `default-src 'self'; script-src ${scripts}; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`;
+  return `default-src 'self'; script-src ${scripts}; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`;
 }
 
 /** sha256 (base64) of every inline <script> body in an HTML file, for the CSP. */

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { AppContext } from '../context.js';
 import { MatchResult, ResolvedCopy, type Unresolved } from '../brain/schemas.js';
 import { matchPrompt, resolvePrompt } from '../brain/prompts.js';
-import { allRows, daySlug, postAbout, rowByDay, rowById, rowsBetween, seriesLabel, setStatus, type CalendarRow } from '../calendar/rows.js';
+import { allRows, daySlug, postAbout, reelClips, rowByDay, rowById, rowsBetween, seriesLabel, setStatus, type CalendarRow } from '../calendar/rows.js';
 import { getFile, putFile } from '../files.js';
 import { crop, cropAround, decode, measure, thumbnail, type Quality } from '../images/prep.js';
 import { hasTag, parseCaption, type ParsedCaption } from '../intake/caption.js';
@@ -431,7 +431,7 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
   const s = await allSettings(ctx.pool);
   const settings = { storeAddress: s.store_address ?? '', openHours: s.open_hours ?? '', websiteUrl: s.website_url ?? '', instagramHandle: s.instagram_handle ?? '@fuadijan' };
   const postTime = postTimeFor(row, { post: s.post_time_default ?? '18:00', story: s.story_time_default ?? '12:00' });
-  const clips = Number((await ctx.pool.query<{ n: string }>("select count(*) n from assets where calendar_row_id = $1 and kind = 'video'", [row.id])).rows[0]!.n);
+  const clips = await reelClips(ctx.pool, row);
 
   const assets = (await ctx.pool.query<Asset>('select * from assets where calendar_row_id = $1 order by created_at', [row.id])).rows;
   const hero = ctx.asset?.prepped ? ctx.asset : assets.find((a) => a.prepped);
@@ -445,7 +445,7 @@ export async function pack(ctx: StageContext): Promise<Outcome> {
   mkdirSync(folder, { recursive: true });
   const captionText = captionTxt(row, copy, settings, postTime);
   const brief = canvaBriefTxt(row, copy, settings, layout, { feed: 'crop-4x5.jpg', story: 'crop-9x16.jpg' });
-  const reelText = row.slot === 'reel' ? reelPackTxt(row, copy, clips) : null;
+  const reelText = row.slot === 'reel' ? reelPackTxt(row, copy, clips.received, clips.picked) : null;
   writeFileSync(join(folder, 'caption.txt'), captionText);
   writeFileSync(join(folder, 'canva-brief.txt'), brief);
   if (reelText) writeFileSync(join(folder, 'reel-pack.txt'), reelText);

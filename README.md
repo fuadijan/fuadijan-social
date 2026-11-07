@@ -159,6 +159,13 @@ day number, and nothing is erased (rows, photos, designs and packs stay). The St
 documents, the old plan can no longer be re-applied, and `brand/strategy.json` supplies only the voice rules once
 they are loaded.
 
+**A reel's clips and cover.** On a reel day's page, "Video for the reel" lists the clips received; the owner taps
+them in the order they go in the reel (`calendar_rows.clips`, `POST /api/rows/:dayNo/clips`), and the reel pack lists
+them. A clip is never kept: the web upload sends only its name and a still the browser takes about a second in
+(`assets.still_file_id`, migration 0016; the CSP allows `media-src blob:` for this). Clips sent to the bot have no
+still and show as ▶ with their name. The reel's cover is still made from a photo ("Photo for the cover"); a post day
+picks photos only.
+
 **Two photos in one design.** Two different dishes that look alike once cooked can share a design: on the Day page the
 owner picks two received photos and names each (`calendar_rows.design_photos`, `src/render/pair.ts`). The feed shows
 them side by side, the story and reel cover stacked, each with its dish's name on it and the words below, off the food.

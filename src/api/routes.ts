@@ -9,12 +9,12 @@ import type { AppContext } from '../context.js';
 import { EDITABLE_FIELDS, allRows, cleanInvite, setInvite, currentPlan, editField, markPosted, plans, pushRow, recordEdit, rowByDay, rowTitle, rowsBetween, seriesLabel, skipRow, type CalendarRow, type EditableField } from '../calendar/rows.js';
 import { receiveAsset } from '../pipeline/worker.js';
 import { redoRow } from '../pipeline/worker.js';
-import { getFile } from '../files.js';
+import { getFile, putFile } from '../files.js';
 import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
 import { addOwnerOption, allCopyOptions, copyOptionsById, latestCopyOptions, markChosen, remakeNote, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from '../pipeline/wording.js';
-import { POST_PARTS, POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostParts, setPostText, spreadSloganEdit, spreadSloganLink, type PostPart, type PostTextField } from '../pipeline/post-text.js';
+import { POST_PARTS, POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostParts, setPostText, setReelClips, spreadSloganEdit, spreadSloganLink, type PostPart, type PostTextField } from '../pipeline/post-text.js';
 import { parsePreviewInput, previewDesign } from '../pipeline/preview.js';
 import { loadBrand } from '../render/brand.js';
 import { WORDING_LIBRARIES, wordingsView } from '../wordings-view.js';
@@ -75,8 +75,8 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
     const [v] = await rowViews(ctx, [row]);
     const qs = await openQuestions(ctx.pool, row.id);
-    const assets = (await ctx.pool.query<{ id: number; kind: string; caption_raw: string | null; prepped: Record<string, string> | null; original_file_id: string | null; created_at: Date; quality: unknown }>(
-      'select id, kind, caption_raw, prepped, original_file_id, created_at, quality from assets where calendar_row_id = $1 order by created_at', [row.id])).rows;
+    const assets = (await ctx.pool.query<{ id: number; kind: string; filename: string | null; caption_raw: string | null; prepped: Record<string, string> | null; original_file_id: string | null; still_file_id: string | null; created_at: Date; quality: unknown }>(
+      'select id, kind, filename, caption_raw, prepped, original_file_id, still_file_id, created_at, quality from assets where calendar_row_id = $1 order by created_at', [row.id])).rows;
     const pack = (await ctx.pool.query<{ id: number; caption: string; cta: string | null; hashtags: string[]; alt_text: string | null; story_text: string | null; facebook_caption: string | null; reel_pack_txt: string | null; canva_brief: string; caption_txt: string; folder: string; sources: { crops?: Record<string, string> }; created_at: Date }>(
       'select id, caption, cta, hashtags, alt_text, story_text, facebook_caption, reel_pack_txt, canva_brief, caption_txt, folder, sources, platforms, created_at from packs where calendar_row_id = $1 order by created_at desc limit 1', [row.id])).rows[0] ?? null;
     const renders = (await ctx.pool.query<{ id: number; format: string; page: number | null; file_id: string }>('select id, format, page, file_id from renders where calendar_row_id = $1 order by format, page', [row.id])).rows;
@@ -92,7 +92,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       wordingWaiting: qs.some((q) => q.field === 'wording'),
       // The finished set once a pack exists; before that, what the record already says.
       platforms: (pack as { platforms?: PlatformVersions | null } | undefined)?.platforms ?? (row.content ? platformVersions(row, null) : null),
-      assets: assets.map((a) => ({ id: a.id, kind: a.kind, caption: a.caption_raw, thumb: a.prepped?.thumb ?? a.prepped?.['1x1'] ?? a.original_file_id, crops: a.prepped, createdAt: a.created_at, quality: a.quality })),
+      assets: assets.map((a) => ({ id: a.id, kind: a.kind, caption: a.caption_raw, filename: a.filename, thumb: a.prepped?.thumb ?? a.prepped?.['1x1'] ?? a.still_file_id ?? a.original_file_id, crops: a.prepped, createdAt: a.created_at, quality: a.quality })),
       pack: pack && { ...pack, crops: pack.sources.crops ?? {} },
       renders,
       edits,
@@ -182,6 +182,15 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const job = await rerenderRow(ctx.pool, row.id, { note: remakeNote(style, req.body?.note) ?? undefined });
     if (!job) return reply.code(400).send({ ok: false, error: 'There is no design to make again yet: it is made when the photo arrives.' });
     return { ok: true, message: 'Making the design again with the same words. About a minute.', rebuilding: true };
+  });
+
+  /** The clips picked for a reel, in order; the reel pack lists them. */
+  app.post<{ Params: { dayNo: string }; Body: { clips?: unknown } }>('/api/rows/:dayNo/clips', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const ids = Array.isArray(req.body?.clips) ? req.body.clips.filter((x): x is number => Number.isInteger(x)) : [];
+    const clips = await setReelClips(ctx.pool, row, ids, 'owner-web');
+    return { ok: true, clips, message: clips ? `${clips.length === 1 ? 'This clip is' : `These ${clips.length} clips are`} the reel's, in this order. The reel pack lists them.` : 'No clip picked.' };
   });
 
   /** The real preview: the chosen words on the chosen photo, drawn the way the design draws them; nothing is stored. */
@@ -300,20 +309,27 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
     if (!req.isMultipart()) return reply.code(400).send({ ok: false, error: 'multipart/form-data expected' });
     let caption = '';
-    const files: { bytes: Buffer; mime: string; filename: string }[] = [];
+    const files: { bytes: Buffer; mime: string; filename: string; field: string }[] = [];
+    // A clip's still comes as `still-<n>`: n is the clip's place among the `file` parts.
+    const stills = new Map<number, Buffer>();
     for await (const part of req.parts()) {
       if (part.type === 'file') {
         const bytes = await part.toBuffer();
-        if (bytes.length) files.push({ bytes, mime: part.mimetype, filename: part.filename });
+        const still = part.fieldname.match(/^still-(\d+)$/);
+        if (still && bytes.length && part.mimetype.startsWith('image/')) stills.set(Number(still[1]), bytes);
+        // A clip comes without its bytes (they are never kept): its name and type are enough.
+        else if (bytes.length || part.mimetype.startsWith('video/')) files.push({ bytes, mime: part.mimetype, filename: part.filename, field: part.fieldname });
       } else if (part.fieldname === 'caption') caption = String(part.value ?? '').trim();
     }
     if (!files.length) return reply.code(400).send({ ok: false, error: 'No file' });
     const base = caption || (row.dish && !row.dish.startsWith('[') ? row.dish.split(',')[0]!.toLowerCase() : (row.theme ?? 'photo').toLowerCase());
     const withDay = /#day\d+/i.test(base) ? base : `${base} #day${row.day_no}`;
     const ids: number[] = [];
-    for (const f of files) {
+    for (const [i, f] of files.entries()) {
       const isVideo = f.mime.startsWith('video/');
       const { asset } = await receiveAsset(ctx.pool, { kind: isVideo ? 'video' : 'document', bytes: isVideo ? undefined : f.bytes, mime: f.mime, filename: f.filename, caption: withDay });
+      const still = isVideo ? stills.get(i) : undefined;
+      if (still) await ctx.pool.query('update assets set still_file_id = $2 where id = $1', [asset.id, await putFile(ctx.pool, still, 'image/jpeg')]);
       ids.push(asset.id);
     }
     return { ok: true, assetIds: ids, caption: withDay };

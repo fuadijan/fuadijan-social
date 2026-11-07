@@ -10,7 +10,7 @@ import '../src/config.js';
 import { createDatabaseIfMissing, createPool } from '../src/db/pool.js';
 import { migrate } from '../src/db/migrate.js';
 import { readWorkbook, seedRows, WORKBOOK_PATH } from '../calendar/seed.js';
-import { allRows, editField, markPosted, pushRow, rowByDay, skipRow } from '../src/calendar/rows.js';
+import { allRows, editField, markPosted, pushRow, rowByDay, rowById, skipRow } from '../src/calendar/rows.js';
 import { FixtureClaude } from '../src/brain/client.js';
 import type { AppContext } from '../src/context.js';
 import { FileMenuSource } from '../src/menu/index.js';
@@ -45,7 +45,7 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
   afterAll(() => pool.end());
 
   it('migrates once, then reports up to date', async () => {
-    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql', '0012_design_photos.sql', '0013_reference_edits.sql', '0014_slogan_items.sql', '0015_invite.sql']);
+    expect(await migrate(pool, () => {})).toEqual(['0001_init.sql', '0002_asset_match.sql', '0003_copy_options.sql', '0004_slogans.sql', '0005_plans.sql', '0006_custom.sql', '0007_campaigns_products.sql', '0008_benefits_objective.sql', '0009_post_record.sql', '0010_knowledge_base.sql', '0011_retire_old_plan.sql', '0012_design_photos.sql', '0013_reference_edits.sql', '0014_slogan_items.sql', '0015_invite.sql', '0016_reel_clips.sql']);
     expect(await migrate(pool, () => {})).toEqual([]);
   });
 
@@ -609,6 +609,22 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     await new Worker(ctx, 1000).drain();
     expect((await pool.query('select stage, status from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]).toEqual({ stage: 'done', status: 'done' });
     await setInvite(pool, (await rowByDay(pool, 2))!, null, 'owner-web');
+  });
+
+  it("keeps the clips picked for a reel, in order, and the reel pack lists them", async () => {
+    const { setReelClips } = await import('../src/pipeline/post-text.js');
+    const reel = (await allRows(pool)).find((r) => r.slot === 'reel')!;
+    const a = (await receiveAsset(pool, { kind: 'video', mime: 'video/mp4', filename: 'IMG_0001.MOV', caption: `karahi #day${reel.day_no}` })).asset;
+    const b = (await receiveAsset(pool, { kind: 'video', mime: 'video/mp4', filename: 'IMG_0002.MOV', caption: `karahi #day${reel.day_no}` })).asset;
+    await new Worker(ctx, 1000).drain();
+    expect((await pool.query('select count(*)::int n from assets where id = any($1) and calendar_row_id = $2', [[a.id, b.id], reel.id])).rows[0]!.n).toBe(2);
+    // Picked second clip first; an id that is not this reel's clip is dropped.
+    expect(await setReelClips(pool, (await rowById(pool, reel.id))!, [b.id, a.id, 999999], 'owner-web')).toEqual([b.id, a.id]);
+    const { reelClips } = await import('../src/calendar/rows.js');
+    expect((await reelClips(pool, (await rowById(pool, reel.id))!)).picked).toEqual(['IMG_0002.MOV', 'IMG_0001.MOV']);
+    const pack = (await pool.query<{ reel_pack_txt: string | null }>('select reel_pack_txt from packs where calendar_row_id = $1 order by created_at desc limit 1', [reel.id])).rows[0];
+    if (pack) expect(pack.reel_pack_txt).toContain(['Clips for the reel, in order:', '  1) IMG_0002.MOV', '  2) IMG_0001.MOV'].join(String.fromCharCode(10)));
+    expect(await setReelClips(pool, (await rowById(pool, reel.id))!, [], 'owner-web')).toBeNull();
   });
 
   it('previews the words on a photo without making or keeping anything', async () => {

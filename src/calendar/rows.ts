@@ -47,6 +47,24 @@ export function cleanInvite(v: unknown): InviteDetails | null {
   return out.date || out.time || out.message ? out : null;
 }
 
+/** The clips on a reel's row: how many were received, and the picked ones' names in order. */
+export async function reelClips(db: Db, row: CalendarRow): Promise<{ received: number; picked: string[] }> {
+  const { rows } = await db.query<{ id: number; filename: string | null; caption_raw: string | null }>("select id, filename, caption_raw from assets where calendar_row_id = $1 and kind = 'video' order by created_at", [row.id]);
+  const name = (a: { id: number; filename: string | null; caption_raw: string | null }) => a.filename || a.caption_raw?.replace(/#\S+/g, '').trim() || `clip ${a.id}`;
+  const picked = (row.clips ?? []).map((id) => rows.find((a) => a.id === id)).filter((a): a is (typeof rows)[number] => Boolean(a)).map(name);
+  return { received: rows.length, picked };
+}
+
+/** The clips picked for a reel, in order: only this row's videos; an empty pick is null. */
+export async function setClips(db: Db, row: CalendarRow, ids: number[], source: EditSource): Promise<number[] | null> {
+  const own = new Set((await db.query<{ id: number }>("select id from assets where calendar_row_id = $1 and kind = 'video'", [row.id])).rows.map((r) => r.id));
+  const clips = [...new Set(ids)].filter((id) => own.has(id));
+  const value = clips.length ? clips : null;
+  await db.query('update calendar_rows set clips = $2, updated_at = now() where id = $1', [row.id, value ? JSON.stringify(value) : null]);
+  await recordEdit(db, row.id, 'clips', row.clips?.length ? row.clips.join(', ') : null, value ? value.join(', ') : null, source);
+  return value;
+}
+
 /** Saves what the Invite style prints for a post, and notes the change. */
 export async function setInvite(db: Db, row: CalendarRow, invite: InviteDetails | null, source: EditSource): Promise<boolean> {
   if (JSON.stringify(row.invite ?? null) === JSON.stringify(invite)) return false;
@@ -90,6 +108,8 @@ export interface CalendarRow {
   design_photos: DesignPhoto[] | null;
   /** What the Invite style prints, when the owner set it. */
   invite?: InviteDetails | null;
+  /** The clips picked for a reel, in order (video asset ids); null until the owner picks. */
+  clips?: number[] | null;
   posted_at: Date | null;
   updated_at: Date;
 }
@@ -98,7 +118,7 @@ export interface CalendarRow {
 export const EDITABLE_FIELDS = ['dish', 'caption', 'cta', 'hashtags', 'story_ideas', 'post_time', 'on_screen_text', 'creative_instructions', 'theme', 'objective', 'confirmation_notes'] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
-const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, content, design_photos, invite, posted_at, updated_at';
+const COLS = 'id, plan, day_no, to_char(date, \'YYYY-MM-DD\') as date, slot, type, dish, theme, caption_hint, to_char(post_time, \'HH24:MI\') as post_time, template, status, asset, objective, creative_instructions, on_screen_text, caption, cta, hashtags, story_ideas, confirmation_notes, custom, campaign_id, benefit, content, design_photos, invite, clips, posted_at, updated_at';
 
 /** Every plan with its first and last date, oldest first. */
 export async function plans(db: Db): Promise<{ plan: string; first: IsoDate; last: IsoDate; rows: number }[]> {

@@ -93,12 +93,48 @@ export const patchRow = (dayNo: number, field: EditableField, value: string, red
  * Cut 2: photos or clips from the phone, through the same intake pipeline as Telegram. The caption follows the
  * Telegram convention ("dish -- note #tags"); empty means the server uses the day's dish and adds #dayN.
  */
-export function uploadToDay(dayNo: number, files: File[], caption: string): Promise<UploadResponse> {
+export async function uploadToDay(dayNo: number, files: File[], caption: string): Promise<UploadResponse> {
   const form = new FormData();
-  for (const f of files) form.append('file', f, f.name);
+  for (const [i, f] of files.entries()) {
+    if (!f.type.startsWith('video/')) {
+      form.append('file', f, f.name);
+      continue;
+    }
+    // A clip is never kept: only its name, and a still to recognise it by.
+    form.append('file', new File([], f.name, { type: f.type }), f.name);
+    const still = await videoStill(f);
+    if (still) form.append(`still-${i}`, still, `${f.name}.jpg`);
+  }
   form.append('caption', caption);
   return apiFetch<UploadResponse>(`/api/rows/${dayNo}/upload`, { method: 'POST', body: form });
 }
+
+/** A still from a clip, about a second in, made in the browser; null when the browser cannot play the clip. */
+export function videoStill(file: File, width = 480): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    const done = (b: Blob | null) => { URL.revokeObjectURL(url); resolve(b); };
+    const timer = window.setTimeout(() => done(null), 10_000);
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.onerror = () => { window.clearTimeout(timer); done(null); };
+    video.onloadedmetadata = () => { video.currentTime = Math.min(1, (video.duration || 2) / 3); };
+    video.onseeked = () => {
+      window.clearTimeout(timer);
+      const scale = width / (video.videoWidth || width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round((video.videoWidth || width) * scale);
+      canvas.height = Math.round((video.videoHeight || width) * scale);
+      canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((b) => done(b), 'image/jpeg', 0.85);
+    };
+    video.src = url;
+  });
+}
+
+export const setReelClips = (dayNo: number, clips: number[]) => post<{ ok: true; clips: number[] | null; message: string }>(`/api/rows/${dayNo}/clips`, { clips });
 
 /** Image bytes for a stored file id. */
 export const fileUrl = (fileId: string) => `/api/files/${fileId}`;

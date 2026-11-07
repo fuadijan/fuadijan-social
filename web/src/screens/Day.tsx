@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
-import { fileUrl, getDay, markPosted, packTextUrl, pushDay, setDesignPhotos, skipDay } from '../api';
+import { fileUrl, getDay, markPosted, packTextUrl, pushDay, setDesignPhotos, setReelClips, skipDay } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
 import { CopyButton } from '../components/CopyButton';
 import { DayBuilder, RemakeDesign, canBuild } from '../components/DayBuilder';
@@ -215,7 +215,7 @@ function Thumb({ a }: { a: Asset }) {
   return (
     <figure className={cls} title={title}>
       {isVideo ? (
-        <span className="sa-thumb-kind" aria-label="video clip">▶</span>
+        a.thumb ? <span className="sa-clip-still"><img src={fileUrl(a.thumb)} alt={a.filename ?? 'video clip'} loading="lazy" /><span className="sa-clip-play" aria-hidden="true">▶</span></span> : <span className="sa-thumb-kind" aria-label="video clip">▶</span>
       ) : a.thumb ? (
         <a href={fileUrl(a.thumb)} target="_blank" rel="noreferrer"><img src={fileUrl(a.thumb)} alt={a.caption ?? `${a.kind} ${a.id}`} loading="lazy" /></a>
       ) : (
@@ -224,6 +224,62 @@ function Thumb({ a }: { a: Asset }) {
       {flagged && note ? <span className="sa-thumb-note">{note}</span> : null}
       {a.caption ? <figcaption className="sa-thumb-cap">{a.caption}</figcaption> : null}
     </figure>
+  );
+}
+
+/**
+ * A reel's clips, picked in the order they go in the reel. The clips themselves stay on the phone (Instagram takes
+ * them from there); the pick goes into the reel pack, so the order is written down.
+ */
+function ClipPicker({ d, reload }: { d: DayResponse; reload: Reload }) {
+  const clips = d.assets.filter((a) => a.kind === 'video');
+  const [picked, setPicked] = useState<number[]>(() => d.row.clips ?? []);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ text: string; error?: boolean } | null>(null);
+  const saved = JSON.stringify(d.row.clips ?? []) === JSON.stringify(picked);
+  const nameOf = (a: Asset) => a.filename || (a.caption ?? '').replace(/#\S+/g, '').trim() || `Clip ${a.id}`;
+  async function save() {
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await setReelClips(d.dayNo, picked);
+      setResult({ text: r.message });
+      await reload();
+    } catch (e) {
+      setResult({ text: e instanceof Error ? e.message : String(e), error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="sa-field">
+      <div className="sa-eyebrow">Video for the reel</div>
+      {clips.length === 0 ? (
+        <div className="sa-note">No clips yet. Add them above (only their name and a still are kept), or send them to the bot.</div>
+      ) : (
+        <>
+          <div className="sa-note">Tap the clips in the order they go in the reel. The clips stay on your phone; the reel pack lists your pick.</div>
+          <div className="sa-photo-pick">
+            {clips.map((a) => {
+              const n = picked.indexOf(a.id);
+              return (
+                <div key={a.id} className={`sa-photo-choice${n >= 0 ? ' sa-photo-choice--on' : ''}`}>
+                  <button type="button" aria-pressed={n >= 0} disabled={busy} onClick={() => { setResult(null); setPicked((now) => (now.includes(a.id) ? now.filter((x) => x !== a.id) : [...now, a.id])); }}>
+                    {a.thumb ? <span className="sa-clip-still"><img src={fileUrl(a.thumb)} alt={nameOf(a)} loading="lazy" /><span className="sa-clip-play" aria-hidden="true">▶</span></span> : <span className="sa-clip-none">▶</span>}
+                    {n >= 0 ? <span className="sa-clip-order fj-numeric">{n + 1}</span> : null}
+                  </button>
+                  <div className="sa-clip-name">{nameOf(a)}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="sa-actions sa-editor-actions">
+            <Button variant="secondary" size="sm" disabled={busy || saved} onClick={() => void save()}>{busy ? 'Saving…' : picked.length > 1 ? `Use these ${picked.length} clips` : picked.length ? 'Use this clip' : 'Clear the pick'}</Button>
+          </div>
+        </>
+      )}
+      {result ? <div className={`sa-result${result.error ? ' sa-result--error' : ''}`} role="status">{result.text}</div> : null}
+    </div>
   );
 }
 
@@ -266,8 +322,8 @@ function DesignPhotos({ d, reload, onRebuild }: { d: DayResponse; reload: Reload
 
   return (
     <div className="sa-field">
-      <div className="sa-eyebrow">Photos in the design</div>
-      <div className="sa-note">{d.canPair ? 'Tap one photo, or two for two different dishes shown together. Each of the two carries its dish’s name, so customers can tell them apart.' : 'Tap the photo the design should use.'}{saved.length ? '' : ' Until you pick, the design uses the newest photo.'}</div>
+      <div className="sa-eyebrow">{d.slot === 'reel' ? 'Photo for the cover' : 'Photos in the design'}</div>
+      <div className="sa-note">{d.slot === 'reel' ? 'Tap the photo the reel’s cover (and story) is made from.' : d.canPair ? 'Tap one photo, or two for two different dishes shown together. Each of the two carries its dish’s name, so customers can tell them apart.' : 'Tap the photo the design should use.'}{saved.length ? '' : ' Until you pick, the design uses the newest photo.'}</div>
       <div className="sa-photo-pick">
         {photos.map((a) => {
           const p = picked.find((x) => x.assetId === a.id);
@@ -315,6 +371,7 @@ function ImagesSection({ d, reload, onRebuild }: { d: DayResponse; reload: Reloa
           </div>
         </div>
       ) : null}
+      {d.slot === 'reel' ? <ClipPicker key={`clips-${d.dayNo}`} d={d} reload={reload} /> : null}
       <DesignPhotos key={`photos-${d.dayNo}`} d={d} reload={reload} onRebuild={onRebuild} />
       {outputs.length > 0 ? (
         <div className="sa-field">

@@ -42,6 +42,12 @@ describe('reel pack', () => {
     const txt = reelPackTxt(row({ slot: 'reel' }), { ...copy, on_screen_text: [] }, 0);
     expect(txt).toContain('  2. FROM THE FIRE');
   });
+
+  it('lists the clips the owner picked, in order', () => {
+    const txt = reelPackTxt(row({ slot: 'reel' }), copy, 3, ['IMG_0002.MOV', 'IMG_0001.MOV']);
+    expect(txt).toContain(['Clips for the reel, in order:', '  1) IMG_0002.MOV', '  2) IMG_0001.MOV'].join(String.fromCharCode(10)));
+    expect(reelPackTxt(row({ slot: 'reel' }), copy, 3)).not.toContain('Clips for the reel');
+  });
 });
 
 describe('canva brief', () => {

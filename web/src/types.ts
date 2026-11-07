@@ -84,6 +84,8 @@ export interface Row {
   content?: Record<string, string | null> | null;
   /** What the Invite style prints, when the owner set it. */
   invite?: InviteDetails | null;
+  /** The clips picked for a reel, in order (video asset ids). */
+  clips?: number[] | null;
   posted_at: string | null;
   updated_at: string;
 }
@@ -106,6 +108,9 @@ export interface Asset {
   id: number;
   kind: 'photo' | 'document' | 'video' | 'text';
   caption: string | null;
+  /** The file's name as uploaded (a clip's name from the phone). */
+  filename?: string | null;
+  /** A photo's thumbnail, or a clip's still made in the browser when it was uploaded. */
   thumb: string | null; // file id
   crops: Crops | null;
   createdAt: string;

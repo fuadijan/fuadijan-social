@@ -79,7 +79,7 @@ export function reelLength(row: CalendarRow): string {
   return '10–20 s';
 }
 
-export function reelPackTxt(row: CalendarRow, copy: ResolvedCopy, clipsReceived: number): string {
+export function reelPackTxt(row: CalendarRow, copy: ResolvedCopy, clipsReceived: number, picked: string[] = []): string {
   const onScreen = copy.on_screen_text.length ? copy.on_screen_text : (row.on_screen_text ?? '').split(/\s*→\s*/).map((x) => x.replace(/^[“"]|[”"]$/g, '').trim()).filter(Boolean);
   const hook = row.content?.hook?.trim() || (onScreen[0] ?? copy.headline.split('\n')[0] ?? '');
   return [
@@ -95,6 +95,7 @@ export function reelPackTxt(row: CalendarRow, copy: ResolvedCopy, clipsReceived:
     `Length: ${reelLength(row)}, vertical 9:16.`,
     "Music: use Instagram's licensed audio.",
     `Clips received: ${clipsReceived}${clipsReceived ? ' (not downloaded — Instagram takes them straight from your phone)' : ' — send them with captions like "karahi clip 1"'}.`,
+    ...(picked.length ? ['Clips for the reel, in order:', ...picked.map((c, i) => `  ${i + 1}) ${c}`)] : []),
     copy.unresolved.length ? `Still to confirm: ${copy.unresolved.map((u) => u.placeholder).join('; ')}` : '',
     '',
   ].filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n');

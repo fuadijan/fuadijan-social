@@ -73,7 +73,8 @@ export function UploadPhotos({ d, onChanged }: { d: DayResponse; onChanged: () =
 
   const busy = phase.kind === 'uploading';
   const tooMany = files.length > MAX_FILES;
-  const tooBig = files.filter((f) => f.size > MAX_BYTES);
+  // A clip is not uploaded (only its name and a still), so only photos have a size limit.
+  const tooBig = files.filter((f) => !f.type.startsWith('video/') && f.size > MAX_BYTES);
   const canUpload = files.length > 0 && !tooMany && tooBig.length === 0 && !busy;
 
   function pick(list: FileList | null) {
@@ -112,7 +113,7 @@ export function UploadPhotos({ d, onChanged }: { d: DayResponse; onChanged: () =
       {files.length > 0 ? (
         <ul className="sa-filelist">
           {files.map((f, i) => (
-            <li key={`${f.name}-${f.size}-${i}`} className={f.size > MAX_BYTES ? 'sa-filelist--bad' : undefined}>
+            <li key={`${f.name}-${f.size}-${i}`} className={tooBig.includes(f) ? 'sa-filelist--bad' : undefined}>
               <span className="sa-filelist-name">{f.name}</span>
               <span className="sa-filelist-size fj-numeric">{fmtSize(f.size)}</span>
             </li>
@@ -120,7 +121,7 @@ export function UploadPhotos({ d, onChanged }: { d: DayResponse; onChanged: () =
         </ul>
       ) : null}
       {tooMany ? <div className="sa-result sa-result--error">Up to {MAX_FILES} files at a time.</div> : null}
-      {tooBig.length > 0 ? <div className="sa-result sa-result--error">Each file must be under 25 MB ({tooBig.map((f) => f.name).join(', ')}).</div> : null}
+      {tooBig.length > 0 ? <div className="sa-result sa-result--error">Each photo must be under 25 MB ({tooBig.map((f) => f.name).join(', ')}).</div> : null}
       <div className="sa-upload-caption">
         <label className="sa-eyebrow" htmlFor={captionId}>Caption</label>
         <input id={captionId} className="sa-input" type="text" value={caption} onChange={(e) => setCaption(e.target.value)} disabled={busy} autoComplete="off" autoCapitalize="none" />
