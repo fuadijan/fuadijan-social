@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import type { ResolvedCopy } from '../brain/schemas.js';
 import { platformVersions, platformsTxt, type RecordField } from '../calendar/record.js';
 import { editField, postAbout, recordEdit, reelClips, rowById, setClips, type CalendarRow, type EditSource } from '../calendar/rows.js';
+import { templateKeyFor } from '../render/registry.js';
 import type { Db } from '../db/pool.js';
 import { allSettings } from '../settings.js';
 import { canvaBriefTxt, captionTxt, postTimeFor, reelPackTxt } from './packs.js';
@@ -261,4 +262,26 @@ export async function setReelClips(db: Db, row: CalendarRow, ids: number[], sour
   const job = await latestJobWithCopy(db, row.id);
   if (job) await refreshPack(db, (await rowById(db, row.id))!, job.copy);
   return clips;
+}
+
+/**
+ * A planned reel made a post, or a post made a reel: same day, date, campaign and words. The switch is the owner's
+ * edit, so loading the workbook again leaves it. A post made from Create keeps its formats in step. When the design
+ * was already made it is made again in the new shape (a feed post and story, or a reel cover and story).
+ */
+export async function switchPostKind(db: Db, row: CalendarRow, slot: 'feed' | 'reel', source: EditSource): Promise<{ rebuilding: boolean }> {
+  if (row.slot === slot) return { rebuilding: false };
+  if (row.slot === 'carousel') throw new Error('A carousel stays a carousel.');
+  if (!['hero-photo', 'text-only'].includes(templateKeyFor(row.template))) throw new Error('This series is not a photo post, so it cannot be a reel or a post.');
+  if (row.status === 'posted') throw new Error('This post is already posted.');
+  if (await rowIsBusy(db, row.id)) throw new PostBusyError();
+  await db.query('update calendar_rows set slot = $2, updated_at = now() where id = $1', [row.id, slot]);
+  await recordEdit(db, row.id, 'slot', row.slot, slot, source);
+  if (row.custom) {
+    const formats = slot === 'reel' ? ['reel'] : ['feed', 'story'];
+    await db.query("update calendar_rows set custom = jsonb_set(custom, '{formats}', $2::jsonb) where id = $1", [row.id, JSON.stringify(formats)]);
+  }
+  const made = ((await db.query('select 1 from packs where calendar_row_id = $1 limit 1', [row.id])).rowCount ?? 0) > 0;
+  if (!made || await rowIsWaiting(db, row.id)) return { rebuilding: false };
+  return { rebuilding: Boolean(await rerenderRow(db, row.id)) };
 }

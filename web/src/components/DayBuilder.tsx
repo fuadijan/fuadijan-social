@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react';
-import { fileUrl, getCreateOptions, getWordings, previewDesign, remakeDesign, savePostParts } from '../api';
+import { fileUrl, getCreateOptions, getWordings, previewDesign, remakeDesign, savePostParts, switchPostKind } from '../api';
 import { Button, Card } from './fj';
 import { LookStep, PARTS, PartStep, PartsSummary, PreviewImages, Sketch, choicesFor, inviteDay, partDef, startValue, type BuildKind, type Look, type PartChoice, type PartKey, type PartValue, type PartValues } from './PostBuilder';
 import type { DayResponse, InviteDetails, PostPartField, PreviewResponse } from '../types';
@@ -74,6 +74,41 @@ export function RemakeDesign({ d, reload, onRebuild }: { d: DayResponse; reload:
       <div className="sa-actions sa-editor-actions">
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => void remake()}>{busy ? 'Starting…' : 'Make the design again'}</Button>
       </div>
+      {result ? <div className={`sa-result${result.error ? ' sa-result--error' : ''}`} role="status">{result.text}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * A reel with no video made a post, or a post made a reel: same day, date, campaign and words. When the design was
+ * already made, it is made again in the new shape.
+ */
+function KindSwitch({ d, reload, onRebuild }: { d: DayResponse; reload: () => Promise<void>; onRebuild: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ text: string; error?: boolean } | null>(null);
+  if (d.status === 'posted') return null;
+  const toPost = d.slot === 'reel';
+  async function flip() {
+    const ask = toPost
+      ? `Make Day ${d.dayNo} a post instead of a reel? It keeps its date, campaign and words, and needs a photo instead of clips.`
+      : `Make Day ${d.dayNo} a reel instead of a post? It keeps its date, campaign and words, and needs clips and a cover photo.`;
+    if (!window.confirm(ask)) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await switchPostKind(d.dayNo, toPost ? 'feed' : 'reel');
+      setResult({ text: r.message });
+      if (r.rebuilding) onRebuild();
+      await reload();
+    } catch (e) {
+      setResult({ text: e instanceof Error ? e.message : String(e), error: true });
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="sa-kind-switch">
+      <span className="sa-muted">{toPost ? 'No video for this reel?' : 'Got video for this one?'}</span>
+      <Button variant="secondary" size="sm" disabled={busy} onClick={() => void flip()}>{busy ? 'Switching…' : toPost ? 'Make it a post instead' : 'Make it a reel instead'}</Button>
       {result ? <div className={`sa-result${result.error ? ' sa-result--error' : ''}`} role="status">{result.text}</div> : null}
     </div>
   );
@@ -217,6 +252,7 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
   const sketch = <Sketch kind={kind} parts={parts} values={allValues} active={active} photoUrl={photoUrl} footer={footer} look={look} lookName={styleName} />;
   return (
     <Card title={kind === 'reel' ? 'The reel, part by part' : 'The post, part by part'} id="build">
+      {d.slot === 'reel' || d.slot === 'feed' ? <KindSwitch key={d.slot} d={d} reload={reload} onRebuild={onRebuild} /> : null}
       <div className="sa-note" style={{ marginBottom: 10 }}>Each number on the sketch is one step. Pick the words from the list, change them if you like, choose the look, then save. Only what you change is saved, and the design is made again with it.</div>
       <div className="sa-wizard-steps" role="list" aria-label="Parts">
         {STEPS.map((name, i) => {

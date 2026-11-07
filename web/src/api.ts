@@ -134,6 +134,7 @@ export function videoStill(file: File, width = 480): Promise<Blob | null> {
   });
 }
 
+export const switchPostKind = (dayNo: number, slot: 'feed' | 'reel') => post<RebuildResult>(`/api/rows/${dayNo}/slot`, { slot });
 export const setReelClips = (dayNo: number, clips: number[]) => post<{ ok: true; clips: number[] | null; message: string }>(`/api/rows/${dayNo}/clips`, { clips });
 
 /** Image bytes for a stored file id. */

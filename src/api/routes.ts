@@ -14,7 +14,7 @@ import { applyAnswer, statusText } from '../messaging/commands.js';
 import { shotList } from '../pipeline/packs.js';
 import { openQuestions } from '../pipeline/questions.js';
 import { addOwnerOption, allCopyOptions, copyOptionsById, latestCopyOptions, markChosen, remakeNote, rerenderRow, rerenderWithWording, updateOption, type CopyOptions } from '../pipeline/wording.js';
-import { POST_PARTS, POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostParts, setPostText, setReelClips, spreadSloganEdit, spreadSloganLink, type PostPart, type PostTextField } from '../pipeline/post-text.js';
+import { POST_PARTS, POST_TEXT_FIELDS, PostBusyError, cleanHashtags, rowIsBusy, rowIsWaiting, setPostParts, setPostText, setReelClips, spreadSloganEdit, switchPostKind, spreadSloganLink, type PostPart, type PostTextField } from '../pipeline/post-text.js';
 import { parsePreviewInput, previewDesign } from '../pipeline/preview.js';
 import { loadBrand } from '../render/brand.js';
 import { WORDING_LIBRARIES, wordingsView } from '../wordings-view.js';
@@ -182,6 +182,21 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const job = await rerenderRow(ctx.pool, row.id, { note: remakeNote(style, req.body?.note) ?? undefined });
     if (!job) return reply.code(400).send({ ok: false, error: 'There is no design to make again yet: it is made when the photo arrives.' });
     return { ok: true, message: 'Making the design again with the same words. About a minute.', rebuilding: true };
+  });
+
+  /** A reel made a post, or a post made a reel. */
+  app.post<{ Params: { dayNo: string }; Body: { slot?: string } }>('/api/rows/:dayNo/slot', async (req, reply) => {
+    const row = await rowByDay(ctx.pool, Number(req.params.dayNo));
+    if (!row) return reply.code(404).send({ ok: false, error: 'No such day' });
+    const slot = req.body?.slot;
+    if (slot !== 'feed' && slot !== 'reel') return reply.code(400).send({ ok: false, error: 'A post or a reel.' });
+    try {
+      const r = await switchPostKind(ctx.pool, row, slot, 'owner-web');
+      const now = slot === 'feed' ? 'a post' : 'a reel';
+      return { ok: true, rebuilding: r.rebuilding, message: r.rebuilding ? `Now ${now}. The design is being made again in its new shape.` : `Now ${now}. ${slot === 'feed' ? 'It needs a photo, not clips.' : 'It needs clips, and a photo for the cover.'}` };
+    } catch (e) {
+      return reply.code(e instanceof PostBusyError ? 409 : 400).send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
   });
 
   /** The clips picked for a reel, in order; the reel pack lists them. */

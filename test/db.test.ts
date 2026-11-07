@@ -627,6 +627,33 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect(await setReelClips(pool, (await rowById(pool, reel.id))!, [], 'owner-web')).toBeNull();
   });
 
+  it('makes a reel a post and back: the design in its new shape, and a workbook reload keeps the switch', async () => {
+    const { switchPostKind } = await import('../src/pipeline/post-text.js');
+    const reels = (await allRows(pool)).filter((r) => r.slot === 'reel');
+    const withPack = [];
+    for (const r of reels) if ((await pool.query('select 1 from packs where calendar_row_id = $1', [r.id])).rowCount) withPack.push(r);
+    const reel = withPack[0]!;
+    expect(reel).toBeTruthy();
+    const formats = async () => (await pool.query<{ format: string }>('select format from renders where calendar_row_id = $1 order by format', [reel.id])).rows.map((x) => x.format);
+    expect(await switchPostKind(pool, reel, 'feed', 'owner-web')).toEqual({ rebuilding: true });
+    await new Worker(ctx, 1000).drain();
+    expect((await rowById(pool, reel.id))!.slot).toBe('feed');
+    expect(await formats()).toEqual(['feed', 'story']);
+    expect((await pool.query<{ reel_pack_txt: string | null }>('select reel_pack_txt from packs where calendar_row_id = $1 order by created_at desc limit 1', [reel.id])).rows[0]!.reel_pack_txt).toBeNull();
+    // Loading the workbook again leaves the owner's switch.
+    const wb = await readWorkbook();
+    const sheet = wb.rows.find((r) => r.day_no === reel.day_no);
+    if (sheet) {
+      const res = await seedRows(pool, [sheet], wb.rows[0]!.date);
+      expect((await rowById(pool, reel.id))!.slot).toBe('feed');
+      expect(res.protectedFields).toContainEqual({ day_no: reel.day_no, field: 'slot' });
+    }
+    await expect(switchPostKind(pool, (await rowById(pool, reel.id))!, 'feed', 'owner-web')).resolves.toEqual({ rebuilding: false });
+    expect(await switchPostKind(pool, (await rowById(pool, reel.id))!, 'reel', 'owner-web')).toEqual({ rebuilding: true });
+    await new Worker(ctx, 1000).drain();
+    expect(await formats()).toContain('reel-cover');
+  });
+
   it('previews the words on a photo without making or keeping anything', async () => {
     const { parsePreviewInput, previewDesign } = await import('../src/pipeline/preview.js');
     const renders = Number((await pool.query<{ n: string }>('select count(*) n from renders')).rows[0]!.n);

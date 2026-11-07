@@ -166,6 +166,11 @@ them. A clip is never kept: the web upload sends only its name and a still the b
 still and show as ▶ with their name. The reel's cover is still made from a photo ("Photo for the cover"); a post day
 picks photos only.
 
+**A reel made a post, or a post a reel.** A day's page has "Make it a post instead" on a reel (and the reverse),
+for a reel with no video (`POST /api/rows/:dayNo/slot`, `switchPostKind`). The day keeps its number, date, campaign
+and words; the switch is logged as the owner's `slot` edit, so loading the workbook again leaves it; a Create post's
+formats follow. If the design was made, it is made again in the new shape. Carousels, reviews and posted days stay.
+
 **Two photos in one design.** Two different dishes that look alike once cooked can share a design: on the Day page the
 owner picks two received photos and names each (`calendar_rows.design_photos`, `src/render/pair.ts`). The feed shows
 them side by side, the story and reel cover stacked, each with its dish's name on it and the words below, off the food.

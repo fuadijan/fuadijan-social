@@ -588,7 +588,7 @@ export function Day() {
           {canBuild(data) ? (
             <>
               {/* The post part by part first; everything else about it is one tap away. */}
-              <DayBuilder key={data.dayNo} d={data} reload={reload} onRebuild={onRebuild} />
+              <DayBuilder key={`${data.dayNo}-${data.slot}`} d={data} reload={reload} onRebuild={onRebuild} />
               <ImagesSection d={data} reload={reload} onRebuild={onRebuild} />
               {data.slot === 'reel' ? <ShootSection d={data} reload={reload} /> : null}
               <ConfirmSection d={data} reload={reload} />

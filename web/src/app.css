@@ -400,3 +400,5 @@ a { color: var(--fj-primary); }
 .sa-clip-none { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; font-size: 1.6rem; color: var(--fj-text-secondary); background: var(--fj-surface-sunken); }
 .sa-clip-order { position: absolute; top: 6px; left: 6px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--fj-primary-solid); color: #fff; font-size: 0.75rem; font-weight: 700; }
 .sa-clip-name { font-size: var(--fj-text-xs); color: var(--fj-text-secondary); overflow-wrap: anywhere; }
+.sa-kind-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: -4px 0 12px; }
+.sa-kind-switch .sa-result { flex-basis: 100%; }
