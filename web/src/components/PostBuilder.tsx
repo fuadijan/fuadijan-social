@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { Button } from './fj';
-import type { InviteDetails, StyleKey, Wording, WordingLibrary } from '../types';
+import type { InviteDetails, PostWording, StyleKey, Wording, WordingLibrary } from '../types';
 
 /**
  * The step-by-step builder: a post (or a reel) is a handful of named parts, each shown on a labelled sketch of the
@@ -80,6 +80,10 @@ export interface ChoiceSources {
   libraries: WordingLibrary[];
   /** Words this post already has (the calendar's, the writer's), offered first. */
   extra?: Partial<Record<PartKey, PartChoice[]>>;
+  /** Every post's words: the ones about the same product, then the same series, are offered after its saved captions. */
+  posts?: PostWording[];
+  /** This post's own day, left out of the other posts. */
+  dayNo?: number;
 }
 
 /** Every part's list of words, the ones belonging to the product and its series first. */
@@ -96,15 +100,34 @@ export function choicesFor(src: ChoiceSources): Record<PartKey, PartChoice[]> {
     add('title', { id: 'product', text: src.product.trim(), from: 'The product’s name' });
     add('cover', { id: 'product', text: src.product.trim(), from: 'The product’s name' });
   }
-  for (const [list, from] of [[mine, forProduct], [house, 'For every post']] as const) {
+  const fromBank = (list: Wording[], from: string) => {
     for (const w of list) {
       add('title', { id: `w${w.id}`, text: w.headline, from });
       add('line', { id: `w${w.id}`, text: w.line?.trim() || flat(w.headline), from });
       add('cover', { id: `w${w.id}`, text: flat(w.headline), from });
       if (w.caption?.trim()) add('caption', { id: `w${w.id}`, text: w.caption, from });
     }
-  }
+  };
+  fromBank(mine, forProduct);
+  // Other posts' words: the ones about this product first, then the rest of its series (a launch's teasers, say).
   const series = key(src.series);
+  const product = key(src.product);
+  const others = (src.posts ?? []).filter((p) => p.dayNo !== src.dayNo);
+  const aboutProduct = (p: PostWording) => product.length >= 3 && namedIn(product, `${p.items.join(' | ')} | ${p.title}`.toLowerCase());
+  const fromPost = (p: PostWording, from: string) => {
+    const id = `post:${p.dayNo}`;
+    add('title', { id: `${id}:t`, text: p.headline, from });
+    add('line', { id: `${id}:l`, text: p.line, from });
+    add('cover', { id: `${id}:r`, text: p.platforms?.reel_cover ?? '', from });
+    add('caption', { id: `${id}:c`, text: p.caption, from });
+    add('caption', { id: `${id}:fb`, text: p.platforms?.facebook.caption ?? '', from: `${from} · Facebook` });
+    add('cta', { id: `${id}:a`, text: p.cta, from });
+    add('cta', { id: `${id}:fba`, text: p.platforms?.facebook.cta ?? '', from: `${from} · Facebook` });
+    add('hashtags', { id: `${id}:h`, text: p.hashtags, from });
+  };
+  for (const p of others.filter(aboutProduct)) fromPost(p, `Day ${p.dayNo} · ${src.product.trim()}`);
+  if (series) for (const p of others.filter((p) => !aboutProduct(p) && key(p.series) === series)) fromPost(p, `Day ${p.dayNo} · ${p.series}`);
+  fromBank(house, 'For every post');
   const hooks = libraryRows(src.libraries, 'Hooks Library');
   if (hooks) {
     const rows = [...hooks.rows].sort((a, b) => Number(key(b[hooks.groupColumn] ?? '') === series) - Number(key(a[hooks.groupColumn] ?? '') === series));

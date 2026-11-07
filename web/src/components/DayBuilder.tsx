@@ -137,7 +137,7 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
       add('caption', o.caption, from, `opt:${set.id}:${i}:c`);
     }));
     const wordings = bank.data?.reusable.flatMap((w) => w.items.map((i) => ({ ...w, item: i.item, itemKey: i.itemKey }))) ?? [];
-    const c = choicesFor({ product, group, series: d.series, bank: wordings, libraries: bank.data?.libraries ?? [], extra });
+    const c = choicesFor({ product, group, series: d.series, bank: wordings, libraries: bank.data?.libraries ?? [], extra, posts: bank.data?.posts ?? [], dayNo: d.dayNo });
     return Object.fromEntries(parts.map((k) => [k, partDef(k, c[k])])) as Record<PartKey, ReturnType<typeof partDef>>;
   }, [d, now, bank.data, options.data, parts]);
 

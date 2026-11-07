@@ -138,7 +138,7 @@ export function Create() {
     if (!opts) return null;
     const group = [chosenProduct?.category, chosenProduct?.series].filter(Boolean).join(' | ');
     const wordings = bank.data?.reusable.flatMap((w) => w.items.map((i) => ({ ...w, item: i.item, itemKey: i.itemKey }))) ?? [];
-    const c = choicesFor({ product, group, series: series?.label ?? '', bank: wordings, libraries: bank.data?.libraries ?? [] });
+    const c = choicesFor({ product, group, series: series?.label ?? '', bank: wordings, libraries: bank.data?.libraries ?? [], posts: bank.data?.posts ?? [] });
     // The label is the series' own: picking it picks the series, which also sets the footer and the colours of the words.
     const suggested = chosenProduct?.template ?? '';
     const seriesChoices = [...opts.templates].sort((a, b) => Number(b.template === suggested) - Number(a.template === suggested))
@@ -165,8 +165,9 @@ export function Create() {
   const active = partAt(step);
   const filesOk = photo?.kind !== 'files' || (photo.files.length > 0 && photo.files.length <= MAX_FILES && photo.files.every((f) => f.size <= MAX_BYTES));
   const partOk = (k: PartKey) => !defs[k].required || text(k).length > 0;
-  const ready: boolean[] = [product.trim().length > 0 && template.length > 0, photo !== null && filesOk, ...parts.map(partOk), true, (kind === 'reel' || formats.length > 0) && /^\d{4}-\d{2}-\d{2}$/.test(theDate)];
-  const canGenerate = ready.every(Boolean);
+  // The photo can wait: the words are chosen (and previewed on a blank photo) first; making the design needs it.
+  const ready: boolean[] = [product.trim().length > 0 && template.length > 0, filesOk, ...parts.map(partOk), true, (kind === 'reel' || formats.length > 0) && /^\d{4}-\d{2}-\d{2}$/.test(theDate)];
+  const canGenerate = ready.every(Boolean) && photo !== null;
 
   function pickProduct(name: string) {
     const previous = opts!.products.find((p) => key(p.name) === key(product))?.template ?? '';
@@ -306,6 +307,7 @@ export function Create() {
                 </div>
                 {preview ? <div style={{ marginTop: 10 }}><PreviewImages images={preview.images} note={preview.note} /></div> : null}
               </div>
+              {!photo ? <div className="sa-result sa-result--error" role="status">Choose the photo (step b) to make the design. The preview on a blank photo works without it.</div> : null}
               {error ? <div className="sa-result sa-result--error" role="alert">{error}</div> : null}
               <div className="sa-note" style={{ marginTop: 10 }}>Then about a minute: the design is directed and checked, and anything you left to the agent is written. It lands on the day’s page here and in Telegram, for {fmtDate(theDate)}{time ? ` at ${time}` : ''}.</div>
             </Card>
