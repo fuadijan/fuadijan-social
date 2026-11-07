@@ -24,6 +24,8 @@ describe('the seafood series', () => {
     expect(suggestedTemplate('Chapli Kebab', 'BBQ')).toBe('from-the-fire');
     expect(suggestedTemplate('Aloo Paratha', 'Paratha')).toBe('from-the-tawa');
     expect(suggestedTemplate('Nutella Paratha', 'Desserts')).toBe('save-room');
+    expect(suggestedTemplate('Paratha with Chai', 'Paratha')).toBe('from-the-tawa');
+    expect(suggestedTemplate('Karak Chai', 'Drinks')).toBe('fresh-pour');
     expect(templateForSeries('FROM THE TAWA')).toBe('from-the-tawa');
     expect(seriesLabel({ template: 'from-the-charcoal-sea', theme: null, type: 'launch' })).toBe('FROM THE CHARCOAL SEA');
     // The template names the series; the words only guess for a template the registry does not know.

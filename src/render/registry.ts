@@ -82,12 +82,13 @@ const KARAHI = /karahi|curr|nihari|haleem|daal|\bdal\b/i;
 const MODERN = /burger|wrap|\broll\b|snack|shami/i;
 const TAWA = /paratha|\btawa\b/i;
 
-/** The series a custom post starts from: seafood from the charcoal sea, drinks pour, sweets save room (a Nutella Paratha too), other parathas from the tawa, karahis and curries from the karahi, burgers and snacks modern, else the first hero series. */
+/** The series a custom post starts from: seafood from the charcoal sea, parathas from the tawa (a Paratha with Chai too, but a Nutella Paratha saves room), drinks pour, sweets save room, karahis and curries from the karahi, burgers and snacks modern, else the first hero series. */
 export function suggestedTemplate(product: string, category?: string | null): string {
   const hay = `${category ?? ''} ${product}`;
   const all = heroTemplates();
   const by = (re: RegExp, label: string) => (re.test(hay) ? all.find((t) => t.label === label)?.template ?? null : null);
-  return by(SEAFOOD, 'FROM THE CHARCOAL SEA') ?? by(DRINK, 'FRESH POUR') ?? by(SWEET, 'SAVE ROOM') ?? by(TAWA, 'FROM THE TAWA') ?? by(KARAHI, 'FROM THE KARAHI') ?? by(MODERN, 'MODERN FUADIJAN') ?? all[0]!.template;
+  const paratha = SWEET.test(hay) ? null : by(TAWA, 'FROM THE TAWA');
+  return by(SEAFOOD, 'FROM THE CHARCOAL SEA') ?? paratha ?? by(DRINK, 'FRESH POUR') ?? by(SWEET, 'SAVE ROOM') ?? by(KARAHI, 'FROM THE KARAHI') ?? by(MODERN, 'MODERN FUADIJAN') ?? all[0]!.template;
 }
 
 /**
