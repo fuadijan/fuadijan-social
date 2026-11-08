@@ -75,6 +75,24 @@ export async function composeLayoutB(brand: Brand, w: number, h: number, jpeg: B
   return sharp(photo).composite([{ input: textLayer, left: 0, top: 0 }]).png().toBuffer();
 }
 
+/**
+ * The photo moved up by `frac` of its height: the top is trimmed, the bottom eases into `fill` (Night) over a soft
+ * fade, so a dish near the bottom edge of the photo can sit above the words at the bottom of the design.
+ */
+export async function shiftPhotoUp(jpeg: Buffer, frac: number, fill: string): Promise<Buffer> {
+  const meta = await sharp(jpeg).metadata();
+  const w = meta.width ?? 0;
+  const h = meta.height ?? 0;
+  const cut = Math.round(h * Math.min(0.4, Math.max(0, frac)));
+  if (!w || !h || cut < 1) return jpeg;
+  const keptH = h - cut;
+  const fadeH = Math.min(keptH, Math.round(h * 0.12));
+  const fade = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${fadeH}"><defs><linearGradient id="f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${fill}" stop-opacity="0"/><stop offset="1" stop-color="${fill}" stop-opacity="1"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#f)"/></svg>`);
+  const { r, g, b } = hexToRgb(fill);
+  const kept = await sharp(jpeg).extract({ left: 0, top: cut, width: w, height: keptH }).composite([{ input: fade, left: 0, top: keptH - fadeH }]).toBuffer();
+  return sharp(kept).extend({ bottom: cut, background: { r, g, b } }).jpeg({ quality: 92, mozjpeg: true }).toBuffer();
+}
+
 /** No photo: the text layer over Night. */
 export async function composeTextOnly(brand: Brand, w: number, h: number, textLayer: Buffer): Promise<Buffer> {
   const { r, g, b } = hexToRgb(brand.colors.night);

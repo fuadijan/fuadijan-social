@@ -6,7 +6,7 @@ import { brandLineOn, isKarahiPost } from '../pipeline/packs.js';
 import type { z } from 'zod';
 import type { DesignSpec } from '../brain/schemas.js';
 import { loadBrand, type Brand } from './brand.js';
-import { composeLayoutA, composeLayoutB, composeTextOnly, type Cutout } from './compose.js';
+import { composeLayoutA, composeLayoutB, composeTextOnly, shiftPhotoUp, type Cutout } from './compose.js';
 import { composeFlat, composeInvite, composePoster } from './compose-styles.js';
 import { templateEntry, templateKeyFor, type TemplateKey } from './registry.js';
 import { PairData, composePair, pairLayer } from './pair.js';
@@ -70,6 +70,8 @@ export interface PairPhoto { name: string; feed: Buffer; tall: Buffer }
 export interface LookDetails {
   date?: string | null; time?: string; message?: string; price?: string; menu?: { name: string; price: string }[];
   side?: 'left' | 'right'; accent?: 'none' | 'gold' | 'orange'; lead?: string;
+  /** Move the photo up by this percentage of its height (10, 20 or 30), so a low dish clears the words. */
+  photoUp?: number;
 }
 
 /** The owner's text side and lead-in as design fields; they win over the art director and the critic. */
@@ -114,7 +116,13 @@ export function styleFor(input: Pick<RenderInput, 'photo' | 'cutout' | 'design'>
 export interface RenderOutput { format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; png: Buffer }
 
 export async function renderPost(raw: RenderInput, baseBrand: Brand = loadBrand()): Promise<RenderOutput[]> {
-  const input = withLook(raw);
+  const looked = withLook(raw);
+  const up = (looked.invite?.photoUp ?? 0) / 100;
+  const input = up > 0 ? {
+    ...looked,
+    photo: looked.photo ? await shiftPhotoUp(looked.photo, up, baseBrand.colors.night) : null,
+    storyPhoto: looked.storyPhoto ? await shiftPhotoUp(looked.storyPhoto, up, baseBrand.colors.night) : looked.storyPhoto,
+  } : looked;
   const key = templateKeyFor(input.sheetTemplate);
   const entry = templateEntry(input.sheetTemplate);
   const brand: Brand = { ...baseBrand, brandLine: brandLineOn(input.date, baseBrand.brandLine, isKarahiPost({ template: input.sheetTemplate, label: input.label, dish: input.dish })) };

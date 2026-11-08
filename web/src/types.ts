@@ -247,6 +247,8 @@ export interface InviteDetails {
   date: string | null; time: string; message: string;
   price?: string; menu?: { name: string; price: string }[];
   side?: 'left' | 'right'; accent?: 'none' | 'gold' | 'orange'; lead?: string;
+  /** The photo moved up by 10, 20 or 30 % of its height, for a dish low in the photo. */
+  photoUp?: number;
 }
 
 /** What the owner chose for a one-off post; stored on the row (`row.custom`). */

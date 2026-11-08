@@ -280,6 +280,8 @@ shown, the time and the message over the time, printed on the feed post and the 
 the words under the count; for Ribbon its words; for Deal the price and the word over it; for Menu board the dishes.
 For any look that has them it also sets the text side (left or right) and an italic line over the title in gold or
 orange, with its own words or the title's first line; these win over the art director and the critic (`lookSpec`).
+For a photo whose food sits low, Photo position moves the photo up 10, 20 or 30 % (`shiftPhotoUp`): the top is
+trimmed and Night fills in under the words.
 On a day's page the picked look is kept with those details, so a later design (a new photo, a remake) uses it too. "Preview on the
 photo" (`POST /api/preview`, `src/pipeline/preview.ts`) draws the real design with those words, without Claude or the
 cutout, and stores nothing. "Preview on a blank photo" draws it on a plain stand-in (also used when there is no photo yet), to show just where the words sit. On a day's page, saving sends only the changed parts (`POST /api/rows/:dayNo/parts`,

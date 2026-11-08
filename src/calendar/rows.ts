@@ -48,6 +48,8 @@ export interface InviteDetails {
   date: string | null; time: string; message: string;
   price?: string; menu?: { name: string; price: string }[];
   side?: 'left' | 'right'; accent?: 'none' | 'gold' | 'orange'; lead?: string;
+  /** The photo moved up by 10, 20 or 30 % of its height, for a dish low in the photo. */
+  photoUp?: number;
 }
 
 /** The owner's look details, cleaned: an empty set is null (the post's date, the opening hours and "FROM"). */
@@ -64,6 +66,8 @@ export function cleanInvite(v: unknown): InviteDetails | null {
   if (menu.length) out.menu = menu;
   if (o.side === 'left' || o.side === 'right') out.side = o.side;
   if (o.accent === 'none' || o.accent === 'gold' || o.accent === 'orange') out.accent = o.accent;
+  const up = Number(o.photoUp);
+  if ([10, 20, 30].includes(up)) out.photoUp = up;
   const lead = s(o.lead, 30);
   if (lead && out.accent && out.accent !== 'none') out.lead = lead;
   return out.date || out.time || out.message || Object.keys(out).length > 3 ? out : null;

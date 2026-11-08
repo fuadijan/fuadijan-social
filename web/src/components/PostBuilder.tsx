@@ -242,6 +242,9 @@ export const EMPTY_DETAILS: InviteDetails = { date: null, time: '', message: '' 
 /** The looks whose text block can sit on either side, and the ones that can carry the italic line over the title. */
 const SIDE_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'invite', 'countdown', 'ribbon', 'deal'];
 const LEAD_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'invite', 'countdown', 'ribbon', 'deal', 'arch', 'jaali', 'menu'];
+/** The looks that show the whole photo, so it can be moved up (poster and flat use the cut-out plate). */
+const PHOTO_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'split', 'invite', 'arch', 'countdown', 'ribbon', 'jaali', 'deal', 'menu'];
+const UP_NAMES: Record<number, string> = { 10: 'a little', 20: 'up', 30: 'a lot' };
 
 /** "SATURDAY 14 NOV" from YYYY-MM-DD, as the Invite style prints it. */
 export function inviteDay(iso: string | null): string {
@@ -281,6 +284,7 @@ export function detailsOut(look: Look): InviteDetails | null {
     out.accent = i.accent;
     if (i.accent !== 'none' && i.lead?.trim()) out.lead = i.lead.trim();
   }
+  if (i.photoUp && PHOTO_LOOKS.includes(s)) out.photoUp = i.photoUp;
   return out.date || out.time || out.message || Object.keys(out).length > 3 ? out : null;
 }
 
@@ -290,6 +294,7 @@ export function lookSummary(look: Look, name: string | undefined, postDate?: str
   const bits = [name ?? 'The art director’s choice', ...lookDetails(look, postDate)];
   if (i.side && SIDE_LOOKS.includes(look.style)) bits.push(`text on the ${i.side}`);
   if (i.accent && LEAD_LOOKS.includes(look.style)) bits.push(i.accent === 'none' ? 'no italic line' : `${i.accent} italic line${i.lead?.trim() ? ` “${i.lead.trim()}”` : ''}`);
+  if (i.photoUp && PHOTO_LOOKS.includes(look.style)) bits.push(`photo moved up ${UP_NAMES[i.photoUp] === 'up' ? '' : UP_NAMES[i.photoUp]}`.trim());
   return bits.join(' · ');
 }
 
@@ -324,7 +329,7 @@ function LookCard({ option, on, onPick }: { option: StyleOption | null; on: bool
  * and for any look the side the text sits on and an italic line over the title in gold or orange.
  */
 export function LookStep({ n, styles, value, onChange, postDate, title }: { n: number | string; styles: StyleOption[]; value: Look; onChange: (v: Look) => void; postDate?: string | null; title?: string }) {
-  const ids = { d: useId(), t: useId(), m: useId(), p: useId(), side: useId(), acc: useId(), lead: useId() };
+  const ids = { d: useId(), t: useId(), m: useId(), p: useId(), side: useId(), acc: useId(), lead: useId(), up: useId() };
   const inv = value.invite;
   const setInvite = (patch: Partial<InviteDetails>) => onChange({ ...value, invite: { ...inv, ...patch } });
   // Each look's words mean something different, so they start empty when the look changes.
@@ -468,6 +473,18 @@ export function LookStep({ n, styles, value, onChange, postDate, title }: { n: n
           <label className="sa-eyebrow" htmlFor={ids.lead}>Words for the italic line</label>
           <input id={ids.lead} className="sa-input" maxLength={30} value={inv.lead ?? ''} placeholder={firstLine || 'Fresh from'} onChange={(e) => setInvite({ lead: e.target.value })} />
           <div className="sa-note">A short lead-in such as Fresh from, Time to, Made with love. Empty: the title’s first line{firstLine ? ` (${firstLine})` : ''} becomes the italic line, so the title needs two lines.</div>
+        </div>
+      ) : null}
+      {PHOTO_LOOKS.includes(value.style) ? (
+        <div style={{ marginTop: 10 }}>
+          <label className="sa-eyebrow" htmlFor={ids.up}>Photo position</label>
+          <select id={ids.up} className="sa-input sa-select" value={String(inv.photoUp ?? 0)} onChange={(e) => setInvite({ photoUp: Number(e.target.value) || undefined })}>
+            <option value="0">As it is</option>
+            <option value="10">Move it up a little</option>
+            <option value="20">Move it up</option>
+            <option value="30">Move it up a lot</option>
+          </select>
+          <div className="sa-note">When the food sits low in the photo and the words cover it: the top of the photo is trimmed and the food moves up, with the dark ground filling in under the words. Check it with the preview.</div>
         </div>
       ) : null}
     </div>

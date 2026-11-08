@@ -237,6 +237,22 @@ describe('the occasion looks', () => {
     }
   });
 
+  it('moves the photo up for a dish low in the frame: the top is trimmed, Night fills in at the bottom', async () => {
+    const { shiftPhotoUp } = await import('../src/render/compose.js');
+    const up = await shiftPhotoUp(karahi, 0.2, brand.colors.night);
+    const [a, b] = [await sharp(karahi).metadata(), await sharp(up).metadata()];
+    expect([b.width, b.height]).toEqual([a.width, a.height]);
+    expect(await lum(up, 500, b.height! - 60)).toBeLessThan(25);
+    // What was 20% down the photo is now at its top.
+    const row = async (img: Buffer, top: number) => sharp(img).extract({ left: 0, top, width: a.width!, height: 4 }).greyscale().raw().toBuffer();
+    const [want, got] = [await row(karahi, Math.round(a.height! * 0.2)), await row(up, 0)];
+    const diff = want.reduce((s, v, i) => s + Math.abs(v - got[i]!), 0) / want.length;
+    expect(diff).toBeLessThan(12);
+    // The owner's choice goes through renderPost.
+    const out = await renderPost({ ...base, design: { style: 'band', layout: 'B' }, invite: { photoUp: 30 } }, brand);
+    expect(out.map((o) => o.format)).toEqual(['feed', 'story']);
+  });
+
   it('countdown: the days left from the day the post goes up to the big day', async () => {
     const { countdownFor } = await import('../src/render/occasion.js');
     expect(countdownFor('2026-11-14', '2026-11-11', '')).toEqual({ count: '3', unit: 'DAYS TO GO' });

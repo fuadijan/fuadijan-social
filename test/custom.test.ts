@@ -104,6 +104,8 @@ describe('the Create flow', () => {
     // The words for the italic line only count with a colour; an unknown side or colour is dropped.
     expect(cleanInvite({ accent: 'none', lead: 'Fresh from' })).toEqual({ date: null, time: '', message: '', accent: 'none' });
     expect(cleanInvite({ side: 'middle', accent: 'purple', lead: 'x' })).toBeNull();
+    expect(cleanInvite({ photoUp: 20 })).toEqual({ date: null, time: '', message: '', photoUp: 20 });
+    expect(cleanInvite({ photoUp: 55 })).toBeNull();
   });
 
   it('notes the look and the change asked for when a design is made again', async () => {
