@@ -402,3 +402,19 @@ a { color: var(--fj-primary); }
 .sa-clip-name { font-size: var(--fj-text-xs); color: var(--fj-text-secondary); overflow-wrap: anywhere; }
 .sa-kind-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: -4px 0 12px; }
 .sa-kind-switch .sa-result { flex-basis: 100%; }
+
+/* The Look step: a picture card per look, showing what it makes. */
+.sa-looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; margin-top: 6px; }
+.sa-look { display: grid; gap: 6px; padding: 6px; min-height: var(--fj-tap-target); border: 1px solid var(--fj-border); border-radius: var(--fj-radius-md); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sa-look:hover { border-color: var(--fj-border-strong); }
+.sa-look--on { border-color: var(--fj-primary-solid); box-shadow: 0 0 0 2px var(--fj-primary-solid); background: var(--fj-accent-bg); }
+.sa-look:focus-visible { outline: 2px solid var(--fj-primary-solid); outline-offset: 2px; }
+.sa-look-img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: var(--fj-radius-sm); background: var(--fj-surface-sunken); }
+.sa-look-auto { display: grid; place-items: center; font-size: 1.8rem; color: #F2B544; }
+.sa-look-name { font-size: var(--fj-text-sm); font-weight: 600; line-height: 1.2; }
+.sa-menu-row { display: grid; grid-template-columns: 1fr 96px auto; gap: 8px; align-items: center; }
+.sa-sketch-lead { font-style: italic; }
+.sa-sketch-lead--gold { color: #F2B544; }
+.sa-sketch-lead--orange { color: #E8742E; }
+.sa-sketch-title > .sa-sketch-lead { display: block; font-size: 0.72em; }
+.sa-sketch-text--right { text-align: right; justify-items: end; }

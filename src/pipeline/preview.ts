@@ -9,7 +9,7 @@ import type { Db } from '../db/pool.js';
 import { getFile } from '../files.js';
 import { CROPS, crop, decode } from '../images/prep.js';
 import { loadBrand } from '../render/brand.js';
-import { renderPost, styleFor } from '../render/index.js';
+import { lookSpec, renderPost, styleFor } from '../render/index.js';
 import { templateEntry } from '../render/registry.js';
 import { STYLE_KEYS, STYLES, type Style } from '../render/styles.js';
 import { allSettings } from '../settings.js';
@@ -116,7 +116,7 @@ export async function previewDesign(db: Db, input: PreviewInput): Promise<Previe
   const s = await allSettings(db);
   const settings = { storeAddress: s.store_address ?? '', openHours: s.open_hours ?? '', handle: s.instagram_handle ?? '@fuadijan', website: s.website_url ?? '' };
   const asked: Style = input.style === 'auto' ? entry.style ?? 'band' : input.style;
-  const design = { style: asked };
+  const design = { style: asked, ...lookSpec(input.invite) };
   const style = styleFor({ photo: photo.feed, cutout: null, design });
   const outputs = await renderPost({
     sheetTemplate: input.template, slot: input.kind === 'reel' ? 'reel' : 'feed', label: input.label || entry.label, headline: input.headline, line: input.line,

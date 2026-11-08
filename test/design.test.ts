@@ -137,6 +137,15 @@ describe('design styles', () => {
     expect(styleFromNote('band style')).toBe('band');
     expect(styleFromNote('stronger band')).toBeNull();
     expect(styleFromNote('shorter caption')).toBeNull();
+    expect(styleFromNote('arch style')).toBe('arch');
+    expect(styleFromNote('countdown style')).toBe('countdown');
+    expect(styleFromNote('a ribbon please')).toBe('ribbon');
+    expect(styleFromNote('jaali style')).toBe('jaali');
+    expect(styleFromNote('deal style')).toBe('deal');
+    expect(styleFromNote('menu style')).toBe('menu');
+    expect(styleFromNote('menu board')).toBe('menu');
+    // Ordinary words about the menu or a deal are not a look.
+    expect(styleFromNote('new on the menu, great deal')).toBeNull();
     const base = { style: 'band' as const, accent_word: false, layout: 'B' as const, text_position: 'bottom' as const, text_side: 'left' as const, band_strength: 0.9, type_scale: 1, crop_focus_y: 0.42, lift_tone: false, rationale: 'r' };
     const { spec, locked } = applyOwnerNote(base, 'poster with an accent');
     expect(spec.style).toBe('poster');
@@ -144,6 +153,15 @@ describe('design styles', () => {
     expect(locked).toEqual(['style', 'accent_word']);
     // The critic cannot change a locked style.
     expect(mergeFixes(spec, { style: 'band' }, locked).style).toBe('poster');
+    // Nor can it pick an occasion look, which only the owner picks.
+    expect(mergeFixes(base, { style: 'deal' }, []).style).toBe('band');
+  });
+
+  it('draws jaali and menu without a photo; the other occasion looks need one', () => {
+    expect(feasibleStyle('jaali', { cutout: false, photo: false })).toBe('jaali');
+    expect(feasibleStyle('menu', { cutout: false, photo: false })).toBe('menu');
+    expect(feasibleStyle('arch', { cutout: false, photo: false })).toBe('band');
+    expect(feasibleStyle('arch', { cutout: false, photo: true })).toBe('arch');
   });
 
   it('only offers poster and flat with a cutout, and anything with a photo', () => {

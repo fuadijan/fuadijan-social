@@ -28,8 +28,10 @@ export const designFields = {
   textSide: z.enum(['left', 'right']).default('left'),
   bandStrength: z.number().min(0).max(1).default(1),
   typeScale: z.number().min(0.8).max(1.4).default(1),
-  /** The first headline line as an italic saffron lead-in. */
+  /** The first headline line as an italic lead-in over the title. */
   accentWord: z.boolean().default(false),
+  /** The lead-in's colour: saffron (gold) or ember (orange); the owner's pick. */
+  accentColor: z.enum(['saffron', 'ember']).default('saffron'),
 };
 
 export const HeroData = z.object({
@@ -80,7 +82,7 @@ export const ACCENT_RATIO = 0.64;
  * ACCENT_RATIO of the size (the "Time to / Savour the flavours" idea from the owner's references), so only the
  * second line decides the size.
  */
-export function headline(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, italic = false, maxSize = ctx.brand.layout.headline.start, scale = 1, side: Side = 'left', accent = false): { el: El; size: number } {
+export function headline(ctx: Ctx, text: string, width = ctx.brand.layout.textColumn, italic = false, maxSize = ctx.brand.layout.headline.start, scale = 1, side: Side = 'left', accent = false, accentColor = ctx.brand.colors.saffron): { el: El; size: number } {
   const { brand } = ctx;
   const lines = twoLines(text);
   const font = fontOf(italic && brand.fontFiles.headingItalic ? brand.fontFiles.headingItalic : brand.fontFiles.heading);
@@ -96,7 +98,7 @@ export function headline(ctx: Ctx, text: string, width = ctx.brand.layout.textCo
     return {
       size,
       el: el('div', common, [
-        el('div', { display: 'flex', fontStyle: 'italic', fontSize: accentSize, lineHeight: 1.0, color: brand.colors.saffron, marginBottom: Math.round(size * 0.04) }, lines[0]),
+        el('div', { display: 'flex', fontStyle: 'italic', fontSize: accentSize, lineHeight: 1.0, color: accentColor, marginBottom: Math.round(size * 0.04) }, lines[0]),
         ...mainLines.filter(Boolean).map((l) => el('div', { display: 'flex' }, l)),
       ]),
     };
@@ -208,7 +210,7 @@ export function heroLayer(ctx: Ctx, d: z.infer<typeof HeroData>): El {
   }
   // The logo takes the top corner the text block doesn't.
   parts.push(logo(ctx, atTop && side === 'left' ? 'right' : 'left'));
-  const h = headline(ctx, d.headline, brand.layout.textColumn, false, d.layout === 'B' ? 128 : undefined, d.typeScale, side, d.accentWord);
+  const h = headline(ctx, d.headline, brand.layout.textColumn, false, d.layout === 'B' ? 128 : undefined, d.typeScale, side, d.accentWord, brand.colors[d.accentColor]);
   const belowLogo = (brand.layout.margin + logoHeight(ctx) + 40) / ctx.h;
   const textTop = d.layout === 'A' ? 0.26 : atTop ? belowLogo : 0.44;
   const textBottom = d.layout === 'A' ? 0.24 : atTop ? 0.36 : 0.115;
@@ -281,21 +283,23 @@ export function storyLayer(ctx: Ctx, d: z.infer<typeof StoryData>): El {
   const { brand } = ctx;
   const { margin, storySafeTop: top, storySafeBottom: bottom } = brand.layout;
   const atTop = d.textPosition === 'top';
-  const h = headline(ctx, d.headline, 760, false, undefined, d.typeScale, 'left', d.accentWord);
+  const side = d.textSide;
+  const h = headline(ctx, d.headline, 760, false, undefined, d.typeScale, side, d.accentWord, brand.colors[d.accentColor]);
   const brandLine = el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 28, letterSpacing: '0.2em', color: brand.colors.sand }, brand.brandLine);
   const details = d.details.length ? [el('div', { display: 'flex', gap: 44, marginBottom: 30 }, d.details.map((x) => el('div', { display: 'flex', flexDirection: 'column', paddingLeft: 20, borderLeft: `3px solid ${brand.colors.ember}`, gap: 6 }, [
     el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 26, letterSpacing: '0.22em', color: brand.colors.saffron }, uc(x.head)),
     ...(x.value ? [el('div', { display: 'flex', fontFamily: brand.fonts.heading.family, fontSize: 50, lineHeight: 1.1, color: brand.colors.cream }, uc(x.value))] : []),
   ])))] : [];
-  const block = [label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx), ...(d.line ? [line(ctx, d.line, 760, brand.layout.line.size, 'left', 2), spacer(30)] : []), ...details];
+  const block = [label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx), ...(d.line ? [line(ctx, d.line, 760, brand.layout.line.size, side, 2), spacer(30)] : []), ...details];
+  const align = alignItems(side);
   return canvas(ctx, [
     gradient(ctx, atTop ? 0.5 : 0.48, d.bandStrength, atTop ? 'top' : 'bottom'),
     ...(atTop ? [gradient(ctx, 0.16, Math.min(1, d.bandStrength), 'bottom')] : []),
     el('div', { position: 'absolute', top, left: margin, display: 'flex' }, logoImg(ctx, {})),
     atTop
-      ? el('div', { position: 'absolute', left: margin, right: margin, top: top + logoHeight(ctx) + 56, display: 'flex', flexDirection: 'column' }, block)
-      : el('div', { position: 'absolute', left: margin, right: margin, bottom, display: 'flex', flexDirection: 'column' }, [...block, brandLine]),
-    ...(atTop ? [el('div', { position: 'absolute', left: margin, bottom, display: 'flex' }, brandLine)] : []),
+      ? el('div', { position: 'absolute', left: margin, right: margin, top: top + logoHeight(ctx) + 56, display: 'flex', flexDirection: 'column', alignItems: align }, block)
+      : el('div', { position: 'absolute', left: margin, right: margin, bottom, display: 'flex', flexDirection: 'column', alignItems: align }, [...block, brandLine]),
+    ...(atTop ? [el('div', { position: 'absolute', left: margin, right: margin, bottom, display: 'flex', justifyContent: align }, brandLine)] : []),
   ]);
 }
 

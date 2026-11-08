@@ -233,11 +233,21 @@ export interface StatusResponse {
 
 // ─── the Create flow (custom designs) and the wording bank ──────────────────────────────────────────────
 
-export type StyleKey = 'band' | 'split' | 'poster' | 'flat' | 'invite';
+export type StyleKey = 'band' | 'split' | 'poster' | 'flat' | 'invite' | 'arch' | 'countdown' | 'ribbon' | 'jaali' | 'deal' | 'menu';
 export type CustomFormat = 'feed' | 'story' | 'reel';
 
-/** What the Invite style prints: the date shown (YYYY-MM-DD), the time, and the short message over the time. */
-export interface InviteDetails { date: string | null; time: string; message: string }
+/**
+ * A look's own details: the date (the invite's day, the countdown's big day; YYYY-MM-DD), the time and the short
+ * message (over the invite's time, under the count, on the ribbon, over the price); the deal's price; the menu's
+ * dishes; and for any look the text side and the italic line over the title (its colour and its own words).
+ */
+export interface InviteDetails {
+  /** The look picked on the day's page, kept with its details (the server adds it). */
+  style?: StyleKey;
+  date: string | null; time: string; message: string;
+  price?: string; menu?: { name: string; price: string }[];
+  side?: 'left' | 'right'; accent?: 'none' | 'gold' | 'orange'; lead?: string;
+}
 
 /** What the owner chose for a one-off post; stored on the row (`row.custom`). */
 export interface CustomSpec {
@@ -311,7 +321,7 @@ export interface CreateOptions {
   /** `template` is the series suggested for the product (its menu category: drinks pour, sweets save room, karahis from the karahi). */
   products: { name: string; category: string | null; series: string | null; status: string; wordings: number; template: string }[];
   templates: { template: string; label: string; footer: 'brand' | 'address'; style: StyleKey | null }[];
-  styles: { key: StyleKey; name: string; blurb: string; needsCutout: boolean; story: boolean }[];
+  styles: { key: StyleKey; name: string; blurb: string; needsCutout: boolean; story: boolean; occasion: boolean }[];
   photos: RecentPhoto[];
 }
 

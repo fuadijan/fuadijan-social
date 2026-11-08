@@ -159,7 +159,8 @@ export async function directDesign(app: AppContext, input: DesignInput, thumb: B
   try {
     const prompt = directPrompt({ ...input, heuristic, templateStyle: input.templateStyle ?? null });
     const spec = await app.claude.call({ purpose: 'direct-design', fixtureKey: 'default', system: prompt.system, user: prompt.user, image: { bytes: thumb, mime: 'image/jpeg' }, schema: DesignSpec, jobId });
-    return { spec, source: 'claude' };
+    // The occasion looks are the owner's to pick.
+    return { spec: STYLES[spec.style].occasion ? { ...spec, style: heuristic.style } : spec, source: 'claude' };
   } catch (e) {
     app.log.warn(`Art director unavailable, using the rule-based design: ${e instanceof Error ? e.message : e}`);
     return { spec: heuristic, source: 'heuristic' };
@@ -196,6 +197,7 @@ export function mergeFixes(spec: DesignSpec, fixes: Critique['fixes'], locked: (
   const out = { ...spec };
   for (const [k, v] of Object.entries(fixes) as [keyof Critique['fixes'], unknown][]) {
     if (v === undefined || v === null || locked.includes(k)) continue;
+    if (k === 'style' && STYLES[v as Style].occasion) continue;
     (out as Record<string, unknown>)[k] = v;
   }
   if (out.text_position !== spec.text_position && !locked.includes('crop_focus_y')) out.crop_focus_y = out.text_position === 'top' ? 0.58 : 0.42;

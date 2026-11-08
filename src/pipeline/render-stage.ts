@@ -15,10 +15,10 @@ import { cropAround, regionAround, thumbnail, upright } from '../images/prep.js'
 import type { Critique, DesignSpec, MatchResult } from '../brain/schemas.js';
 import { loadBrand } from '../render/brand.js';
 import type { Cutout } from '../render/compose.js';
-import { renderPost, type RenderInput, type RenderOutput } from '../render/index.js';
+import { lookSpec, renderPost, type RenderInput, type RenderOutput } from '../render/index.js';
 import { pairRatio } from '../render/pair.js';
 import { templateEntry } from '../render/registry.js';
-import { STYLES, feasibleStyle } from '../render/styles.js';
+import { STYLES, feasibleStyle, styleFromNote } from '../render/styles.js';
 import { allSettings } from '../settings.js';
 import { CRITIQUE_FIX_BELOW, applyOwnerNote, critiqueDesign, directDesign, mergeFixes, withLegibility, type DesignRun } from './design.js';
 import { customNote } from './custom.js';
@@ -111,8 +111,10 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   // The photo read lives on the asset too, so a /redo (a fresh job with no state) still knows the composition.
   const read: MatchResult | null = (ownPhoto ? ctx.job.state.match : null) ?? hero?.match ?? null;
   const composition = read?.composition;
-  // A custom post's chosen style reads like a note ("poster style"), unless this run's note names another.
-  const note = customNote(row.custom, ctx.job.state.note ?? null);
+  // The look the owner picked reads like a note ("poster style"), unless this run's note names another: the one
+  // picked on the day's page (kept with the look's details) first, then a custom post's.
+  const jobNote = ctx.job.state.note ?? null;
+  const note = row.invite?.style && !(jobNote && styleFromNote(jobNote)) ? [jobNote, `${row.invite.style} style`].filter(Boolean).join(', ') : customNote(row.custom, jobNote);
   const { spec: noteSpec, locked } = applyOwnerNote(blankSpec(), note);
   const forceB = locked.includes('layout') && noteSpec.layout === 'B';
   const forceA = locked.includes('layout') && noteSpec.layout === 'A';
@@ -175,6 +177,10 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
   };
   const directed = await directDesign(ctx, designInput, await thumbnail(heroPhoto, 512), ctx.job.id);
   let { spec } = applyOwnerNote(directed.spec, note);
+  // The owner's text side and italic lead-in, set in the Look step, win too.
+  const look = lookSpec(row.invite);
+  spec = { ...spec, ...look };
+  for (const k of Object.keys(look) as (keyof DesignSpec)[]) if (k in spec && !locked.includes(k)) locked.push(k);
   spec = feasible(spec);
   const source = locked.length ? 'owner' : directed.source;
 

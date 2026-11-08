@@ -22,9 +22,9 @@ function giantSize(ctx: Ctx, lines: string[], width: number, start: number): num
   return fitHeadline(font, [uc(a), uc(b)], width, start, floor, 8);
 }
 
-const isStory = (ctx: Ctx) => ctx.h / ctx.w > 1.6;
-const safeTop = (ctx: Ctx) => (isStory(ctx) ? ctx.brand.layout.storySafeTop : ctx.brand.layout.margin);
-const safeBottom = (ctx: Ctx) => (isStory(ctx) ? ctx.brand.layout.storySafeBottom : ctx.brand.layout.margin);
+export const isStory = (ctx: Ctx) => ctx.h / ctx.w > 1.6;
+export const safeTop = (ctx: Ctx) => (isStory(ctx) ? ctx.brand.layout.storySafeTop : ctx.brand.layout.margin);
+export const safeBottom = (ctx: Ctx) => (isStory(ctx) ? ctx.brand.layout.storySafeBottom : ctx.brand.layout.margin);
 const centred = (ctx: Ctx, top: number | undefined, bottom: number | undefined, children: El[]): El =>
   el('div', { position: 'absolute', left: ctx.brand.layout.margin, right: ctx.brand.layout.margin, ...(top !== undefined ? { top } : {}), ...(bottom !== undefined ? { bottom } : {}), display: 'flex', flexDirection: 'column', alignItems: 'center' }, children);
 
@@ -168,6 +168,7 @@ export const InviteData = z.object({
   website: z.string().max(60).default(''),
   textSide: designFields.textSide,
   typeScale: designFields.typeScale,
+  accentColor: designFields.accentColor,
 });
 
 /** The share of the width the photo takes on an invite, from its outer edge. */
@@ -208,7 +209,7 @@ export function inviteLayer(ctx: Ctx, d: z.infer<typeof InviteData>): El {
     el('div', { position: 'absolute', ...place, top: top + 10, width: colWidth, display: 'flex', flexDirection: 'column', alignItems: align }, [
       label(ctx, d.label, brand.colors.sand, d.typeScale, colWidth),
       spacer(Math.round(ctx.h * 0.05)),
-      lead ? el('div', { display: 'flex', fontFamily: brand.fonts.heading.family, fontStyle: 'italic', fontSize: Math.round(size * 0.62), lineHeight: 1, color: brand.colors.saffron, marginBottom: 6 }, lead) : spacer(0),
+      lead ? el('div', { display: 'flex', fontFamily: brand.fonts.heading.family, fontStyle: 'italic', fontSize: Math.round(size * 0.62), lineHeight: 1, color: brand.colors[d.accentColor], marginBottom: 6 }, lead) : spacer(0),
       el('div', { display: 'flex', fontFamily: brand.fonts.heading.family, fontSize: size, lineHeight: 0.92, color: brand.colors.cream, whiteSpace: 'nowrap' }, uc(main)),
       spacer(26),
       line(ctx, d.line, Math.min(colWidth, 560), Math.round(brand.layout.line.size * 0.8), side, 2, brand.colors.sand),

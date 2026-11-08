@@ -236,7 +236,12 @@ export function PartStep({ n, def, value, onChange }: { n: number; def: PartDef;
 }
 
 export interface Look { style: StyleKey | 'auto'; invite: InviteDetails }
-export interface StyleOption { key: StyleKey; name: string; blurb: string }
+export interface StyleOption { key: StyleKey; name: string; blurb: string; occasion?: boolean }
+
+export const EMPTY_DETAILS: InviteDetails = { date: null, time: '', message: '' };
+/** The looks whose text block can sit on either side, and the ones that can carry the italic line over the title. */
+const SIDE_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'invite', 'countdown', 'ribbon', 'deal'];
+const LEAD_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'invite', 'countdown', 'ribbon', 'deal', 'arch', 'jaali', 'menu'];
 
 /** "SATURDAY 14 NOV" from YYYY-MM-DD, as the Invite style prints it. */
 export function inviteDay(iso: string | null): string {
@@ -245,27 +250,115 @@ export function inviteDay(iso: string | null): string {
   return `${d.toLocaleDateString('en-AU', { weekday: 'long' })} ${d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }).replace('.', '')}`.toUpperCase();
 }
 
-/** The look of the design: a style from the list, and for Invite the date, the time and the message over the time. */
-export function LookStep({ n, styles, value, onChange }: { n: number | string; styles: StyleOption[]; value: Look; onChange: (v: Look) => void }) {
-  const ids = { s: useId(), d: useId(), t: useId(), m: useId() };
+/** The countdown's big word and the words under it, worked out as the design does on the day the post goes up. */
+export function countdownText(bigDay: string | null, postDate: string | null | undefined, words: string): string {
+  const day = (iso: string | null | undefined) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) : null);
+  const big = day(bigDay);
+  const post = day(postDate);
+  const w = words.trim().toUpperCase();
+  if (big === null || post === null) return `SOON${w ? ` ${w}` : ''}`;
+  const n = Math.round((big - post) / 86_400_000);
+  if (n > 1) return `${n} ${w || 'DAYS TO GO'}`;
+  if (n === 1) return `1 ${w || 'DAY TO GO'}`;
+  if (n === 0) return `TODAY ${w || "IT'S HERE"}`;
+  return `NOW ON${w ? ` ${w}` : ''}`;
+}
+
+/** The details to save for this look: only what the chosen look uses, and null when nothing is set. */
+export function detailsOut(look: Look): InviteDetails | null {
+  const i = look.invite;
+  const s = look.style;
+  const out: InviteDetails = {
+    date: s === 'invite' || s === 'countdown' ? i.date || null : null,
+    time: s === 'invite' ? i.time.trim() : '',
+    message: ['invite', 'countdown', 'ribbon', 'deal'].includes(s) ? i.message.trim() : '',
+  };
+  if (s === 'deal' && i.price?.trim()) out.price = i.price.trim();
+  const menu = s === 'menu' ? (i.menu ?? []).map((m) => ({ name: m.name.trim(), price: m.price.trim() })).filter((m) => m.name) : [];
+  if (menu.length) out.menu = menu;
+  if (i.side && SIDE_LOOKS.includes(s)) out.side = i.side;
+  if (i.accent && LEAD_LOOKS.includes(s)) {
+    out.accent = i.accent;
+    if (i.accent !== 'none' && i.lead?.trim()) out.lead = i.lead.trim();
+  }
+  return out.date || out.time || out.message || Object.keys(out).length > 3 ? out : null;
+}
+
+/** One line on what the look will print, for the summary before the design is made. */
+export function lookSummary(look: Look, name: string | undefined, postDate?: string | null): string {
+  const i = look.invite;
+  const bits = [name ?? 'The art director’s choice', ...lookDetails(look, postDate)];
+  if (i.side && SIDE_LOOKS.includes(look.style)) bits.push(`text on the ${i.side}`);
+  if (i.accent && LEAD_LOOKS.includes(look.style)) bits.push(i.accent === 'none' ? 'no italic line' : `${i.accent} italic line${i.lead?.trim() ? ` “${i.lead.trim()}”` : ''}`);
+  return bits.join(' · ');
+}
+
+/** What the look's own details print (the invite's day and time, the countdown, the ribbon, the sticker, the menu). */
+function lookDetails(look: Look, postDate?: string | null): string[] {
+  const i = look.invite;
+  const bits: string[] = [];
+  if (look.style === 'invite') bits.push(inviteDay(i.date) || 'the day it goes up', `${i.message.trim() || 'FROM'} ${i.time.trim() || 'opening hours'}`);
+  if (look.style === 'countdown') bits.push(i.date ? `${countdownText(i.date, postDate, i.message)} (big day ${inviteDay(i.date)})` : 'no big day set yet');
+  if (look.style === 'ribbon') bits.push(`ribbon: ${i.message.trim().toUpperCase() || 'NEW ON THE MENU'}`);
+  if (look.style === 'deal') bits.push(`sticker: ${[i.message.trim() || (i.price?.trim() ? 'ONLY' : ''), i.price?.trim() || 'SPECIAL'].filter(Boolean).join(' ')}`);
+  if (look.style === 'menu') {
+    const n = (i.menu ?? []).filter((m) => m.name.trim()).length;
+    bits.push(n ? `${n} dish${n === 1 ? '' : 'es'}` : 'no dishes yet: the line shows instead');
+  }
+  return bits;
+}
+
+/** A look as a picture card: the sample it makes, its name and when to use it. */
+function LookCard({ option, on, onPick }: { option: StyleOption | null; on: boolean; onPick: () => void }) {
+  return (
+    <button type="button" className={`sa-look${on ? ' sa-look--on' : ''}`} aria-pressed={on} onClick={onPick}>
+      {option ? <img className="sa-look-img" src={`/looks/${option.key}.jpg`} alt="" loading="lazy" /> : <span className="sa-look-img sa-look-auto" aria-hidden="true">✦</span>}
+      <span className="sa-look-name">{option ? option.name : 'Art director’s choice'}</span>
+    </button>
+  );
+}
+
+/**
+ * The look of the design, picked from picture cards (a sample of what each makes), then the look's own details
+ * (the invite's date and time, the countdown's big day, the ribbon's words, the deal's price, the menu's dishes),
+ * and for any look the side the text sits on and an italic line over the title in gold or orange.
+ */
+export function LookStep({ n, styles, value, onChange, postDate, title }: { n: number | string; styles: StyleOption[]; value: Look; onChange: (v: Look) => void; postDate?: string | null; title?: string }) {
+  const ids = { d: useId(), t: useId(), m: useId(), p: useId(), side: useId(), acc: useId(), lead: useId() };
   const inv = value.invite;
   const setInvite = (patch: Partial<InviteDetails>) => onChange({ ...value, invite: { ...inv, ...patch } });
+  // Each look's words mean something different, so they start empty when the look changes.
+  const pick = (style: StyleKey | 'auto') => onChange({ style, invite: style === value.style ? inv : { ...inv, message: '', time: style === 'invite' ? inv.time : '' } });
   const chosen = styles.find((s) => s.key === value.style);
+  const everyday = styles.filter((s) => !s.occasion);
+  const occasion = styles.filter((s) => s.occasion);
+  const menu = inv.menu?.length ? inv.menu : [{ name: '', price: '' }];
+  const setDish = (i: number, patch: Partial<{ name: string; price: string }>) => setInvite({ menu: menu.map((m, j) => (j === i ? { ...m, ...patch } : m)) });
+  const firstLine = (title ?? '').split('\n')[0]?.trim() ?? '';
   return (
     <div className="sa-part">
       <div className="sa-part-head">
         <span className="sa-pin" aria-hidden="true">{n}</span>
         <div>
           <div className="sa-part-name">Look <span className="sa-part-on">the style of the design</span></div>
-          <div className="sa-note">How the words and the photo sit together. The art director can choose, or you can.</div>
+          <div className="sa-note">Each card shows what the look makes. The art director can choose, or you can.</div>
         </div>
       </div>
-      <label className="sa-eyebrow" htmlFor={ids.s}>Choose the style</label>
-      <select id={ids.s} className="sa-input sa-select" value={value.style} onChange={(e) => onChange({ ...value, style: e.target.value as StyleKey | 'auto' })}>
-        <option value="auto">Let the art director choose</option>
-        {styles.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
-      </select>
-      <div className="sa-part-text sa-part-text--muted">{chosen ? chosen.blurb : 'It reads the photo and picks the style that suits it.'}</div>
+      <div className="sa-eyebrow">Every day</div>
+      <div className="sa-looks" role="group" aria-label="Everyday looks">
+        <LookCard option={null} on={value.style === 'auto'} onPick={() => pick('auto')} />
+        {everyday.map((s) => <LookCard key={s.key} option={s} on={value.style === s.key} onPick={() => pick(s.key)} />)}
+      </div>
+      {occasion.length ? (
+        <>
+          <div className="sa-eyebrow" style={{ marginTop: 12 }}>Special occasions</div>
+          <div className="sa-looks" role="group" aria-label="Looks for special occasions">
+            {occasion.map((s) => <LookCard key={s.key} option={s} on={value.style === s.key} onPick={() => pick(s.key)} />)}
+          </div>
+        </>
+      ) : null}
+      <div className="sa-part-text sa-part-text--muted"><b>{chosen?.name ?? 'Art director’s choice'}.</b> {chosen ? chosen.blurb : 'It reads the photo and picks the everyday look that suits it.'} The sample uses other words and photo; the preview shows yours.</div>
+
       {value.style === 'invite' ? (
         <div className="sa-invite">
           <div className="sa-eyebrow" style={{ marginTop: 12 }}>What the invite prints</div>
@@ -287,6 +380,96 @@ export function LookStep({ n, styles, value, onChange }: { n: number | string; s
           <div className="sa-note">For example ALL DAY over 7AM – 10PM, or LAUNCH DAY over FROM 7AM. Empty: FROM over the opening hours.</div>
         </div>
       ) : null}
+
+      {value.style === 'countdown' ? (
+        <div className="sa-invite">
+          <div className="sa-eyebrow" style={{ marginTop: 12 }}>What the countdown prints</div>
+          <div className="sa-invite-time">
+            <div>
+              <label className="sa-eyebrow" htmlFor={ids.d}>The big day</label>
+              <input id={ids.d} className="sa-input" type="date" value={inv.date ?? ''} onChange={(e) => setInvite({ date: e.target.value || null })} />
+            </div>
+            <div>
+              <label className="sa-eyebrow" htmlFor={ids.m}>Words under the number</label>
+              <input id={ids.m} className="sa-input" maxLength={24} value={inv.message} placeholder="DAYS TO GO" onChange={(e) => setInvite({ message: e.target.value })} />
+            </div>
+          </div>
+          <div className="sa-note">{inv.date ? `On the day it goes up it shows ${countdownText(inv.date, postDate, inv.message)}, then THE BIG DAY ${inviteDay(inv.date)}.` : 'Set the big day (the launch, the first day); the number of days left is worked out from the day the post goes up. Empty: SOON.'}</div>
+        </div>
+      ) : null}
+
+      {value.style === 'ribbon' ? (
+        <div className="sa-invite">
+          <label className="sa-eyebrow" htmlFor={ids.m} style={{ marginTop: 12 }}>Words on the ribbon</label>
+          <input id={ids.m} className="sa-input" maxLength={24} value={inv.message} placeholder="NEW ON THE MENU" onChange={(e) => setInvite({ message: e.target.value })} />
+          <div className="sa-note">A few words: NOW OPEN, ONE YEAR TODAY, EID SPECIAL. Empty: NEW ON THE MENU.</div>
+        </div>
+      ) : null}
+
+      {value.style === 'deal' ? (
+        <div className="sa-invite">
+          <div className="sa-eyebrow" style={{ marginTop: 12 }}>What the sticker says</div>
+          <div className="sa-invite-time">
+            <div>
+              <label className="sa-eyebrow" htmlFor={ids.m}>Small word on top</label>
+              <input id={ids.m} className="sa-input" maxLength={24} value={inv.message} placeholder="ONLY" onChange={(e) => setInvite({ message: e.target.value })} />
+            </div>
+            <div>
+              <label className="sa-eyebrow" htmlFor={ids.p}>Price</label>
+              <input id={ids.p} className="sa-input" maxLength={12} value={inv.price ?? ''} placeholder="$25" onChange={(e) => setInvite({ price: e.target.value })} />
+            </div>
+          </div>
+          <div className="sa-note">For example ONLY over $25, or FROM over $12. With no price the sticker shows the word big (2 FOR 1, SPECIAL).</div>
+        </div>
+      ) : null}
+
+      {value.style === 'menu' ? (
+        <div className="sa-invite">
+          <div className="sa-eyebrow" style={{ marginTop: 12 }}>The dishes on the menu (up to six)</div>
+          {menu.map((m, i) => (
+            <div key={i} className="sa-menu-row">
+              <input className="sa-input" aria-label={`Dish ${i + 1}`} maxLength={40} value={m.name} placeholder={i === 0 ? 'Chicken karahi' : 'Dish'} onChange={(e) => setDish(i, { name: e.target.value })} />
+              <input className="sa-input" aria-label={`Price of dish ${i + 1}`} maxLength={12} value={m.price} placeholder="$22" onChange={(e) => setDish(i, { price: e.target.value })} />
+              <Button variant="ghost" size="sm" aria-label={`Remove dish ${i + 1}`} disabled={menu.length === 1 && !m.name && !m.price} onClick={() => setInvite({ menu: menu.filter((_, j) => j !== i) })}>✕</Button>
+            </div>
+          ))}
+          {menu.length < 6 ? <div><Button variant="ghost" size="sm" onClick={() => setInvite({ menu: [...menu, { name: '', price: '' }] })}>+ Add a dish</Button></div> : null}
+          <div className="sa-note">The title goes above the list (Iftar Menu, Eid Platters). With no dishes, the line under the title shows instead.</div>
+        </div>
+      ) : null}
+
+      {SIDE_LOOKS.includes(value.style) || LEAD_LOOKS.includes(value.style) ? (
+        <div className="sa-invite-time" style={{ marginTop: 12 }}>
+          {SIDE_LOOKS.includes(value.style) ? (
+            <div>
+              <label className="sa-eyebrow" htmlFor={ids.side}>Text on</label>
+              <select id={ids.side} className="sa-input sa-select" value={inv.side ?? ''} onChange={(e) => setInvite({ side: (e.target.value || undefined) as InviteDetails['side'] })}>
+                <option value="">The art director chooses</option>
+                <option value="left">The left</option>
+                <option value="right">The right</option>
+              </select>
+            </div>
+          ) : <div />}
+          {LEAD_LOOKS.includes(value.style) ? (
+            <div>
+              <label className="sa-eyebrow" htmlFor={ids.acc}>Italic line over the title</label>
+              <select id={ids.acc} className="sa-input sa-select" value={inv.accent ?? ''} onChange={(e) => setInvite({ accent: (e.target.value || undefined) as InviteDetails['accent'] })}>
+                <option value="">The art director chooses</option>
+                <option value="none">None</option>
+                <option value="gold">Gold</option>
+                <option value="orange">Orange</option>
+              </select>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {LEAD_LOOKS.includes(value.style) && (inv.accent === 'gold' || inv.accent === 'orange') ? (
+        <div style={{ marginTop: 10 }}>
+          <label className="sa-eyebrow" htmlFor={ids.lead}>Words for the italic line</label>
+          <input id={ids.lead} className="sa-input" maxLength={30} value={inv.lead ?? ''} placeholder={firstLine || 'Fresh from'} onChange={(e) => setInvite({ lead: e.target.value })} />
+          <div className="sa-note">A short lead-in such as Fresh from, Time to, Made with love. Empty: the title’s first line{firstLine ? ` (${firstLine})` : ''} becomes the italic line, so the title needs two lines.</div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -297,11 +480,17 @@ const shown = (v: PartValue | undefined, agentText: string) => (v?.pick === 'age
  * A drawing of the design with every part numbered where it goes, and what is posted with it underneath. It is a
  * sketch: the real preview, drawn on the photo, is a button away.
  */
-export function Sketch({ kind, parts, values, active, photoUrl, footer, look, lookName }: { kind: BuildKind; parts: PartKey[]; values: PartValues; active: PartKey | null; photoUrl: string | null; footer: string; look?: Look | null; lookName?: string }) {
+export function Sketch({ kind, parts, values, active, photoUrl, footer, look, lookName, postDate }: { kind: BuildKind; parts: PartKey[]; values: PartValues; active: PartKey | null; photoUrl: string | null; footer: string; look?: Look | null; lookName?: string; postDate?: string | null }) {
   const num = (k: PartKey) => parts.indexOf(k) + 1;
   const pin = (k: PartKey) => <span className="sa-pin sa-pin--on-photo" aria-hidden="true">{num(k)}</span>;
   const cls = (k: PartKey) => `sa-sketch-part${active === k ? ' sa-sketch-part--active' : ''}`;
   const cards = shown(values.onscreen, 'Text cards by the agent').split('\n').map((l) => l.trim()).filter(Boolean);
+  // The owner's italic line over the title, in its colour: its own words, or the title's first line.
+  const accent = look && LEAD_LOOKS.includes(look.style) && (look.invite.accent === 'gold' || look.invite.accent === 'orange') ? look.invite.accent : null;
+  const lead = accent ? look!.invite.lead?.trim() || null : null;
+  const titleLines = (shown(values.title, 'Title') || 'Title').split('\n');
+  const right = look?.invite.side === 'right' && SIDE_LOOKS.includes(look.style);
+  const details = look ? lookDetails(look, postDate) : [];
   return (
     <figure className="sa-sketch-wrap" aria-label="Sketch of the design, with each part numbered">
       <div className={`sa-sketch sa-sketch--${kind}`} style={photoUrl ? { backgroundImage: `url(${photoUrl})` } : undefined}>
@@ -316,11 +505,11 @@ export function Sketch({ kind, parts, values, active, photoUrl, footer, look, lo
             {cards.length > 3 ? <span className="sa-sketch-hint">+ {cards.length - 3} more</span> : null}
           </div>
         ) : null}
-        <div className="sa-sketch-text">
+        <div className={`sa-sketch-text${right ? ' sa-sketch-text--right' : ''}`}>
           <div className={`${cls('label')} sa-sketch-label`}>{pin('label')}{shown(values.label, 'SERIES LABEL') || 'SERIES LABEL'}</div>
           {kind === 'post' ? (
             <>
-              <div className={`${cls('title')} sa-sketch-title`}>{pin('title')}{(shown(values.title, 'Title') || 'Title').split('\n').map((l, i) => <span key={i}>{l}</span>)}</div>
+              <div className={`${cls('title')} sa-sketch-title`}>{pin('title')}{lead ? <span className={`sa-sketch-lead sa-sketch-lead--${accent}`}>{lead}</span> : null}{titleLines.map((l, i) => <span key={i} className={accent && !lead && i === 0 && titleLines.length > 1 ? `sa-sketch-lead sa-sketch-lead--${accent}` : undefined}>{l}</span>)}</div>
               <div className={`${cls('line')} sa-sketch-line`}>{pin('line')}{shown(values.line, 'A line by the agent') || 'Line under the title'}</div>
             </>
           ) : (
@@ -331,6 +520,8 @@ export function Sketch({ kind, parts, values, active, photoUrl, footer, look, lo
               <span><b>{inviteDay(look.invite.date) || 'THE DAY IT GOES UP'}</b></span>
               <span><b>{look.invite.message.trim().toUpperCase() || 'FROM'}</b> {look.invite.time.trim() || 'opening hours'}</span>
             </div>
+          ) : details.length ? (
+            <div className="sa-sketch-invite"><span><b>{details.join(' · ')}</b></span></div>
           ) : null}
           <div className="sa-sketch-footer" title="Set by the series">{footer || 'Footer'}</div>
         </div>

@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { createCustom, fileUrl, getCreateOptions, getWordings, previewDesign, uploadToDay } from '../api';
 import { Button, buttonClass, Card, PageHeader } from '../components/fj';
-import { LookStep, PARTS, PartStep, PartsSummary, PreviewImages, Sketch, choicesFor, inviteDay, partDef, photoForPreview, startValue, type BuildKind, type PartDef, type PartKey, type PartValue, type PartValues } from '../components/PostBuilder';
+import { EMPTY_DETAILS, LookStep, PARTS, PartStep, PartsSummary, PreviewImages, Sketch, choicesFor, detailsOut, lookSummary, partDef, photoForPreview, startValue, type BuildKind, type PartDef, type PartKey, type PartValue, type PartValues } from '../components/PostBuilder';
 import { ErrorCard, Loading } from '../components/States';
 import { fmtDate } from '../format';
 import type { CreateOptions, CustomFormat, InviteDetails, PreviewResponse, StyleKey, WordingInput } from '../types';
@@ -111,7 +111,7 @@ export function Create() {
   const [values, setValues] = useState<PartValues>({});
   const [photo, setPhoto] = useState<PhotoChoice | null>(null);
   const [style, setStyle] = useState<StyleKey | 'auto'>('auto');
-  const [invite, setInvite] = useState<InviteDetails>({ date: null, time: '', message: '' });
+  const [invite, setInvite] = useState<InviteDetails>(EMPTY_DETAILS);
   const [formats, setFormats] = useState<CustomFormat[]>(['feed', 'story']);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -159,7 +159,7 @@ export function Create() {
 
   const STEPS = ['What', 'Photo', ...parts.map((k) => defs[k].name), 'Look', 'Check and make'];
   const lookStep = 2 + parts.length;
-  const inviteOut = style === 'invite' && (invite.date || invite.time.trim() || invite.message.trim()) ? { ...invite, time: invite.time.trim(), message: invite.message.trim() } : null;
+  const inviteOut = detailsOut({ style, invite });
   const styleName = style === 'auto' ? 'art director’s choice' : opts.styles.find((s) => s.key === style)?.name ?? style;
   const partAt = (i: number): PartKey | null => (i >= 2 && i < 2 + parts.length ? parts[i - 2]! : null);
   const active = partAt(step);
@@ -233,7 +233,7 @@ export function Create() {
 
   const last = step === STEPS.length - 1;
   const toggle = (f: CustomFormat) => setFormats(formats.includes(f) ? formats.filter((x) => x !== f) : [...formats, f]);
-  const sketch = <Sketch kind={kind} parts={parts} values={allValues} active={active} photoUrl={photoUrl} footer={footer} look={{ style, invite }} lookName={style === 'auto' ? undefined : styleName} />;
+  const sketch = <Sketch kind={kind} parts={parts} values={allValues} active={active} photoUrl={photoUrl} footer={footer} look={{ style, invite }} lookName={style === 'auto' ? undefined : styleName} postDate={theDate} />;
   return (
     <>
       <PageHeader title="New design" subtitle="Step by step: each part of the post is numbered on the sketch, so you see what you will get before it is made" />
@@ -263,7 +263,7 @@ export function Create() {
         {step === lookStep ? (
           <div className="sa-builder">
             <Card>
-              <LookStep n={parts.length + 1} styles={opts.styles} value={{ style, invite }} onChange={(v) => { setStyle(v.style); setInvite(v.invite); setPreview(null); }} />
+              <LookStep n={parts.length + 1} styles={opts.styles} value={{ style, invite }} onChange={(v) => { setStyle(v.style); setInvite(v.invite); setPreview(null); }} postDate={theDate} title={text('title') || product.trim()} />
               {style !== 'auto' && opts.styles.find((s) => s.key === style)?.needsCutout ? <div className="sa-note" style={{ marginTop: 10 }}>This style needs the plate cut out of the photo; when the photo cannot give one, the design falls back to Band.</div> : null}
             </Card>
             <div className="sa-builder-sketch">{sketch}</div>
@@ -276,7 +276,7 @@ export function Create() {
               <div className="sa-two-col" style={{ marginTop: 14 }}>
                 <div>
                   <div className="sa-eyebrow">Look</div>
-                  <div className="sa-part-words">{styleName}{style === 'invite' ? ` · ${inviteDay(invite.date) || 'the day it goes up'} · ${invite.message.trim() || 'FROM'} ${invite.time.trim() || 'opening hours'}` : ''}</div>
+                  <div className="sa-part-words">{lookSummary({ style, invite }, style === 'auto' ? undefined : styleName, theDate)}</div>
                   <Button variant="ghost" size="sm" onClick={() => setStep(lookStep)}>Change</Button>
                 </div>
                 {kind === 'post' ? (

@@ -608,6 +608,14 @@ describe.skipIf(!safe || !haveWorkbook)('database', () => {
     expect((await pool.query<{ state: { note: string } }>('select state from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]!.state.note).toBe('invite style, words at the top');
     await new Worker(ctx, 1000).drain();
     expect((await pool.query('select stage, status from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]).toEqual({ stage: 'done', status: 'done' });
+    // A look picked on the day's page is kept with its details: a later design, with no look in its note, uses it,
+    // and the owner's text side wins over the art director.
+    await setInvite(pool, (await rowByDay(pool, 2))!, cleanInvite({ style: 'deal', price: '$19', side: 'right', accent: 'orange', lead: 'Family size' }), 'owner-web');
+    expect((await rowByDay(pool, 2))!.invite).toMatchObject({ style: 'deal', price: '$19', side: 'right' });
+    expect(await setPostParts(pool, (await rowByDay(pool, 2))!, {}, 'owner-web', { note: 'bigger text', force: true })).toEqual({ rebuilding: true, changed: [] });
+    await new Worker(ctx, 1000).drain();
+    const used = (await pool.query<{ state: { design?: { spec: { style: string; text_side: string; accent_word: boolean } } } }>('select state from jobs where calendar_row_id = $1 order by id desc limit 1', [row.id])).rows[0]!.state.design?.spec;
+    expect(used).toMatchObject({ style: 'deal', text_side: 'right', accent_word: true });
     await setInvite(pool, (await rowByDay(pool, 2))!, null, 'owner-web');
   });
 

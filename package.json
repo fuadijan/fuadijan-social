@@ -20,6 +20,7 @@
     "build:web": "vite build --config web/vite.config.ts",
     "dev:web": "vite --config web/vite.config.ts",
     "render-samples": "tsx src/render-samples.ts",
+    "look-samples": "tsx src/look-samples.ts",
     "strategy-workbook": "tsx calendar/strategy-workbook.ts",
     "template-workbook": "tsx calendar/template-workbook.ts"
   },

@@ -256,6 +256,15 @@ new-product-reveal and weekend-feast → invite), the owner's note locks it (`/r
 the right`, "accent" / "no accent", "band style"), and the critic judges each style by its own rules. The style
 also shapes the story (invite's story is the band story).
 
+**Six occasion looks** (`src/render/occasion.ts`), for special days, which only the owner picks (the art director and
+the critic never choose one): **arch** (the photo in an arched window, the greeting centred under it), **countdown**
+(a giant count of the days from the day the post goes up to the big day, the photo fading off one side), **ribbon**
+(the band design with a ribbon of the owner's words across the corner), **jaali** (a lattice in a double frame, the
+photo in a round window; it also draws with no photo), **deal** (the band design with a price sticker) and **menu**
+(up to six dishes with prices, a strip of the photo along the bottom; also with no photo). `npm run look-samples`
+draws one sample of every look with the reference photos into `web/public/looks/` (the Look step's picture cards)
+and full size into `samples/out/`; run it again after changing a look.
+
 The pack's `design.json` and the Telegram line "🎨 Layout B · text bottom-left · type ×1.10 · …" say what was
 decided and why. `DESIGN_CRITIQUE=0` turns the critic off.
 
@@ -265,8 +274,13 @@ caption, call to action and hashtags (posted with it). A reel is series label, c
 then the same three. Each part is one step, numbered on a sketch of the design. Its dropdown lists the words that belong
 to the product: the post's own (calendar and writer), the product's saved captions, the series' hooks, the CTA, hashtag
 and benefit-caption libraries. "Write my own" and, in Create, "Let the agent write it" are also in the list, and the
-chosen words can be edited. The Look step picks a style. For Invite it also sets the date shown, the time and the
-message over the time (`calendar_rows.invite`, migration 0015), printed on the feed post and the story. "Preview on the
+chosen words can be edited. The Look step shows every look as a picture card of what it makes (every-day looks, then
+special occasions) and keeps the look's own details in `calendar_rows.invite` (migration 0015): for Invite the date
+shown, the time and the message over the time, printed on the feed post and the story; for Countdown the big day and
+the words under the count; for Ribbon its words; for Deal the price and the word over it; for Menu board the dishes.
+For any look that has them it also sets the text side (left or right) and an italic line over the title in gold or
+orange, with its own words or the title's first line; these win over the art director and the critic (`lookSpec`).
+On a day's page the picked look is kept with those details, so a later design (a new photo, a remake) uses it too. "Preview on the
 photo" (`POST /api/preview`, `src/pipeline/preview.ts`) draws the real design with those words, without Claude or the
 cutout, and stores nothing. "Preview on a blank photo" draws it on a plain stand-in (also used when there is no photo yet), to show just where the words sit. On a day's page, saving sends only the changed parts (`POST /api/rows/:dayNo/parts`,
 `setPostParts`), and the design is made again once. With nothing changed, the same button makes the design again

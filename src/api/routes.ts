@@ -48,6 +48,9 @@ function viewJson(v: RowView, extra: Record<string, unknown> = {}) {
 
 const qJson = (q: Awaited<ReturnType<typeof openQuestions>>[number]) => ({ id: q.id, rowId: q.row_id, field: q.field, question: q.question, options: q.options, askedAt: q.asked_at });
 
+/** A JSON body field as an object to spread (anything else is empty). */
+const asObject = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {});
+
 export function registerApi(app: FastifyInstance, ctx: AppContext): void {
   app.get('/api/me', async (req) => ({ user: req.user, hub: config.hub.url, webUrl: config.webUrl }));
 
@@ -158,9 +161,10 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     if (style !== 'auto' && !(STYLE_KEYS as readonly string[]).includes(style)) return reply.code(400).send({ ok: false, error: 'Pick a style.' });
     try {
       if (look && await rowIsBusy(ctx.pool, row.id)) throw new PostBusyError();
-      const inviteChanged = look && 'invite' in look ? await setInvite(ctx.pool, row, cleanInvite(look.invite), 'owner-web') : false;
+      // The look is kept with its details, so a later design (a new photo, a remake) uses it too.
+      const inviteChanged = look ? await setInvite(ctx.pool, row, cleanInvite({ ...asObject('invite' in look ? look.invite : row.invite), style }), 'owner-web') : false;
       const r = await setPostParts(ctx.pool, (await rowByDay(ctx.pool, row.day_no, row.plan))!, parts, 'owner-web', look ? { note: remakeNote(style, look.note), force: true } : undefined);
-      if (inviteChanged && !r.changed.length && !r.rebuilding) return { ok: true, message: 'Saved. The invite uses these details when the design is made.', rebuilding: false };
+      if (inviteChanged && !r.changed.length && !r.rebuilding) return { ok: true, message: 'Saved. The design uses this look when it is made.', rebuilding: false };
       const message = !r.changed.length && !r.rebuilding ? 'Nothing changed.' : !r.changed.length ? 'Making the design again with the new look.' : r.rebuilding ? 'Saved. The designs are being made again with these words.' : 'Saved. The post uses these words.';
       return { ok: true, message, rebuilding: r.rebuilding };
     } catch (e) {
@@ -178,7 +182,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
     const style = String(req.body?.style ?? 'auto');
     if (style !== 'auto' && !(STYLE_KEYS as readonly string[]).includes(style)) return reply.code(400).send({ ok: false, error: 'Pick a style.' });
     if (await rowIsBusy(ctx.pool, row.id)) return reply.code(409).send({ ok: false, error: new PostBusyError().message });
-    if (req.body && 'invite' in req.body) await setInvite(ctx.pool, row, cleanInvite(req.body.invite), 'owner-web');
+    await setInvite(ctx.pool, row, cleanInvite({ ...asObject(req.body && 'invite' in req.body ? req.body.invite : row.invite), style }), 'owner-web');
     const job = await rerenderRow(ctx.pool, row.id, { note: remakeNote(style, req.body?.note) ?? undefined });
     if (!job) return reply.code(400).send({ ok: false, error: 'There is no design to make again yet: it is made when the photo arrives.' });
     return { ok: true, message: 'Making the design again with the same words. About a minute.', rebuilding: true };
@@ -396,7 +400,7 @@ export function registerApi(app: FastifyInstance, ctx: AppContext): void {
       footers: { brand: loadBrand().brandLine, address: settings.store_address ?? '' },
       products: await products(),
       templates: heroTemplates(),
-      styles: STYLE_KEYS.map((k) => ({ key: k, name: STYLES[k].name, blurb: STYLES[k].blurb, needsCutout: STYLES[k].needsCutout, story: STYLES[k].story })),
+      styles: STYLE_KEYS.map((k) => ({ key: k, name: STYLES[k].name, blurb: STYLES[k].blurb, needsCutout: STYLES[k].needsCutout, story: STYLES[k].story, occasion: Boolean(STYLES[k].occasion) })),
       photos: await recentPhotos(ctx.pool),
     };
   });

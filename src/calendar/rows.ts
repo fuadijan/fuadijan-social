@@ -5,6 +5,7 @@
 import type { Db } from '../db/pool.js';
 import { addDays, sydneyDate, type IsoDate } from '../time.js';
 import { seriesOfTemplate } from '../render/registry.js';
+import { isStyle, type Style } from '../render/styles.js';
 import type { PostRecord } from './record.js';
 
 export type Slot = 'feed' | 'carousel' | 'reel';
@@ -18,7 +19,7 @@ export interface CustomWording { headline: string; line: string; caption: string
 export interface CustomSpec {
   product: string;
   /** A style key, or `auto` for the art director's choice. */
-  style: 'band' | 'split' | 'poster' | 'flat' | 'invite' | 'auto';
+  style: Style | 'auto';
   /** A reel is made alone: its cover (with the hook) and the reel pack. */
   formats: ('feed' | 'story' | 'reel')[];
   /** null: the agent writes the headline and line. */
@@ -35,16 +36,37 @@ export interface CustomSpec {
 export interface DesignPhoto { assetId: number; name: string | null }
 
 /** What the Invite style prints, as the owner set it: the date shown, the time, and the short message over the time. */
-export interface InviteDetails { date: string | null; time: string; message: string }
+/**
+ * A look's own details (the column is still called invite): the date, time and message the invite prints; the
+ * countdown's big day and the words under the count (date, message); the ribbon's words (message); the deal's
+ * price and the word over it; the menu's dishes; and, for any look, the text side and the italic line over the
+ * title (its colour, and its own words or the title's first line). `style` is the look the owner picked on the
+ * day's page, kept so a later design (a new photo, a remake) uses it too; empty means the art director chooses.
+ */
+export interface InviteDetails {
+  style?: Style;
+  date: string | null; time: string; message: string;
+  price?: string; menu?: { name: string; price: string }[];
+  side?: 'left' | 'right'; accent?: 'none' | 'gold' | 'orange'; lead?: string;
+}
 
-/** The owner's invite details, cleaned: an empty set is null (the post's date, the opening hours and "FROM"). */
+/** The owner's look details, cleaned: an empty set is null (the post's date, the opening hours and "FROM"). */
 export function cleanInvite(v: unknown): InviteDetails | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
   const s = (x: unknown, max: number) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
   const date = /^\d{4}-\d{2}-\d{2}$/.test(s(o.date, 10)) ? s(o.date, 10) : null;
-  const out = { date, time: s(o.time, 24), message: s(o.message, 24) };
-  return out.date || out.time || out.message ? out : null;
+  const out: InviteDetails = { date, time: s(o.time, 24), message: s(o.message, 24) };
+  if (isStyle(o.style)) out.style = o.style;
+  const price = s(o.price, 12);
+  if (price) out.price = price;
+  const menu = Array.isArray(o.menu) ? o.menu.map((m) => ({ name: s((m as Record<string, unknown>)?.name, 40), price: s((m as Record<string, unknown>)?.price, 12) })).filter((m) => m.name).slice(0, 6) : [];
+  if (menu.length) out.menu = menu;
+  if (o.side === 'left' || o.side === 'right') out.side = o.side;
+  if (o.accent === 'none' || o.accent === 'gold' || o.accent === 'orange') out.accent = o.accent;
+  const lead = s(o.lead, 30);
+  if (lead && out.accent && out.accent !== 'none') out.lead = lead;
+  return out.date || out.time || out.message || Object.keys(out).length > 3 ? out : null;
 }
 
 /** The clips on a reel's row: how many were received, and the picked ones' names in order. */

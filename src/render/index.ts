@@ -10,11 +10,15 @@ import { composeLayoutA, composeLayoutB, composeTextOnly, type Cutout } from './
 import { composeFlat, composeInvite, composePoster } from './compose-styles.js';
 import { templateEntry, templateKeyFor, type TemplateKey } from './registry.js';
 import { PairData, composePair, pairLayer } from './pair.js';
+import {
+  ArchData, COUNTDOWN_PHOTO_SHARE, CountdownData, JaaliData, MenuData, archLayer, archWindow, composeArch, composeJaali, composeMenu,
+  countdownFor, countdownLayer, jaaliLayer, jaaliMedallion, menuLayer, menuStrip, priceBadge, ribbon,
+} from './occasion.js';
 import { FlatData, INVITE_PHOTO_SHARE, InviteData, PosterData, SplitData, flatLayer, flatPlate, inviteLayer, posterLayer, posterPlate, splitLayer } from './styled.js';
 import { STYLES, feasibleStyle, type Style } from './styles.js';
 import {
   CarouselCoverData, CarouselSlideData, HeroData, ReelCoverData, ReviewData, StoryData, TextOnlyData,
-  carouselCoverLayer, carouselSlideLayer, heroLayer, layerToPng, makeCtx, reelCoverLayer, reviewLayer, storyLayer, textOnlyLayer,
+  canvas, carouselCoverLayer, carouselSlideLayer, heroLayer, layerToPng, makeCtx, reelCoverLayer, reviewLayer, storyLayer, textOnlyLayer,
   type RenderSettings,
 } from './templates.js';
 
@@ -40,12 +44,18 @@ export interface RenderInput {
   cutout: Cutout | null;
   busyPhoto?: boolean;
   settings: RenderSettings;
-  /** The art director's (or heuristic) decisions; anything missing falls back to the house defaults. */
-  design?: Partial<DesignSpec> | null;
+  /**
+   * The art director's (or heuristic) decisions; anything missing falls back to the house defaults. The lead-in's
+   * colour is the owner's alone (lookSpec), never the director's.
+   */
+  design?: (Partial<DesignSpec> & { accent_color?: 'saffron' | 'ember' }) | null;
   /** A 9:16 crop for the story; the feed photo is re-cropped when it is missing. */
   storyPhoto?: Buffer | null;
-  /** What the invite style prints instead of the post's date, the opening hours and FROM. */
-  invite?: { date?: string | null; time?: string; message?: string } | null;
+  /**
+   * A look's own details: what the invite prints instead of the post's date, the opening hours and FROM; the
+   * countdown's big day and words; the ribbon's words; the deal's price and the word over it; the menu's dishes.
+   */
+  invite?: LookDetails | null;
   /** The post's date (YYYY-MM-DD), shown by the invite style. */
   date?: string | null;
   /** The post's dish, for the brand line. */
@@ -56,9 +66,34 @@ export interface RenderInput {
 
 export interface PairPhoto { name: string; feed: Buffer; tall: Buffer }
 
+/** A look's own details (calendar_rows.invite), and the owner's text side and italic lead-in over the title. */
+export interface LookDetails {
+  date?: string | null; time?: string; message?: string; price?: string; menu?: { name: string; price: string }[];
+  side?: 'left' | 'right'; accent?: 'none' | 'gold' | 'orange'; lead?: string;
+}
+
+/** The owner's text side and lead-in as design fields; they win over the art director and the critic. */
+export function lookSpec(look: LookDetails | null | undefined): Partial<DesignSpec> & { accent_color?: 'saffron' | 'ember' } {
+  const out: Partial<DesignSpec> & { accent_color?: 'saffron' | 'ember' } = {};
+  if (look?.side) out.text_side = look.side;
+  if (look?.accent === 'none') out.accent_word = false;
+  else if (look?.accent) { out.accent_word = true; out.accent_color = look.accent === 'orange' ? 'ember' : 'saffron'; }
+  return out;
+}
+
+/** The input with the owner's look applied: the design fields, and their own lead-in words over the title. */
+export function withLook(input: RenderInput): RenderInput {
+  const look = lookSpec(input.invite);
+  if (!Object.keys(look).length) return input;
+  const design = { ...(input.design ?? {}), ...look };
+  const lead = input.invite?.lead?.trim();
+  const headline = design.accent_word && lead ? `${lead}\n${input.headline.replace(/\s*\n\s*/g, ' ')}` : input.headline;
+  return { ...input, design, headline };
+}
+
 /** HeroData/StoryData fields from a design spec (undefined fields take the zod defaults). */
-function designFields(d: Partial<DesignSpec> | null | undefined) {
-  return { textPosition: d?.text_position, textSide: d?.text_side, bandStrength: d?.band_strength, typeScale: d?.type_scale, accentWord: d?.accent_word };
+function designFields(d: RenderInput['design']) {
+  return { textPosition: d?.text_position, textSide: d?.text_side, bandStrength: d?.band_strength, typeScale: d?.type_scale, accentWord: d?.accent_word, accentColor: d?.accent_color };
 }
 
 /** "FRIDAY" and "08 NOV" for the invite's first column, from a YYYY-MM-DD date. */
@@ -78,7 +113,8 @@ export function styleFor(input: Pick<RenderInput, 'photo' | 'cutout' | 'design'>
 
 export interface RenderOutput { format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; png: Buffer }
 
-export async function renderPost(input: RenderInput, baseBrand: Brand = loadBrand()): Promise<RenderOutput[]> {
+export async function renderPost(raw: RenderInput, baseBrand: Brand = loadBrand()): Promise<RenderOutput[]> {
+  const input = withLook(raw);
   const key = templateKeyFor(input.sheetTemplate);
   const entry = templateEntry(input.sheetTemplate);
   const brand: Brand = { ...baseBrand, brandLine: brandLineOn(input.date, baseBrand.brandLine, isKarahiPost({ template: input.sheetTemplate, label: input.label, dish: input.dish })) };
@@ -105,30 +141,65 @@ export async function renderPost(input: RenderInput, baseBrand: Brand = loadBran
   const lift = design?.lift_tone ?? 'auto';
   const style = styleFor(input);
 
-  /** The split, poster, flat and invite compositions at any canvas size; null when the style is band. */
-  const styledRender = async (w: number, h: number, photo: Buffer): Promise<Buffer | null> => {
+  /** The styled compositions at any canvas size; null when the style is band. Only jaali and menu take no photo. */
+  const styledRender = async (w: number, h: number, photo: Buffer | null): Promise<Buffer | null> => {
     const ctx = makeCtx(brand, w, h, input.settings);
     const typeScale = design?.type_scale;
     const common = { label: input.label, headline: input.headline, line: input.line };
+    const looks = { typeScale, accentWord: design?.accent_word, accentColor: design?.accent_color };
+    const message = input.invite?.message?.trim() ?? '';
+    if (!photo && !STYLES[style].photoFree) return null;
     switch (style) {
       case 'split': {
+        if (!photo) return null;
         const layer = await layerToPng(brand, splitLayer(ctx, SplitData.parse({ ...common, footer, bandStrength: design?.band_strength, typeScale })), w, h);
         return composeLayoutB(brand, w, h, photo, layer, { lift });
       }
       case 'poster': {
-        if (!input.cutout) return null;
+        if (!input.cutout || !photo) return null;
         const layer = await layerToPng(brand, posterLayer(ctx, PosterData.parse({ label: input.label, headline: input.headline, footer, typeScale })), w, h);
         return composePoster(brand, w, h, input.cutout, layer, posterPlate(ctx));
       }
       case 'flat': {
-        if (!input.cutout) return null;
+        if (!input.cutout || !photo) return null;
         const layer = await layerToPng(brand, flatLayer(ctx, FlatData.parse({ ...common, hours: input.settings.openHours.slice(0, 24), handle: (input.settings.handle ?? '').slice(0, 40), typeScale })), w, h);
         return composeFlat(brand, w, h, input.cutout, layer, flatPlate(ctx));
       }
       case 'invite': {
+        if (!photo) return null;
         const side = design?.text_side ?? 'left';
-        const layer = await layerToPng(brand, inviteLayer(ctx, InviteData.parse({ ...common, ...inviteDate(input.invite?.date || input.date), hours: (input.invite?.time || input.settings.openHours).slice(0, 24), message: input.invite?.message ?? '', address: input.settings.storeAddress.slice(0, 80), website: (input.settings.website ?? '').slice(0, 60), textSide: side, typeScale })), w, h);
-        return composeInvite(brand, w, h, photo, layer, side === 'right' ? 'left' : 'right', INVITE_PHOTO_SHARE, { lift });
+        const layer = await layerToPng(brand, inviteLayer(ctx, InviteData.parse({ ...common, ...inviteDate(input.invite?.date || input.date), hours: (input.invite?.time || input.settings.openHours).slice(0, 24), message: input.invite?.message ?? '', address: input.settings.storeAddress.slice(0, 80), website: (input.settings.website ?? '').slice(0, 60), textSide: side, typeScale, accentColor: design?.accent_color })), w, h);
+        return composeInvite(brand, w, h, photo!, layer, side === 'right' ? 'left' : 'right', INVITE_PHOTO_SHARE, { lift });
+      }
+      case 'arch': {
+        const layer = await layerToPng(brand, archLayer(ctx, ArchData.parse({ ...common, ...looks })), w, h);
+        return composeArch(brand, w, h, photo!, layer, archWindow(ctx), lift);
+      }
+      case 'countdown': {
+        const big = input.invite?.date || null;
+        const when = inviteDate(big);
+        const layer = await layerToPng(brand, countdownLayer(ctx, CountdownData.parse({ ...common, ...countdownFor(big, input.date, message.slice(0, 24)), when: big ? `${when.day} ${when.date}`.trim().slice(0, 24) : '', ...looks, textSide: design?.text_side })), w, h);
+        return composeInvite(brand, w, h, photo!, layer, design?.text_side === 'right' ? 'left' : 'right', COUNTDOWN_PHOTO_SHARE, { lift });
+      }
+      case 'ribbon':
+      case 'deal': {
+        // The house band design with the text at the bottom, so the top-right corner is free for the ribbon or sticker.
+        const story = h / w > 1.6;
+        const base = story
+          ? storyLayer(ctx, StoryData.parse({ ...common, ...designFields(design), textPosition: 'bottom' }))
+          : heroLayer(ctx, HeroData.parse({ ...common, layout: 'B', footer, busyPhoto: input.busyPhoto ?? false, ...designFields(design), textPosition: 'bottom' }));
+        const extra = style === 'ribbon' ? ribbon(ctx, message || 'NEW ON THE MENU') : priceBadge(ctx, input.invite?.price ?? '', message);
+        const layer = await layerToPng(brand, canvas(ctx, [base, extra]), w, h);
+        return composeLayoutB(brand, w, h, photo!, layer, { lift });
+      }
+      case 'jaali': {
+        const layer = await layerToPng(brand, jaaliLayer(ctx, JaaliData.parse({ ...common, hasPhoto: Boolean(photo), ...looks })), w, h);
+        return composeJaali(brand, w, h, photo, layer, jaaliMedallion(ctx), lift);
+      }
+      case 'menu': {
+        const items = (input.invite?.menu ?? []).filter((i) => i.name.trim()).slice(0, 6).map((i) => ({ name: i.name.trim().slice(0, 40), price: i.price.trim().slice(0, 12) }));
+        const layer = await layerToPng(brand, menuLayer(ctx, MenuData.parse({ ...common, items, hasPhoto: Boolean(photo), ...looks })), w, h);
+        return composeMenu(brand, w, h, photo, layer, menuStrip(ctx), lift);
       }
       default:
         return null;
@@ -138,7 +209,7 @@ export async function renderPost(input: RenderInput, baseBrand: Brand = loadBran
   const feed = async (): Promise<Buffer | null> => {
     switch (key) {
       case 'hero-photo': {
-        if (!input.photo) return textOnly();
+        if (!input.photo) return (style !== 'band' ? await styledRender(fw, fh, null) : null) ?? textOnly();
         const styled = style === 'band' ? null : await styledRender(fw, fh, input.photo);
         if (styled) return styled;
         // The spec's layout wins when it can be honoured; A needs a cutout.
@@ -190,11 +261,11 @@ export async function renderPost(input: RenderInput, baseBrand: Brand = loadBran
     out.push({ format: 'reel-cover', page: null, png: await composeLayoutB(brand, sw, sh, input.storyPhoto ?? input.photo, layer, { lift }) });
   }
 
-  if (input.photo) {
-    // Split, poster and flat have a story of their own; invite's story is the band story.
+  if (input.photo || (key === 'hero-photo' && STYLES[style].photoFree)) {
+    // Most styles have a story of their own; invite's story is the band story.
     const styled = key === 'hero-photo' && style !== 'band' && STYLES[style].story ? await styledRender(sw, sh, input.storyPhoto ?? input.photo) : null;
     if (styled) out.push({ format: 'story', page: null, png: styled });
-    else {
+    else if (input.photo) {
       const ctx = makeCtx(brand, sw, sh, input.settings);
       // An invite's story carries its day and date, and the message over the time, like the feed post.
       const when = inviteDate(input.invite?.date || input.date);

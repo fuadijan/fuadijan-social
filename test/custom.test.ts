@@ -96,6 +96,16 @@ describe('the Create flow', () => {
     expect(parseCustomInput({ ...good, style: 'invite', invite: { time: 'From 7AM' } }).invite).toEqual({ date: null, time: 'From 7AM', message: '' });
   });
 
+  it("keeps a look's price, dishes, text side and italic line, and drops what is not set", async () => {
+    const { cleanInvite } = await import('../src/calendar/rows.js');
+    expect(cleanInvite({ price: ' $25 ', message: 'Only' })).toEqual({ date: null, time: '', message: 'Only', price: '$25' });
+    expect(cleanInvite({ menu: [{ name: 'Chicken karahi', price: '$22' }, { name: '  ', price: '$1' }, { name: 'Lassi' }] })).toEqual({ date: null, time: '', message: '', menu: [{ name: 'Chicken karahi', price: '$22' }, { name: 'Lassi', price: '' }] });
+    expect(cleanInvite({ side: 'right', accent: 'orange', lead: 'Made with love' })).toEqual({ date: null, time: '', message: '', side: 'right', accent: 'orange', lead: 'Made with love' });
+    // The words for the italic line only count with a colour; an unknown side or colour is dropped.
+    expect(cleanInvite({ accent: 'none', lead: 'Fresh from' })).toEqual({ date: null, time: '', message: '', accent: 'none' });
+    expect(cleanInvite({ side: 'middle', accent: 'purple', lead: 'x' })).toBeNull();
+  });
+
   it('notes the look and the change asked for when a design is made again', async () => {
     const { remakeNote } = await import('../src/pipeline/wording.js');
     expect(remakeNote('invite', ' words at the top ')).toBe('invite style, words at the top');

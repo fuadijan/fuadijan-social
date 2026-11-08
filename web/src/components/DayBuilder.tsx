@@ -1,8 +1,8 @@
 import { useId, useMemo, useState } from 'react';
 import { fileUrl, getCreateOptions, getWordings, previewDesign, remakeDesign, savePostParts, switchPostKind } from '../api';
 import { Button, Card } from './fj';
-import { LookStep, PARTS, PartStep, PartsSummary, PreviewImages, Sketch, choicesFor, inviteDay, partDef, startValue, type BuildKind, type Look, type PartChoice, type PartKey, type PartValue, type PartValues } from './PostBuilder';
-import type { DayResponse, InviteDetails, PostPartField, PreviewResponse } from '../types';
+import { EMPTY_DETAILS, LookStep, PARTS, PartStep, PartsSummary, PreviewImages, Sketch, choicesFor, detailsOut, lookSummary, partDef, startValue, type BuildKind, type Look, type PartChoice, type PartKey, type PartValue, type PartValues } from './PostBuilder';
+import type { DayResponse, PostPartField, PreviewResponse } from '../types';
 import { useApi } from '../useApi';
 
 const key = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -15,18 +15,12 @@ export function canBuild(d: DayResponse): boolean {
   return d.slot !== 'carousel' && !/review/.test(d.template);
 }
 
-/** The look a day starts from: its custom style (or the art director's choice) and the invite details it has. */
+/** The look a day starts from: its custom style (or the art director's choice) and the look details it has. */
 function startLook(d: DayResponse): Look {
-  return { style: d.row.custom?.style ?? 'auto', invite: d.row.invite ?? { date: null, time: '', message: '' } };
+  return { style: d.row.invite?.style ?? d.row.custom?.style ?? 'auto', invite: d.row.invite ?? EMPTY_DETAILS };
 }
 
-/** The invite details to save: null when nothing is set (the post's date, the opening hours and FROM). */
-function inviteOut(look: Look): InviteDetails | null {
-  const i = { date: look.invite.date || null, time: look.invite.time.trim(), message: look.invite.message.trim() };
-  return i.date || i.time || i.message ? i : null;
-}
-
-const sameLook = (a: Look, b: Look) => a.style === b.style && JSON.stringify(inviteOut(a)) === JSON.stringify(inviteOut(b));
+const sameLook = (a: Look, b: Look) => a.style === b.style && JSON.stringify(detailsOut(a)) === JSON.stringify(detailsOut(b));
 
 /** A note for the art director when the design is made again: anything to change. */
 function NoteField({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
@@ -54,7 +48,7 @@ export function RemakeDesign({ d, reload, onRebuild }: { d: DayResponse; reload:
     setBusy(true);
     setResult(null);
     try {
-      const r = await remakeDesign(d.dayNo, look.style, note, look.style === 'invite' ? inviteOut(look) : undefined);
+      const r = await remakeDesign(d.dayNo, look.style, note, detailsOut(look));
       setResult({ text: r.message });
       setNote('');
       onRebuild();
@@ -69,7 +63,7 @@ export function RemakeDesign({ d, reload, onRebuild }: { d: DayResponse; reload:
     <div className="sa-field">
       <div className="sa-eyebrow">Make the design again</div>
       <div className="sa-note" style={{ marginBottom: 8 }}>Same words and photo, designed afresh. Pick a look, and say what to change if you like.</div>
-      <LookStep n="✦" styles={options.data?.styles ?? []} value={look} onChange={setLook} />
+      <LookStep n="✦" styles={options.data?.styles ?? []} value={look} onChange={setLook} postDate={d.date} title={d.row.content?.canva_headline ?? undefined} />
       <div style={{ marginTop: 10 }}><NoteField value={note} onChange={setNote} disabled={busy} /></div>
       <div className="sa-actions sa-editor-actions">
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => void remake()}>{busy ? 'Starting…' : 'Make the design again'}</Button>
@@ -210,7 +204,7 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
     try {
       setPreview(await previewDesign({
         template: d.template, kind, label: valueOf('label').text, headline: valueOf('title').text.trim() || d.dish || d.series, line: valueOf('line').text,
-        hook: valueOf('cover').text, style: look.style, dish: d.dish, date: d.date, photo: blank ? { blank: true } : { dayNo: d.dayNo }, invite: look.style === 'invite' ? inviteOut(look) : d.row.invite ?? null,
+        hook: valueOf('cover').text, style: look.style, dish: d.dish, date: d.date, photo: blank ? { blank: true } : { dayNo: d.dayNo }, invite: detailsOut(look),
       }));
     } catch (e) {
       setResult({ text: e instanceof Error ? e.message : String(e), error: true });
@@ -233,7 +227,7 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
           const text = valueOf(k).text.trim();
           out[FIELD[k]] = k === 'onscreen' ? text.split('\n').map((l) => l.trim()).filter(Boolean).join(' → ') : text;
         }
-        const withLook = lookChanged || note.trim() ? { style: look.style, invite: inviteOut(look), ...(note.trim() ? { note: note.trim() } : {}) } : undefined;
+        const withLook = lookChanged || note.trim() ? { style: look.style, invite: detailsOut(look), ...(note.trim() ? { note: note.trim() } : {}) } : undefined;
         r = await savePostParts(d.dayNo, out, withLook);
       }
       setResult({ text: r.message });
@@ -249,7 +243,7 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
   }
 
   const saveLabel = busy === 'save' ? 'Saving…' : !changes.length ? 'Make the design again' : d.pack ? 'Save and make the design again' : 'Save';
-  const sketch = <Sketch kind={kind} parts={parts} values={allValues} active={active} photoUrl={photoUrl} footer={footer} look={look} lookName={styleName} />;
+  const sketch = <Sketch kind={kind} parts={parts} values={allValues} active={active} photoUrl={photoUrl} footer={footer} look={look} lookName={styleName} postDate={d.date} />;
   return (
     <Card title={kind === 'reel' ? 'The reel, part by part' : 'The post, part by part'} id="build">
       {d.slot === 'reel' || d.slot === 'feed' ? <KindSwitch key={d.slot} d={d} reload={reload} onRebuild={onRebuild} /> : null}
@@ -270,13 +264,13 @@ export function DayBuilder({ d, reload, onRebuild }: { d: DayResponse; reload: (
           {active ? (
             <PartStep key={`${d.dayNo}-${active}`} n={step + 1} def={defs[active]} value={valueOf(active)} onChange={(v) => setPart(active, v)} />
           ) : step === lookStep ? (
-            <LookStep n={lookStep + 1} styles={styles} value={look} onChange={(v) => { setLook(v); setPreview(null); setResult(null); }} />
+            <LookStep n={lookStep + 1} styles={styles} value={look} onChange={(v) => { setLook(v); setPreview(null); setResult(null); }} postDate={d.date} title={valueOf('title').text} />
           ) : (
             <>
               <PartsSummary defs={parts.map((k) => defs[k])} values={allValues} onEdit={(k) => setStep(parts.indexOf(k))} />
               <div className="sa-field" style={{ marginTop: 10 }}>
                 <div className="sa-eyebrow">Look</div>
-                <div className="sa-part-words">{styleName ?? 'The art director’s choice'}{look.style === 'invite' ? ` · ${inviteDay(look.invite.date) || 'the day it goes up'} · ${look.invite.message.trim() || 'FROM'} ${look.invite.time.trim() || 'opening hours'}` : ''}</div>
+                <div className="sa-part-words">{lookSummary(look, styleName, d.date)}</div>
                 <Button variant="ghost" size="sm" onClick={() => setStep(lookStep)}>Change</Button>
               </div>
               <div className="sa-note" style={{ marginTop: 10 }}>{changes.length ? `You changed ${changes.join(', ')}.` : d.pack ? 'Nothing changed. You can still make the design again, with a note for the art director.' : 'Nothing changed yet.'}</div>

@@ -210,6 +210,56 @@ describe('the invite style', () => {
   });
 });
 
+describe('the occasion looks', () => {
+  const base = { ...SAMPLE_INPUTS['hero-photo'], photo: karahi, cutout: null, settings: SAMPLE_SETTINGS, date: '2026-11-11' };
+  const lum = async (png: Buffer, left: number, top: number, size = 40) => (await sharp(await sharp(png).extract({ left, top, width: size, height: size }).toBuffer()).greyscale().stats()).channels[0]!.mean;
+
+  it('makes a feed post and a story in every occasion look', async () => {
+    for (const style of ['arch', 'countdown', 'ribbon', 'jaali', 'deal', 'menu'] as const) {
+      const out = await renderPost({ ...base, design: { style }, invite: { date: '2026-11-14', price: '$25', menu: [{ name: 'Chicken karahi', price: '$22' }] } }, brand);
+      expect(out.map((o) => o.format), style).toEqual(['feed', 'story']);
+      const [feed, story] = [await sharp(out[0]!.png).metadata(), await sharp(out[1]!.png).metadata()];
+      expect([feed.width, feed.height, story.width, story.height], style).toEqual([1080, 1350, 1080, 1920]);
+    }
+  });
+
+  it('arch: Night around the arched window, the photo inside it', async () => {
+    const out = await renderPost({ ...base, label: 'FROM ALL OF US', headline: 'Eid Mubarak', design: { style: 'arch' } }, brand);
+    // The top corners beside the arch's curve are Night; the window's middle is the photo.
+    expect(await lum(out[0]!.png, 900, 90)).toBeLessThan(30);
+    expect(await lum(out[0]!.png, 520, 420)).toBeGreaterThan(60);
+  });
+
+  it('jaali and menu are drawn without a photo too', async () => {
+    for (const style of ['jaali', 'menu'] as const) {
+      const out = await renderPost({ ...base, photo: null, design: { style }, invite: { menu: [{ name: 'Chicken karahi', price: '$22' }] } }, brand);
+      expect(out.map((o) => o.format), style).toEqual(['feed', 'story']);
+    }
+  });
+
+  it('countdown: the days left from the day the post goes up to the big day', async () => {
+    const { countdownFor } = await import('../src/render/occasion.js');
+    expect(countdownFor('2026-11-14', '2026-11-11', '')).toEqual({ count: '3', unit: 'DAYS TO GO' });
+    expect(countdownFor('2026-11-12', '2026-11-11', '')).toEqual({ count: '1', unit: 'DAY TO GO' });
+    expect(countdownFor('2026-11-11', '2026-11-11', '')).toEqual({ count: 'TODAY', unit: "IT'S HERE" });
+    expect(countdownFor('2026-11-14', '2026-11-11', 'SLEEPS TO GO')).toEqual({ count: '3', unit: 'SLEEPS TO GO' });
+    expect(countdownFor(null, '2026-11-11', '')).toEqual({ count: 'SOON', unit: '' });
+  });
+
+  it("the owner's text side and italic line win, with their own words over the title", async () => {
+    const { lookSpec, withLook } = await import('../src/render/index.js');
+    expect(lookSpec({ side: 'right', accent: 'orange' })).toEqual({ text_side: 'right', accent_word: true, accent_color: 'ember' });
+    expect(lookSpec({ accent: 'none' })).toEqual({ accent_word: false });
+    expect(lookSpec(null)).toEqual({});
+    const input = withLook({ ...base, headline: 'Chicken\nKarahi', design: { style: 'band', text_side: 'left' }, invite: { side: 'right', accent: 'gold', lead: 'Made with love' } });
+    expect(input.design).toMatchObject({ style: 'band', text_side: 'right', accent_word: true, accent_color: 'saffron' });
+    expect(input.headline).toBe('Made with love\nChicken Karahi');
+    // And a band design with the text on the right renders.
+    const out = await renderPost({ ...base, design: { style: 'band', layout: 'B' }, invite: { side: 'right' } }, brand);
+    expect(out[0]!.format).toBe('feed');
+  });
+});
+
 describe('dish-centred crops', () => {
   it('crops around the located dish at the requested ratio and falls back without a box', async () => {
     const meta = await sharp(karahiFull).metadata();
