@@ -204,7 +204,7 @@ export async function renderPost(input: RenderInput, baseBrand: Brand = loadBran
         ...(when.day || when.date ? [{ head: when.day || 'DATE', value: when.date || when.day }] : []),
         ...(hours ? [{ head: message || (when.day || when.date ? 'FROM' : 'OPEN'), value: hours }] : message ? [{ head: message, value: '' }] : []),
       ] : [];
-      const layer = await layerToPng(brand, storyLayer(ctx, StoryData.parse({ label: input.label, headline: input.headline, details, ...designFields(design) })), sw, sh);
+      const layer = await layerToPng(brand, storyLayer(ctx, StoryData.parse({ label: input.label, headline: input.headline, line: input.line ?? '', details, ...designFields(design) })), sw, sh);
       out.push({ format: 'story', page: null, png: await composeLayoutB(brand, sw, sh, input.storyPhoto ?? input.photo, layer, { lift }) });
     }
   }

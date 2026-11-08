@@ -46,6 +46,8 @@ export const CarouselCoverData = z.object({ cover_title: z.string().max(60), lab
 export const CarouselSlideData = z.object({ title: z.string().max(80), index: z.number(), total: z.number(), hasPhoto: z.boolean().default(false), closing: z.boolean().default(false) });
 export const StoryData = z.object({
   label: z.string().max(40), headline: z.string().max(60),
+  /** The line under the title, as on the feed post (two lines at most). */
+  line: z.string().max(140).default(''),
   /** An invite's story: the day and date, and the message over the time, in columns under the headline. */
   details: z.array(z.object({ head: z.string().max(24), value: z.string().max(24) })).max(3).default([]),
   ...designFields,
@@ -285,7 +287,7 @@ export function storyLayer(ctx: Ctx, d: z.infer<typeof StoryData>): El {
     el('div', { display: 'flex', fontFamily: brand.fonts.body.family, fontWeight: 500, fontSize: 26, letterSpacing: '0.22em', color: brand.colors.saffron }, uc(x.head)),
     ...(x.value ? [el('div', { display: 'flex', fontFamily: brand.fonts.heading.family, fontSize: 50, lineHeight: 1.1, color: brand.colors.cream }, uc(x.value))] : []),
   ])))] : [];
-  const block = [label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx), ...details];
+  const block = [label(ctx, d.label, brand.colors.sand, d.typeScale), spacer(18), h.el, rule(ctx), ...(d.line ? [line(ctx, d.line, 760, brand.layout.line.size, 'left', 2), spacer(30)] : []), ...details];
   return canvas(ctx, [
     gradient(ctx, atTop ? 0.5 : 0.48, d.bandStrength, atTop ? 'top' : 'bottom'),
     ...(atTop ? [gradient(ctx, 0.16, Math.min(1, d.bandStrength), 'bottom')] : []),

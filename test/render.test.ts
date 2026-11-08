@@ -198,6 +198,9 @@ describe('the invite style', () => {
     const brand = loadBrand();
     const story = JSON.stringify(templates.storyLayer(templates.makeCtx(brand, 1080, 1920, SAMPLE_SETTINGS), templates.StoryData.parse({ label: 'X', headline: 'Paratha', details: [{ head: 'SATURDAY', value: '14 NOV' }, { head: 'All day', value: '7AM' }] })));
     expect(story).toContain('ALL DAY');
+    // The line under the title is on the story too.
+    const lined = JSON.stringify(templates.storyLayer(templates.makeCtx(brand, 1080, 1920, SAMPLE_SETTINGS), templates.StoryData.parse({ label: 'X', headline: 'Aloo Paratha', line: 'Lahori parathas are coming to Fuadijan.' })));
+    expect(lined).toContain('Lahori parathas are coming');
     expect(story).toContain('14 NOV');
     const feed = JSON.stringify(styled.inviteLayer(templates.makeCtx(brand, 1080, 1350, SAMPLE_SETTINGS), styled.InviteData.parse({ label: 'X', headline: 'Paratha', line: '', day: 'SATURDAY', date: '14 NOV', hours: '7AM', message: 'All day', textSide: 'left', typeScale: 1 })));
     expect(feed).toContain('ALL DAY');
