@@ -9,6 +9,7 @@ import type { Db } from '../db/pool.js';
 import { getFile } from '../files.js';
 import { CROPS, crop, decode } from '../images/prep.js';
 import { loadBrand } from '../render/brand.js';
+import { themeFor } from '../render/theme.js';
 import { lookSpec, renderPost, styleFor } from '../render/index.js';
 import { templateEntry } from '../render/registry.js';
 import { STYLE_KEYS, STYLES, type Style } from '../render/styles.js';
@@ -63,7 +64,7 @@ export function parsePreviewInput(body: unknown): PreviewInput {
     : null;
   return {
     template, kind: b.kind === 'reel' ? 'reel' : 'post', label: str(b.label, 40), headline, line: str(b.line, 140), hook: str(b.hook, 70),
-    style: style as Style | 'auto', dish: str(b.dish, 60) || null, date: str(b.date, 10) || null, photo, invite: cleanInvite(b.invite),
+    style: style as Style | 'auto', dish: str(b.dish, 60) || null, date: str(b.date, 10) || null, photo, invite: cleanInvite(b.invite, style),
   };
 }
 
@@ -118,9 +119,10 @@ export async function previewDesign(db: Db, input: PreviewInput): Promise<Previe
   const asked: Style = input.style === 'auto' ? entry.style ?? 'band' : input.style;
   const design = { style: asked, ...lookSpec(input.invite) };
   const style = styleFor({ photo: photo.feed, cutout: null, design });
+  const theme = await themeFor(input.date);
   const outputs = await renderPost({
     sheetTemplate: input.template, slot: input.kind === 'reel' ? 'reel' : 'feed', label: input.label || entry.label, headline: input.headline, line: input.line,
-    hook: input.kind === 'reel' ? input.hook || input.headline : null, photo: photo.feed, storyPhoto: photo.tall, cutout: null, settings, design, date: input.date, dish: input.dish, invite: input.invite,
+    hook: input.kind === 'reel' ? input.hook || input.headline : null, photo: photo.feed, storyPhoto: photo.tall, cutout: null, settings, design, date: input.date, dish: input.dish, invite: input.invite, theme,
   }, loadBrand());
   const wanted = outputs.filter((o) => (input.kind === 'reel' ? o.format === 'reel-cover' : o.format === 'feed' || o.format === 'story'));
   const images = await Promise.all(wanted.map(async (o) => ({ format: o.format as 'feed' | 'story' | 'reel-cover', dataUrl: await toJpegUrl(o.png) })));
@@ -129,6 +131,7 @@ export async function previewDesign(db: Db, input: PreviewInput): Promise<Previe
   const lookNote = style !== asked
     ? `${STYLES[asked].name} needs the plate cut out of the photo, which happens when the design is made; the preview shows ${STYLES[style].name}.`
     : input.style === 'auto' && !blank ? 'The art director may move the words or pick another style when the design is made; the words stay as you see them.' : null;
-  const note = [blankNote, lookNote].filter(Boolean).join(' ') || null;
+  const themeNote = theme ? `${input.date} is in the ${theme.name} theme (set on the hub's Themes page), so the post wears its colours.` : null;
+  const note = [blankNote, lookNote, themeNote].filter(Boolean).join(' ') || null;
   return { images, style, note };
 }

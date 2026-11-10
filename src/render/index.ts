@@ -6,13 +6,16 @@ import { brandLineOn, isKarahiPost } from '../pipeline/packs.js';
 import type { z } from 'zod';
 import type { DesignSpec } from '../brain/schemas.js';
 import { loadBrand, type Brand } from './brand.js';
+import { themedBrand, type FjTheme } from './theme.js';
 import { composeLayoutA, composeLayoutB, composeTextOnly, shiftPhotoUp, type Cutout } from './compose.js';
 import { composeFlat, composeInvite, composePoster } from './compose-styles.js';
 import { templateEntry, templateKeyFor, type TemplateKey } from './registry.js';
 import { PairData, composePair, pairLayer } from './pair.js';
 import {
-  ArchData, COUNTDOWN_PHOTO_SHARE, CountdownData, JaaliData, MenuData, archLayer, archWindow, composeArch, composeJaali, composeMenu,
-  countdownFor, countdownLayer, jaaliLayer, jaaliMedallion, menuLayer, menuStrip, priceBadge, ribbon,
+  ArchData, COUNTDOWN_PHOTO_SHARE, CountdownData, JaaliData, MenuData, PILLARS_PHOTO_SHARE, PillarsData, StarsData, VisitData, WeeklyData,
+  archLayer, archWindow, composeArch, composeJaali, composeMenu, composePillars, composeVisit, countdownFor, countdownLayer, jaaliLayer,
+  jaaliMedallion, menuLayer, menuStrip, pillarsClear, pillarsLayer, priceBadge, ribbon, starsLayer, stripBelow, visitFrame, visitLayer, weekdayOf,
+  weeklyLayer, weeklyStrip,
 } from './occasion.js';
 import { FlatData, INVITE_PHOTO_SHARE, InviteData, PosterData, SplitData, flatLayer, flatPlate, inviteLayer, posterLayer, posterPlate, splitLayer } from './styled.js';
 import { STYLES, feasibleStyle, type Style } from './styles.js';
@@ -53,11 +56,19 @@ export interface RenderInput {
   storyPhoto?: Buffer | null;
   /**
    * A look's own details: what the invite prints instead of the post's date, the opening hours and FROM; the
-   * countdown's big day and words; the ribbon's words; the deal's price and the word over it; the menu's dishes.
+   * countdown's big day and words; the ribbon's words; the deal's price and the word over it; the menu's dishes;
+   * the weekly night's day, time and offer; the review wall's rating and quotes; the visit card's parking note;
+   * the promise's statements.
    */
   invite?: LookDetails | null;
   /** The post's date (YYYY-MM-DD), shown by the invite style. */
   date?: string | null;
+  /**
+   * The occasion theme covering the post's date (theme.ts: Independence Day in green and white, Eid…), whose colours
+   * replace the kit's for this post; null or missing keeps the everyday kit. The caller looks it up, so rendering
+   * itself never waits on the network.
+   */
+  theme?: FjTheme | null;
   /** The post's dish, for the brand line. */
   dish?: string | null;
   /** Two different dishes in one design, each cropped for the feed's and the taller canvases' panels (pair.ts). */
@@ -69,6 +80,12 @@ export interface PairPhoto { name: string; feed: Buffer; tall: Buffer }
 /** A look's own details (calendar_rows.invite), and the owner's text side and italic lead-in over the title. */
 export interface LookDetails {
   date?: string | null; time?: string; message?: string; price?: string; menu?: { name: string; price: string }[];
+  /** The weekly night's day, 0 = Monday … 6 = Sunday; missing, the day the post goes up. */
+  day?: number;
+  /** The review wall's rating ("4.8") and the guests' words with their initials. */
+  rating?: string; quotes?: { text: string; who: string }[];
+  /** The promise's statements, up to three; missing, the headline split at its lines or sentences. */
+  points?: string[];
   side?: 'left' | 'right'; accent?: 'none' | 'gold' | 'orange'; lead?: string;
   /** Move the photo up by this percentage of its height (10, 20 or 30), so a low dish clears the words. */
   photoUp?: number;
@@ -115,7 +132,8 @@ export function styleFor(input: Pick<RenderInput, 'photo' | 'cutout' | 'design'>
 
 export interface RenderOutput { format: 'feed' | 'story' | 'carousel' | 'reel-cover'; page: number | null; png: Buffer }
 
-export async function renderPost(raw: RenderInput, baseBrand: Brand = loadBrand()): Promise<RenderOutput[]> {
+export async function renderPost(raw: RenderInput, kit: Brand = loadBrand()): Promise<RenderOutput[]> {
+  const baseBrand = themedBrand(kit, raw.theme);
   const looked = withLook(raw);
   const up = (looked.invite?.photoUp ?? 0) / 100;
   const input = up > 0 ? {
@@ -149,7 +167,7 @@ export async function renderPost(raw: RenderInput, baseBrand: Brand = loadBrand(
   const lift = design?.lift_tone ?? 'auto';
   const style = styleFor(input);
 
-  /** The styled compositions at any canvas size; null when the style is band. Only jaali and menu take no photo. */
+  /** The styled compositions at any canvas size; null when the style is band. The photo-free looks take no photo too. */
   const styledRender = async (w: number, h: number, photo: Buffer | null): Promise<Buffer | null> => {
     const ctx = makeCtx(brand, w, h, input.settings);
     const typeScale = design?.type_scale;
@@ -176,7 +194,7 @@ export async function renderPost(raw: RenderInput, baseBrand: Brand = loadBrand(
       case 'invite': {
         if (!photo) return null;
         const side = design?.text_side ?? 'left';
-        const layer = await layerToPng(brand, inviteLayer(ctx, InviteData.parse({ ...common, ...inviteDate(input.invite?.date || input.date), hours: (input.invite?.time || input.settings.openHours).slice(0, 24), message: input.invite?.message ?? '', address: input.settings.storeAddress.slice(0, 80), website: (input.settings.website ?? '').slice(0, 60), textSide: side, typeScale, accentColor: design?.accent_color })), w, h);
+        const layer = await layerToPng(brand, inviteLayer(ctx, InviteData.parse({ ...common, ...inviteDate(input.invite?.date || input.date), hours: (input.invite?.time || input.settings.openHours).slice(0, 24), message: (input.invite?.message ?? '').slice(0, 24), address: input.settings.storeAddress.slice(0, 80), website: (input.settings.website ?? '').slice(0, 60), textSide: side, typeScale, accentColor: design?.accent_color })), w, h);
         return composeInvite(brand, w, h, photo!, layer, side === 'right' ? 'left' : 'right', INVITE_PHOTO_SHARE, { lift });
       }
       case 'arch': {
@@ -208,6 +226,28 @@ export async function renderPost(raw: RenderInput, baseBrand: Brand = loadBrand(
         const items = (input.invite?.menu ?? []).filter((i) => i.name.trim()).slice(0, 6).map((i) => ({ name: i.name.trim().slice(0, 40), price: i.price.trim().slice(0, 12) }));
         const layer = await layerToPng(brand, menuLayer(ctx, MenuData.parse({ ...common, items, hasPhoto: Boolean(photo), ...looks })), w, h);
         return composeMenu(brand, w, h, photo, layer, menuStrip(ctx), lift);
+      }
+      case 'weekly': {
+        // The owner's day, else the weekday the post goes up; the owner's time, else the opening hours.
+        const day = input.invite?.day ?? weekdayOf(input.date);
+        const time = (input.invite?.time?.trim() || input.settings.openHours).slice(0, 24);
+        const layer = await layerToPng(brand, weeklyLayer(ctx, WeeklyData.parse({ ...common, day, time, message: message.slice(0, 40), ...looks })), w, h);
+        return composeMenu(brand, w, h, photo, layer, await stripBelow(layer, weeklyStrip(ctx), Math.round(h * 0.28)), lift);
+      }
+      case 'stars': {
+        const quotes = (input.invite?.quotes ?? []).filter((q) => q.text.trim()).slice(0, 3).map((q) => ({ text: q.text.trim().slice(0, 120), who: (q.who ?? '').trim().slice(0, 24) }));
+        const layer = await layerToPng(brand, starsLayer(ctx, StarsData.parse({ ...common, rating: (input.invite?.rating ?? '').trim().slice(0, 4), quotes, hasPhoto: Boolean(photo), ...looks })), w, h);
+        return composeMenu(brand, w, h, photo, layer, photo ? await stripBelow(layer, menuStrip(ctx), Math.round(h * 0.2)) : 0, lift);
+      }
+      case 'visit': {
+        const s = input.settings;
+        const layer = await layerToPng(brand, visitLayer(ctx, VisitData.parse({ ...common, address: s.storeAddress.slice(0, 80), hours: s.openHours.slice(0, 60), parking: message.slice(0, 40), website: (s.website ?? '').slice(0, 60), hasPhoto: Boolean(photo), ...looks })), w, h);
+        return composeVisit(brand, w, h, photo, layer, visitFrame(ctx), lift);
+      }
+      case 'pillars': {
+        const points = (input.invite?.points ?? []).map((p) => p.trim().slice(0, 32)).filter(Boolean).slice(0, 3);
+        const layer = await layerToPng(brand, pillarsLayer(ctx, PillarsData.parse({ ...common, points, hasPhoto: Boolean(photo), ...looks })), w, h);
+        return composePillars(brand, w, h, photo, layer, PILLARS_PHOTO_SHARE, pillarsClear(ctx), lift);
       }
       default:
         return null;
@@ -278,7 +318,7 @@ export async function renderPost(raw: RenderInput, baseBrand: Brand = loadBrand(
       // An invite's story carries its day and date, and the message over the time, like the feed post.
       const when = inviteDate(input.invite?.date || input.date);
       const hours = (input.invite?.time || input.settings.openHours).slice(0, 24);
-      const message = input.invite?.message ?? '';
+      const message = (input.invite?.message ?? '').slice(0, 24);
       const details = style === 'invite' ? [
         ...(when.day || when.date ? [{ head: when.day || 'DATE', value: when.date || when.day }] : []),
         ...(hours ? [{ head: message || (when.day || when.date ? 'FROM' : 'OPEN'), value: hours }] : message ? [{ head: message, value: '' }] : []),

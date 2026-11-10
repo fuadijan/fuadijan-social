@@ -28,6 +28,9 @@ async function main(): Promise<void> {
   const tikkaFull = (await decode(readFileSync(join(REF, 'real-03.jpg')))).jpeg;
   const tikka = await crop(tikkaFull, '4x5');
   const tikkaTall = await crop(tikkaFull, '9x16');
+  const shopFull = (await decode(readFileSync(join(REF, 'real-02.jpg')))).jpeg;
+  const shop = await crop(shopFull, '4x5');
+  const shopTall = await crop(shopFull, '9x16');
   // Poster and flat need the plate cut out; an oval mask stands in for the background remover.
   const meta = await sharp(karahiFull).metadata();
   const [W, H] = [meta.width!, meta.height!];
@@ -49,6 +52,11 @@ async function main(): Promise<void> {
     jaali: { label: '14 AUGUST', headline: 'Happy\nIndependence Day', line: 'From our family to yours.' },
     deal: { label: 'EID SPECIAL', headline: 'Family\nFeast', line: 'Karahi, naan and raita for four.', invite: { price: '$59', message: 'ONLY' } },
     menu: { label: 'RAMADAN', headline: 'Iftar Menu', invite: { menu: [{ name: 'Chicken karahi', price: '$22' }, { name: 'Chapli kebab', price: '$14' }, { name: 'Chicken tikka', price: '$16' }, { name: 'Pakora plate', price: '$9' }, { name: 'Mango lassi', price: '$6' }] } },
+    weekly: { label: 'EVERY WEDNESDAY', headline: 'Karahi Night', line: 'Bring the family, we’ll bring the karahi.', invite: { day: 2, time: '5PM – 10PM', message: 'FREE NAAN WITH ANY FULL KARAHI' } },
+    // Sample words only: the real wall prints the owner's rating and guests' words as they typed them.
+    stars: { label: 'CUSTOMER LOVE', headline: 'And counting', line: 'Thank you, Auburn.', photo: null, storyPhoto: null, invite: { rating: '4.8', quotes: [{ text: 'Best karahi in Auburn. Fresh off the fire every time.', who: 'S.A.' }, { text: 'The chapli kebab was unreal and the staff were lovely.', who: 'M.K.' }, { text: 'Generous plates, easy parking, we keep coming back.', who: 'R.H.' }] } },
+    visit: { label: 'FIND US', headline: 'Proudly Auburn', line: 'Come in, sit down, the grill is on.', photo: shop, storyPhoto: shopTall, invite: { message: 'Free parking behind the shop' } },
+    pillars: { label: 'OUR PROMISE', headline: 'Smoked. Grilled.\nRooted in tradition.', line: 'Halal Pakistani charcoal BBQ, cooked fresh in Auburn.', photo: tikka, storyPhoto: tikkaTall, invite: { points: ['Smoked.', 'Grilled.', 'Rooted in tradition.'] } },
   };
   for (const style of STYLE_KEYS) {
     const out = await renderPost({ ...base, ...looks[style], design: { style } }, brand);

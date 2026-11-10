@@ -215,8 +215,8 @@ describe('the occasion looks', () => {
   const lum = async (png: Buffer, left: number, top: number, size = 40) => (await sharp(await sharp(png).extract({ left, top, width: size, height: size }).toBuffer()).greyscale().stats()).channels[0]!.mean;
 
   it('makes a feed post and a story in every occasion look', async () => {
-    for (const style of ['arch', 'countdown', 'ribbon', 'jaali', 'deal', 'menu'] as const) {
-      const out = await renderPost({ ...base, design: { style }, invite: { date: '2026-11-14', price: '$25', menu: [{ name: 'Chicken karahi', price: '$22' }] } }, brand);
+    for (const style of ['arch', 'countdown', 'ribbon', 'jaali', 'deal', 'menu', 'weekly', 'stars', 'visit', 'pillars'] as const) {
+      const out = await renderPost({ ...base, design: { style }, invite: { date: '2026-11-14', price: '$25', menu: [{ name: 'Chicken karahi', price: '$22' }], day: 2, message: 'Free naan', rating: '4.8', quotes: [{ text: 'Lovely karahi.', who: 'S.A.' }], points: ['Smoked.', 'Grilled.'] } }, brand);
       expect(out.map((o) => o.format), style).toEqual(['feed', 'story']);
       const [feed, story] = [await sharp(out[0]!.png).metadata(), await sharp(out[1]!.png).metadata()];
       expect([feed.width, feed.height, story.width, story.height], style).toEqual([1080, 1350, 1080, 1920]);
@@ -230,11 +230,100 @@ describe('the occasion looks', () => {
     expect(await lum(out[0]!.png, 520, 420)).toBeGreaterThan(60);
   });
 
-  it('jaali and menu are drawn without a photo too', async () => {
-    for (const style of ['jaali', 'menu'] as const) {
+  it('jaali, menu, stars, visit and pillars are drawn without a photo too', async () => {
+    for (const style of ['jaali', 'menu', 'stars', 'visit', 'pillars'] as const) {
       const out = await renderPost({ ...base, photo: null, design: { style }, invite: { menu: [{ name: 'Chicken karahi', price: '$22' }] } }, brand);
       expect(out.map((o) => o.format), style).toEqual(['feed', 'story']);
     }
+  });
+
+  it("weekly: the week strip fills the ritual's day in saffron, the post's weekday unless the owner set one", async () => {
+    const occasion = await import('../src/render/occasion.js');
+    const { layerToPng, makeCtx } = await import('../src/render/templates.js');
+    expect(occasion.weekdayOf('2026-11-11')).toBe(2); // a Wednesday
+    expect(occasion.weekdayOf('2026-11-16')).toBe(0);
+    expect(occasion.weekdayOf('2026-11-15')).toBe(6);
+    expect(occasion.weekdayOf(null)).toBeNull();
+    const ctx = makeCtx(brand, 1080, 1350, SAMPLE_SETTINGS);
+    const layer = await layerToPng(brand, occasion.weeklyLayer(ctx, occasion.WeeklyData.parse({ label: 'EVERY FRIDAY', headline: 'Chapli Kebab Day', line: '', day: 4, time: '5PM', message: 'Free naan' })), 1080, 1350);
+    const { data, info } = await sharp(layer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const [sr, sg, sb] = [1, 3, 5].map((i) => parseInt(brand.colors.saffron.slice(i, i + 2), 16)) as [number, number, number];
+    // The longest run of solid saffron down a day's circle: the filled circle gives a long one.
+    const run = (x: number) => {
+      let best = 0;
+      let now = 0;
+      for (let y = 0; y < info.height; y++) {
+        const i = (y * info.width + x) * 4;
+        const on = data[i + 3]! > 200 && Math.abs(data[i]! - sr) < 12 && Math.abs(data[i + 1]! - sg) < 12 && Math.abs(data[i + 2]! - sb) < 12;
+        now = on ? now + 1 : 0;
+        best = Math.max(best, now);
+      }
+      return best;
+    };
+    const { size, gap } = occasion.weekCircle(ctx);
+    const left = (1080 - (7 * size + 6 * gap)) / 2;
+    // The letter in the middle of the filled circle is Night, so look just beside it.
+    const beside = (i: number) => Math.round(left + i * (size + gap) + size * 0.18);
+    expect(run(beside(4))).toBeGreaterThan(size * 0.5);
+    for (const other of [0, 2, 3, 6]) expect(run(beside(other)), `day ${other}`).toBeLessThan(size * 0.3);
+    // Through renderPost the day defaults to the post's weekday, and a two-line title still fits above the photo.
+    const out = await renderPost({ ...base, headline: 'Karahi\nNight', design: { style: 'weekly' }, invite: {} }, brand);
+    expect(out.map((o) => o.format)).toEqual(['feed', 'story']);
+  });
+
+  it('stars: the rating, five drawn stars and the quotes, with no photo; at most two quotes beside a photo', async () => {
+    const occasion = await import('../src/render/occasion.js');
+    const { makeCtx } = await import('../src/render/templates.js');
+    const quotes = [{ text: 'Best karahi in Auburn.', who: 'S.A.' }, { text: 'Lovely staff.', who: 'M.K.' }, { text: 'Easy parking.', who: 'R.H.' }];
+    const out = await renderPost({ ...base, photo: null, storyPhoto: null, label: 'CUSTOMER LOVE', headline: 'And counting', design: { style: 'stars' }, invite: { rating: '4.8', quotes } }, brand);
+    expect(out.map((o) => o.format)).toEqual(['feed', 'story']);
+    // The stars are a picture, so no font needs a star glyph; the third quote is left out beside a photo.
+    const ctx = makeCtx(brand, 1080, 1350, SAMPLE_SETTINGS);
+    const alone = JSON.stringify(occasion.starsLayer(ctx, occasion.StarsData.parse({ label: 'X', headline: 'And counting', line: 'Thank you, Auburn', rating: '4.8', quotes, hasPhoto: false })));
+    expect(alone).toContain('data:image/svg+xml');
+    expect(alone).not.toContain('\u2605');
+    expect(alone).toContain('Easy parking.');
+    expect(alone).toContain('PARRAMATTA');
+    const withPhoto = JSON.stringify(occasion.starsLayer(ctx, occasion.StarsData.parse({ label: 'X', headline: 'And counting', line: '', rating: '4.8', quotes, hasPhoto: true })));
+    expect(withPhoto).toContain('Lovely staff.');
+    expect(withPhoto).not.toContain('Easy parking.');
+    // The fifth star is filled to the rating; with no rating all five are full.
+    const svg = (rating: string) => Buffer.from(JSON.stringify(occasion.starRow(ctx, rating, 50)).match(/base64,([^"]+)/)![1]!, 'base64').toString();
+    expect(svg('4.8')).toContain('offset="0.8');
+    expect(svg('')).not.toContain('offset="0.8');
+  });
+
+  it('visit: the address, hours, parking and order rows, only those that are set', async () => {
+    const occasion = await import('../src/render/occasion.js');
+    const { makeCtx } = await import('../src/render/templates.js');
+    const ctx = makeCtx(brand, 1080, 1350, SAMPLE_SETTINGS);
+    const full = JSON.stringify(occasion.visitLayer(ctx, occasion.VisitData.parse({ label: 'FIND US', headline: 'Proudly Auburn', line: '', address: SAMPLE_SETTINGS.storeAddress, hours: '5PM – 10PM', parking: 'Free parking behind the shop', website: 'https://fuadijan.com.au' })));
+    for (const w of ['ADDRESS', 'HOURS', 'PARKING', 'ORDER', 'Free parking behind the shop', 'fuadijan.com.au']) expect(full).toContain(w);
+    expect(full).not.toContain('https://');
+    const bare = JSON.stringify(occasion.visitLayer(ctx, occasion.VisitData.parse({ label: 'FIND US', headline: 'Proudly Auburn', line: '', address: SAMPLE_SETTINGS.storeAddress, hours: '5PM – 10PM' })));
+    expect(bare).not.toContain('PARKING');
+    expect(bare).not.toContain('ORDER');
+    // The photo sits in its rounded window at the top; the corner outside the curve stays Night.
+    const out = await renderPost({ ...base, design: { style: 'visit' }, invite: { message: 'Free parking behind the shop' } }, brand);
+    const f = occasion.visitFrame(ctx);
+    expect(await lum(out[0]!.png, f.left + 2, f.top + 2, 6)).toBeLessThan(30);
+    expect(await lum(out[0]!.png, 520, f.top + Math.round(f.height / 2))).toBeGreaterThan(50);
+  });
+
+  it('pillars: three numbered statements, from the owner or from the title, the photo down the right', async () => {
+    const occasion = await import('../src/render/occasion.js');
+    const { makeCtx } = await import('../src/render/templates.js');
+    expect(occasion.pillarsFrom('Smoked. Grilled. Rooted in tradition.')).toEqual(['Smoked.', 'Grilled.', 'Rooted in tradition.']);
+    expect(occasion.pillarsFrom('100% halal\nNo pork\nNo alcohol')).toEqual(['100% halal', 'No pork', 'No alcohol']);
+    expect(occasion.pillarsFrom('One. Two. Three. Four.')).toEqual(['One.', 'Two.', 'Three. Four.']);
+    const ctx = makeCtx(brand, 1080, 1350, SAMPLE_SETTINGS);
+    const layer = JSON.stringify(occasion.pillarsLayer(ctx, occasion.PillarsData.parse({ label: 'OUR PROMISE', headline: 'Not shown', line: '', points: ['Smoked.', 'Grilled.', 'Rooted in tradition.'] })));
+    for (const w of ['01', '02', '03', 'Smoked.', 'Grilled.']) expect(layer).toContain(w);
+    expect(layer).not.toContain('Not shown');
+    // The right edge is the photo; above the text column it is Night.
+    const out = await renderPost({ ...base, design: { style: 'pillars' }, invite: { points: ['Smoked.', 'Grilled.'] } }, brand);
+    expect(await lum(out[0]!.png, 1000, 600)).toBeGreaterThan(40);
+    expect(await lum(out[0]!.png, 400, 40, 20)).toBeLessThan(30);
   });
 
   it('moves the photo up for a dish low in the frame: the top is trimmed, Night fills in at the bottom', async () => {

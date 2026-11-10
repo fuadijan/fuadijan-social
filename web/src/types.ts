@@ -233,19 +233,25 @@ export interface StatusResponse {
 
 // ─── the Create flow (custom designs) and the wording bank ──────────────────────────────────────────────
 
-export type StyleKey = 'band' | 'split' | 'poster' | 'flat' | 'invite' | 'arch' | 'countdown' | 'ribbon' | 'jaali' | 'deal' | 'menu';
+export type StyleKey = 'band' | 'split' | 'poster' | 'flat' | 'invite' | 'arch' | 'countdown' | 'ribbon' | 'jaali' | 'deal' | 'menu' | 'weekly' | 'stars' | 'visit' | 'pillars';
 export type CustomFormat = 'feed' | 'story' | 'reel';
 
 /**
  * A look's own details: the date (the invite's day, the countdown's big day; YYYY-MM-DD), the time and the short
- * message (over the invite's time, under the count, on the ribbon, over the price); the deal's price; the menu's
- * dishes; and for any look the text side and the italic line over the title (its colour and its own words).
+ * message (over the invite's time, under the count, on the ribbon, over the price, the weekly night's offer, the
+ * visit card's parking note); the deal's price; the menu's dishes; the weekly night's day; the review wall's
+ * rating and quotes; the promise's statements; and for any look the text side and the italic line over the title
+ * (its colour and its own words).
  */
 export interface InviteDetails {
   /** The look picked on the day's page, kept with its details (the server adds it). */
   style?: StyleKey;
   date: string | null; time: string; message: string;
   price?: string; menu?: { name: string; price: string }[];
+  /** The weekly night's day, 0 = Monday … 6 = Sunday; missing, the day the post goes up. */
+  day?: number;
+  rating?: string; quotes?: { text: string; who: string }[];
+  points?: string[];
   side?: 'left' | 'right'; accent?: 'none' | 'gold' | 'orange'; lead?: string;
   /** The photo moved up by 10, 20 or 30 % of its height, for a dish low in the photo. */
   photoUp?: number;

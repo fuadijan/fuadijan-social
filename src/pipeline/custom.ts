@@ -76,7 +76,7 @@ export function parseCustomInput(body: unknown): CustomInput {
   return {
     product, template, style: style as Style | 'auto', formats: [...new Set(formats)], wording, sloganId, date, postTime,
     cta: str(b.cta, 300) || null, hashtags: tags.length ? [...new Set(tags)].join(' ') : null,
-    hook: reel ? str(b.hook, 70) || null : null, onScreen: reel && cards.length ? cards : null, invite: cleanInvite(b.invite),
+    hook: reel ? str(b.hook, 70) || null : null, onScreen: reel && cards.length ? cards : null, invite: cleanInvite(b.invite, style),
   };
 }
 
@@ -115,7 +115,7 @@ export interface CustomCommand {
 }
 
 export const CUSTOM_USAGE = [
-  '/custom <product> [band|split|poster|flat|invite|arch|countdown|ribbon|jaali|deal|menu] [feed|story] [date] [time] [-- <line> | <caption>]',
+  '/custom <product> [band|split|poster|flat|invite|arch|countdown|ribbon|jaali|deal|menu|weekly|stars|visit|pillars] [feed|story] [date] [time] [-- <line> | <caption>]',
   'e.g. /custom chapli kebab poster story tomorrow 7pm -- Hand-formed, fire-finished. | Grilled every evening.',
   'The title is the product\'s name; your words go on the line under it. A different title: -- title: Smoke signals | <line> | <caption>.',
   'Leave the style out and the art director picks; leave feed/story out for both; "-- 2" uses wording 2 from /slogan chapli kebab; no "--" and the agent writes it.',

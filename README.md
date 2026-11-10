@@ -256,12 +256,19 @@ new-product-reveal and weekend-feast → invite), the owner's note locks it (`/r
 the right`, "accent" / "no accent", "band style"), and the critic judges each style by its own rules. The style
 also shapes the story (invite's story is the band story).
 
-**Six occasion looks** (`src/render/occasion.ts`), for special days, which only the owner picks (the art director and
-the critic never choose one): **arch** (the photo in an arched window, the greeting centred under it), **countdown**
-(a giant count of the days from the day the post goes up to the big day, the photo fading off one side), **ribbon**
-(the band design with a ribbon of the owner's words across the corner), **jaali** (a lattice in a double frame, the
-photo in a round window; it also draws with no photo), **deal** (the band design with a price sticker) and **menu**
-(up to six dishes with prices, a strip of the photo along the bottom; also with no photo). `npm run look-samples`
+**Ten occasion looks** (`src/render/occasion.ts`), for special days and weekly rituals, which only the owner picks
+(the art director and the critic never choose one): **arch** (the photo in an arched window, the greeting centred
+under it), **countdown** (a giant count of the days from the day the post goes up to the big day, the photo fading off
+one side), **ribbon** (the band design with a ribbon of the owner's words across the corner), **jaali** (a lattice in
+a double frame, the photo in a round window; it also draws with no photo), **deal** (the band design with a price
+sticker), **menu** (up to six dishes with prices, a strip of the photo along the bottom; also with no photo),
+**weekly** (Weekly night: the title over the week's seven day letters with the ritual's day filled in saffron, the
+time and the offer, the photo filling the lower part; for Karahi Night, Chapli Kebab Day, Student Night), **stars**
+(Review wall: the owner's rating big beside five drawn stars, up to three guest quotes on cards, the address; with a
+photo, a strip of it and two quotes), **visit** (Visit card: the photo in a rounded frame, then the address, hours,
+the owner's parking note and the website as a list) and **pillars** (Promise: three short statements stacked and
+numbered, the photo as a tall strip on the right). Stars, visit and pillars also draw with no photo. They print only
+what the owner typed and the settings, and take their colours from the kit, never their own. `npm run look-samples`
 draws one sample of every look with the reference photos into `web/public/looks/` (the Look step's picture cards)
 and full size into `samples/out/`; run it again after changing a look.
 
@@ -277,7 +284,9 @@ and benefit-caption libraries. "Write my own" and, in Create, "Let the agent wri
 chosen words can be edited. The Look step shows every look as a picture card of what it makes (every-day looks, then
 special occasions) and keeps the look's own details in `calendar_rows.invite` (migration 0015): for Invite the date
 shown, the time and the message over the time, printed on the feed post and the story; for Countdown the big day and
-the words under the count; for Ribbon its words; for Deal the price and the word over it; for Menu board the dishes.
+the words under the count; for Ribbon its words; for Deal the price and the word over it; for Menu board the dishes;
+for Weekly night the day, the time and the offer; for Review wall the rating and the quotes with initials; for Visit
+card the parking note; for Promise the three statements.
 For any look that has them it also sets the text side (left or right) and an italic line over the title in gold or
 orange, with its own words or the title's first line; these win over the art director and the critic (`lookSpec`).
 For a photo whose food sits low, Photo position moves the photo up 10, 20 or 30 % (`shiftPhotoUp`): the top is

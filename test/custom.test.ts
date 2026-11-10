@@ -108,6 +108,24 @@ describe('the Create flow', () => {
     expect(cleanInvite({ photoUp: 55 })).toBeNull();
   });
 
+  it("keeps the weekly night's day, the review wall's rating and quotes and the promise's statements, clamped", async () => {
+    const { cleanInvite } = await import('../src/calendar/rows.js');
+    const blank = { date: null, time: '', message: '' };
+    expect(cleanInvite({ day: 2 })).toEqual({ ...blank, day: 2 });
+    expect(cleanInvite({ day: '4' })).toEqual({ ...blank, day: 4 });
+    // Only a whole day of the week, 0 to 6.
+    for (const day of [7, -1, 2.5, '', null, true, 'Wed']) expect(cleanInvite({ day })).toBeNull();
+    expect(cleanInvite({ rating: ' 4.85 stars ' })).toEqual({ ...blank, rating: '4.85' });
+    const long = 'x'.repeat(200);
+    const quotes = cleanInvite({ quotes: [{ text: long, who: 'y'.repeat(40) }, { text: '  ', who: 'A.B.' }, { text: 'Lovely' }, { text: 'Three' }, { text: 'Four' }] })!.quotes!;
+    expect(quotes).toEqual([{ text: 'x'.repeat(120), who: 'y'.repeat(24) }, { text: 'Lovely', who: '' }, { text: 'Three', who: '' }]);
+    expect(cleanInvite({ points: ['Smoked.', '', 'A statement far longer than any column allows', 'Grilled.', 'Four'] })!.points).toEqual(['Smoked.', 'A statement far longer than any ', 'Grilled.']);
+    // A weekly night's offer may run longer than the other looks' words.
+    expect(cleanInvite({ style: 'weekly', message: 'FREE NAAN WITH ANY FULL KARAHI' })!.message).toBe('FREE NAAN WITH ANY FULL KARAHI');
+    expect(cleanInvite({ message: 'FREE NAAN WITH ANY FULL KARAHI' }, 'weekly')!.message).toBe('FREE NAAN WITH ANY FULL KARAHI');
+    expect(cleanInvite({ message: 'FREE NAAN WITH ANY FULL KARAHI' })!.message).toBe('FREE NAAN WITH ANY FULL ');
+  });
+
   it('notes the look and the change asked for when a design is made again', async () => {
     const { remakeNote } = await import('../src/pipeline/wording.js');
     expect(remakeNote('invite', ' words at the top ')).toBe('invite style, words at the top');

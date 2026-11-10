@@ -241,10 +241,18 @@ export interface StyleOption { key: StyleKey; name: string; blurb: string; occas
 export const EMPTY_DETAILS: InviteDetails = { date: null, time: '', message: '' };
 /** The looks whose text block can sit on either side, and the ones that can carry the italic line over the title. */
 const SIDE_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'invite', 'countdown', 'ribbon', 'deal'];
-const LEAD_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'invite', 'countdown', 'ribbon', 'deal', 'arch', 'jaali', 'menu'];
+const LEAD_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'invite', 'countdown', 'ribbon', 'deal', 'arch', 'jaali', 'menu', 'weekly', 'stars', 'visit'];
 /** The looks that show the whole photo, so it can be moved up (poster and flat use the cut-out plate). */
-const PHOTO_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'split', 'invite', 'arch', 'countdown', 'ribbon', 'jaali', 'deal', 'menu'];
+const PHOTO_LOOKS: (StyleKey | 'auto')[] = ['auto', 'band', 'split', 'invite', 'arch', 'countdown', 'ribbon', 'jaali', 'deal', 'menu', 'weekly', 'stars', 'visit', 'pillars'];
 const UP_NAMES: Record<number, string> = { 10: 'a little', 20: 'up', 30: 'a lot' };
+/** The weekly night's days, 0 = Monday, as the design numbers them. */
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/** The day of the week of a YYYY-MM-DD date, 0 = Monday … 6 = Sunday, or null. */
+function weekdayOf(iso: string | null | undefined): number | null {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return null;
+  return (new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10))).getUTCDay() + 6) % 7;
+}
 
 /** "SATURDAY 14 NOV" from YYYY-MM-DD, as the Invite style prints it. */
 export function inviteDay(iso: string | null): string {
@@ -273,12 +281,18 @@ export function detailsOut(look: Look): InviteDetails | null {
   const s = look.style;
   const out: InviteDetails = {
     date: s === 'invite' || s === 'countdown' ? i.date || null : null,
-    time: s === 'invite' ? i.time.trim() : '',
-    message: ['invite', 'countdown', 'ribbon', 'deal'].includes(s) ? i.message.trim() : '',
+    time: s === 'invite' || s === 'weekly' ? i.time.trim() : '',
+    message: ['invite', 'countdown', 'ribbon', 'deal', 'weekly', 'visit'].includes(s) ? i.message.trim() : '',
   };
   if (s === 'deal' && i.price?.trim()) out.price = i.price.trim();
   const menu = s === 'menu' ? (i.menu ?? []).map((m) => ({ name: m.name.trim(), price: m.price.trim() })).filter((m) => m.name) : [];
   if (menu.length) out.menu = menu;
+  if (s === 'weekly' && i.day !== undefined) out.day = i.day;
+  if (s === 'stars' && i.rating?.trim()) out.rating = i.rating.trim();
+  const quotes = s === 'stars' ? (i.quotes ?? []).map((q) => ({ text: q.text.trim(), who: q.who.trim() })).filter((q) => q.text) : [];
+  if (quotes.length) out.quotes = quotes;
+  const points = s === 'pillars' ? (i.points ?? []).map((p) => p.trim()).filter(Boolean) : [];
+  if (points.length) out.points = points;
   if (i.side && SIDE_LOOKS.includes(s)) out.side = i.side;
   if (i.accent && LEAD_LOOKS.includes(s)) {
     out.accent = i.accent;
@@ -298,7 +312,10 @@ export function lookSummary(look: Look, name: string | undefined, postDate?: str
   return bits.join(' · ');
 }
 
-/** What the look's own details print (the invite's day and time, the countdown, the ribbon, the sticker, the menu). */
+/**
+ * What the look's own details print (the invite's day and time, the countdown, the ribbon, the sticker, the menu,
+ * the weekly night, the review wall, the visit card, the promise).
+ */
 function lookDetails(look: Look, postDate?: string | null): string[] {
   const i = look.invite;
   const bits: string[] = [];
@@ -309,6 +326,20 @@ function lookDetails(look: Look, postDate?: string | null): string[] {
   if (look.style === 'menu') {
     const n = (i.menu ?? []).filter((m) => m.name.trim()).length;
     bits.push(n ? `${n} dish${n === 1 ? '' : 'es'}` : 'no dishes yet: the line shows instead');
+  }
+  if (look.style === 'weekly') {
+    const day = i.day ?? weekdayOf(postDate);
+    bits.push(`${day === null ? 'the day it goes up' : `${DAY_NAMES[day]}s`} ${i.time.trim() || 'opening hours'}`);
+    if (i.message.trim()) bits.push(i.message.trim().toUpperCase());
+  }
+  if (look.style === 'stars') {
+    const n = (i.quotes ?? []).filter((q) => q.text.trim()).length;
+    bits.push(i.rating?.trim() ? `${i.rating.trim()} and five stars` : 'five stars, no rating', n ? `${n} quote${n === 1 ? '' : 's'}` : 'no quotes yet: the line shows instead');
+  }
+  if (look.style === 'visit') bits.push(i.message.trim() ? `parking: ${i.message.trim()}` : 'address, hours and website (no parking row)');
+  if (look.style === 'pillars') {
+    const n = (i.points ?? []).filter((p) => p.trim()).length;
+    bits.push(n ? `${n} statement${n === 1 ? '' : 's'}` : 'the title split into statements');
   }
   return bits;
 }
@@ -325,11 +356,13 @@ function LookCard({ option, on, onPick }: { option: StyleOption | null; on: bool
 
 /**
  * The look of the design, picked from picture cards (a sample of what each makes), then the look's own details
- * (the invite's date and time, the countdown's big day, the ribbon's words, the deal's price, the menu's dishes),
- * and for any look the side the text sits on and an italic line over the title in gold or orange.
+ * (the invite's date and time, the countdown's big day, the ribbon's words, the deal's price, the menu's dishes,
+ * the weekly night's day, time and offer, the review wall's rating and quotes, the visit card's parking note and the
+ * promise's statements), and for any look the side the text sits on and an italic line over the title in gold or
+ * orange.
  */
 export function LookStep({ n, styles, value, onChange, postDate, title }: { n: number | string; styles: StyleOption[]; value: Look; onChange: (v: Look) => void; postDate?: string | null; title?: string }) {
-  const ids = { d: useId(), t: useId(), m: useId(), p: useId(), side: useId(), acc: useId(), lead: useId(), up: useId() };
+  const ids = { d: useId(), t: useId(), m: useId(), p: useId(), day: useId(), r: useId(), side: useId(), acc: useId(), lead: useId(), up: useId() };
   const inv = value.invite;
   const setInvite = (patch: Partial<InviteDetails>) => onChange({ ...value, invite: { ...inv, ...patch } });
   // Each look's words mean something different, so they start empty when the look changes.
@@ -339,6 +372,10 @@ export function LookStep({ n, styles, value, onChange, postDate, title }: { n: n
   const occasion = styles.filter((s) => s.occasion);
   const menu = inv.menu?.length ? inv.menu : [{ name: '', price: '' }];
   const setDish = (i: number, patch: Partial<{ name: string; price: string }>) => setInvite({ menu: menu.map((m, j) => (j === i ? { ...m, ...patch } : m)) });
+  const quotes = inv.quotes?.length ? inv.quotes : [{ text: '', who: '' }];
+  const setQuote = (i: number, patch: Partial<{ text: string; who: string }>) => setInvite({ quotes: quotes.map((q, j) => (j === i ? { ...q, ...patch } : q)) });
+  const points = [0, 1, 2].map((i) => inv.points?.[i] ?? '');
+  const postDay = weekdayOf(postDate);
   const firstLine = (title ?? '').split('\n')[0]?.trim() ?? '';
   return (
     <div className="sa-part">
@@ -440,6 +477,68 @@ export function LookStep({ n, styles, value, onChange, postDate, title }: { n: n
           ))}
           {menu.length < 6 ? <div><Button variant="ghost" size="sm" onClick={() => setInvite({ menu: [...menu, { name: '', price: '' }] })}>+ Add a dish</Button></div> : null}
           <div className="sa-note">The title goes above the list (Iftar Menu, Eid Platters). With no dishes, the line under the title shows instead.</div>
+        </div>
+      ) : null}
+
+      {value.style === 'weekly' ? (
+        <div className="sa-invite">
+          <div className="sa-eyebrow" style={{ marginTop: 12 }}>What the weekly night prints</div>
+          <div className="sa-invite-time">
+            <div>
+              <label className="sa-eyebrow" htmlFor={ids.day}>The night</label>
+              <select id={ids.day} className="sa-input sa-select" value={inv.day === undefined ? '' : String(inv.day)} onChange={(e) => setInvite({ day: e.target.value === '' ? undefined : Number(e.target.value) })}>
+                <option value="">The day it goes up{postDay !== null ? ` (${DAY_NAMES[postDay]})` : ''}</option>
+                {DAY_NAMES.map((name, i) => <option key={name} value={i}>{name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="sa-eyebrow" htmlFor={ids.t}>Time</label>
+              <input id={ids.t} className="sa-input" maxLength={24} value={inv.time} placeholder="5PM – 10PM" onChange={(e) => setInvite({ time: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="sa-eyebrow" htmlFor={ids.m}>The offer</label>
+            <input id={ids.m} className="sa-input" maxLength={40} value={inv.message} placeholder="FREE NAAN WITH ANY FULL KARAHI" onChange={(e) => setInvite({ message: e.target.value })} />
+          </div>
+          <div className="sa-note">The title names the night (Karahi Night, Student Night) and its day is filled in on the week under it. Empty time: the opening hours. Empty offer: the line under the title shows instead. Only an offer the shop really runs.</div>
+        </div>
+      ) : null}
+
+      {value.style === 'stars' ? (
+        <div className="sa-invite">
+          <div className="sa-eyebrow" style={{ marginTop: 12 }}>What the review wall prints</div>
+          <div>
+            <label className="sa-eyebrow" htmlFor={ids.r}>Rating</label>
+            <input id={ids.r} className="sa-input" maxLength={4} value={inv.rating ?? ''} placeholder="4.8" onChange={(e) => setInvite({ rating: e.target.value })} />
+          </div>
+          <div className="sa-eyebrow">Guests’ words (up to three; two with a photo)</div>
+          {quotes.map((q, i) => (
+            <div key={i} className="sa-menu-row">
+              <input className="sa-input" aria-label={`Quote ${i + 1}`} maxLength={120} value={q.text} placeholder={i === 0 ? 'Best karahi in Auburn.' : 'A short quote'} onChange={(e) => setQuote(i, { text: e.target.value })} />
+              <input className="sa-input" aria-label={`Initials for quote ${i + 1}`} maxLength={24} value={q.who} placeholder="S.A." onChange={(e) => setQuote(i, { who: e.target.value })} />
+              <Button variant="ghost" size="sm" aria-label={`Remove quote ${i + 1}`} disabled={quotes.length === 1 && !q.text && !q.who} onClick={() => setInvite({ quotes: quotes.filter((_, j) => j !== i) })}>✕</Button>
+            </div>
+          ))}
+          {quotes.length < 3 ? <div><Button variant="ghost" size="sm" onClick={() => setInvite({ quotes: [...quotes, { text: '', who: '' }] })}>+ Add a quote</Button></div> : null}
+          <div className="sa-note">The rating as Google shows it on the day, and real reviews word for word with the guest’s initials. With no quotes, the line under the title shows instead; the address is at the bottom.</div>
+        </div>
+      ) : null}
+
+      {value.style === 'visit' ? (
+        <div className="sa-invite">
+          <label className="sa-eyebrow" htmlFor={ids.m} style={{ marginTop: 12 }}>Parking</label>
+          <input id={ids.m} className="sa-input" maxLength={40} value={inv.message} placeholder="Free parking behind the shop" onChange={(e) => setInvite({ message: e.target.value })} />
+          <div className="sa-note">The card lists the address, the opening hours and the website from the settings, then this parking note. Empty: no parking row.</div>
+        </div>
+      ) : null}
+
+      {value.style === 'pillars' ? (
+        <div className="sa-invite">
+          <div className="sa-eyebrow" style={{ marginTop: 12 }}>The three statements</div>
+          {points.map((p, i) => (
+            <input key={i} className="sa-input" aria-label={`Statement ${i + 1}`} maxLength={32} value={p} placeholder={['Smoked.', 'Grilled.', 'Rooted in tradition.'][i]} onChange={(e) => setInvite({ points: points.map((q, j) => (j === i ? e.target.value : q)) })} />
+          ))}
+          <div className="sa-note">Short and true: Smoked. Grilled. Rooted in tradition., or 100% halal. No pork. No alcohol. Empty: the title is split into statements at its lines or full stops.</div>
         </div>
       ) : null}
 

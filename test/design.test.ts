@@ -146,6 +146,18 @@ describe('design styles', () => {
     expect(styleFromNote('menu board')).toBe('menu');
     // Ordinary words about the menu or a deal are not a look.
     expect(styleFromNote('new on the menu, great deal')).toBeNull();
+    expect(styleFromNote('weekly night')).toBe('weekly');
+    expect(styleFromNote('weekly style')).toBe('weekly');
+    expect(styleFromNote('a review wall please')).toBe('stars');
+    expect(styleFromNote('stars style')).toBe('stars');
+    expect(styleFromNote('visit card')).toBe('visit');
+    expect(styleFromNote('find us post')).toBe('visit');
+    expect(styleFromNote('visit style')).toBe('visit');
+    expect(styleFromNote('pillars style')).toBe('pillars');
+    expect(styleFromNote('our halal promise')).toBe('pillars');
+    expect(styleFromNote('the manifesto')).toBe('pillars');
+    // Five stars or a visit in passing is not a look.
+    expect(styleFromNote('five stars, come visit us')).toBeNull();
     const base = { style: 'band' as const, accent_word: false, layout: 'B' as const, text_position: 'bottom' as const, text_side: 'left' as const, band_strength: 0.9, type_scale: 1, crop_focus_y: 0.42, lift_tone: false, rationale: 'r' };
     const { spec, locked } = applyOwnerNote(base, 'poster with an accent');
     expect(spec.style).toBe('poster');
@@ -157,11 +169,14 @@ describe('design styles', () => {
     expect(mergeFixes(base, { style: 'deal' }, []).style).toBe('band');
   });
 
-  it('draws jaali and menu without a photo; the other occasion looks need one', () => {
+  it('draws jaali, menu, stars, visit and pillars without a photo; the other occasion looks need one', () => {
     expect(feasibleStyle('jaali', { cutout: false, photo: false })).toBe('jaali');
     expect(feasibleStyle('menu', { cutout: false, photo: false })).toBe('menu');
     expect(feasibleStyle('arch', { cutout: false, photo: false })).toBe('band');
     expect(feasibleStyle('arch', { cutout: false, photo: true })).toBe('arch');
+    for (const style of ['stars', 'visit', 'pillars'] as const) expect(feasibleStyle(style, { cutout: false, photo: false })).toBe(style);
+    expect(feasibleStyle('weekly', { cutout: false, photo: false })).toBe('band');
+    expect(feasibleStyle('weekly', { cutout: false, photo: true })).toBe('weekly');
   });
 
   it('only offers poster and flat with a cutout, and anything with a photo', () => {

@@ -10,10 +10,10 @@
  *  flat    a solid Ember ground, the cut-out plate bleeding off the bottom edge, pill tags and a sticker badge
  *  invite  a Night panel with the photo bleeding off one side, an italic accent word, event details in columns
  *
- * Six occasion looks follow (occasion.ts draws them): arch, countdown, ribbon, jaali, deal and menu. The art
- * director never picks one; the owner does, for a special day.
+ * Ten occasion looks follow (occasion.ts draws them): arch, countdown, ribbon, jaali, deal, menu, weekly, stars,
+ * visit and pillars. The art director never picks one; the owner does, for a special day or a weekly ritual.
  */
-export const STYLE_KEYS = ['band', 'split', 'poster', 'flat', 'invite', 'arch', 'countdown', 'ribbon', 'jaali', 'deal', 'menu'] as const;
+export const STYLE_KEYS = ['band', 'split', 'poster', 'flat', 'invite', 'arch', 'countdown', 'ribbon', 'jaali', 'deal', 'menu', 'weekly', 'stars', 'visit', 'pillars'] as const;
 export type Style = (typeof STYLE_KEYS)[number];
 
 export interface StyleCard {
@@ -112,6 +112,34 @@ export const STYLES: Record<Style, StyleCard> = {
     blurb: 'Up to six dishes with prices, and a strip of the photo along the bottom. For iftar, catering and holiday menus.',
     needsCutout: false, story: true, occasion: true, photoFree: true,
   },
+  weekly: {
+    key: 'weekly', name: 'Weekly night',
+    card: 'Night with the logo, label and title centred at the top, then the week as seven day letters in circles with the ritual\'s day filled saffron, the time big under it (the opening hours unless the owner sets one) and the offer in capitals; the photo fills the lower part and fades up into the Night. For a recurring night: Karahi Night on Wednesdays, Chapli Kebab Day, Student Night.',
+    rules: 'The filled day is the one the owner set (or the day it goes up); the time and the offer read at phone size; the words stay above the photo.',
+    blurb: 'The week with your night\'s day filled in, the time and the offer, the photo below. For Karahi Night and other weekly rituals.',
+    needsCutout: false, story: true, occasion: true,
+  },
+  stars: {
+    key: 'stars', name: 'Review wall',
+    card: 'Night with the label, the rating big in saffron beside five drawn stars, the title ("And counting"), an ember rule and up to three short guest quotes on Charcoal cards in the italic serif with the initials in sand; the line ("Thank you, Auburn") and the address at the bottom. With a photo, a strip of it along the bottom and two quotes at most. Only the rating and the words the owner typed; never a made-up review.',
+    rules: 'The rating and the stars are the first thing seen; every quote reads at phone size; nothing overlaps the address.',
+    blurb: 'Your rating big with five stars, and up to three guest quotes on cards. For a review milestone or a thank-you.',
+    needsCutout: false, story: true, occasion: true, photoFree: true,
+  },
+  visit: {
+    key: 'visit', name: 'Visit card',
+    card: 'The photo (the shop front or a dish) in a rounded window with a saffron outline across the top, then the label (FIND US), the title, an ember rule and a list with saffron heads and cream values: the address, the opening hours, the owner\'s parking note and where to order. Without a photo the list sits in the middle. For a "find us" post or a new neighbourhood.',
+    rules: 'Every row reads at phone size; only the settings and the owner\'s note are printed; the list never crosses the brand line.',
+    blurb: 'The photo in a rounded frame, then the address, hours, parking and where to order. For a "find us" post.',
+    needsCutout: false, story: true, occasion: true, photoFree: true,
+  },
+  pillars: {
+    key: 'pillars', name: 'Promise',
+    card: 'Night with the logo and label, then three short statements stacked in the big serif, each with a small saffron numeral (01, 02, 03) and a thin ember rule between them, the line under them and the brand line at the bottom; the photo is a tall strip on the right fading into the Night. Without a photo the statements are centred. For the brand promise ("Smoked. Grilled. Rooted in tradition.") or a halal promise.',
+    rules: 'Each statement reads at a glance and keeps to two lines; the words stay on the Night, clear of the photo.',
+    blurb: 'Three short statements stacked and numbered, the photo down the right. For the brand promise or a halal promise.',
+    needsCutout: false, story: true, occasion: true, photoFree: true,
+  },
 };
 
 /** The styles the art director may choose from (the occasion looks are the owner's to pick). */
@@ -132,6 +160,10 @@ export function styleFromNote(note: string): Style | null {
   if (/\bjaali\b|\bgreeting card\b/.test(n)) return 'jaali';
   if (/\bstyle\s*deal\b|\bdeal (?:style|look)\b|\bprice (?:sticker|badge)\b/.test(n)) return 'deal';
   if (/\bstyle\s*menu\b|\bmenu[ -]?(?:board|style|look)\b/.test(n)) return 'menu';
+  if (/\bweekly\b/.test(n)) return 'weekly';
+  if (/\breview wall\b|\bstyle\s*stars\b|\bstars? (?:style|look)\b/.test(n)) return 'stars';
+  if (/\bvisit[ -]?card\b|\bfind us\b|\bstyle\s*visit\b|\bvisit (?:style|look)\b/.test(n)) return 'visit';
+  if (/\bpillars?\b|\bmanifesto\b|\bpromise\b/.test(n)) return 'pillars';
   if (/\bstyle\s*band\b|\bband (?:style|look)\b|\bclassic (?:style|look)\b|\bhouse (?:style|look)\b/.test(n)) return 'band';
   return null;
 }

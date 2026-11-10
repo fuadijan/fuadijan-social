@@ -14,6 +14,7 @@ import { cutoutFrom, cutoutUsable, removerFromConfig, type BackgroundRemover } f
 import { cropAround, regionAround, thumbnail, upright } from '../images/prep.js';
 import type { Critique, DesignSpec, MatchResult } from '../brain/schemas.js';
 import { loadBrand } from '../render/brand.js';
+import { themeFor } from '../render/theme.js';
 import type { Cutout } from '../render/compose.js';
 import { lookSpec, renderPost, type RenderInput, type RenderOutput } from '../render/index.js';
 import { pairRatio } from '../render/pair.js';
@@ -143,6 +144,8 @@ export async function renderForRow(ctx: StageContext, row: CalendarRow): Promise
     sheetTemplate: row.template, slot: row.slot, label: copy.label || entry.label, headline: copy.headline, line: copy.line,
     quote, reviewer, slides, hook: row.content?.reel_cover_text?.trim() || row.custom?.hook?.trim() || copy.versions?.reel_cover_text?.trim() || (copy.on_screen_text[0] ?? null),
     photo: heroPhoto, storyPhoto, slidePhotos, cutout: cut.cutout, busyPhoto: read?.background_clutter === 'high', settings, date: row.date, dish: row.dish, invite: row.invite,
+    // The occasion theme of the day the post goes up (Independence Day, Eid…), from the hub's Themes page.
+    theme: await themeFor(row.date),
   };
 
   // Two dishes in one design: its layout is fixed, so the art director and the critic have nothing to decide.
