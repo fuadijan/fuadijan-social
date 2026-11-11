@@ -100,6 +100,14 @@ Photos under 1600 px, too dark or blurry get one question (use it / resend) — 
 `/set wording ask|off` `/fact <dish> -- <what is true>` `/wording N [k]` `/pause` `/resume`,
 plus `posted N`, `skip N`, `ok`. Every question has buttons; a free-text reply answers the latest open one.
 
+**The portrait TV.** `/tvlink` replies with the address to open on a TV stood on its end:
+`https://fjtv.nutrimeals.au/story?feed=https://social.nutrimeals.au&key=…`. That page (in Menu Screens) shows
+the finished stories dated today and the six days before, about 12 seconds each, and re-reads the list every
+10 minutes. A TV can't sign in at the hub, so the list (`GET /public/stories?key=…`) and its images
+(`GET /public/stories/<file id>?key=…`) answer to that key instead, and hand out nothing else: never a story
+dated later, never any other file. The key is made on first use and kept in `settings` (`tv_story_key`);
+`/tvlink new` replaces it, which switches the old address off. Code: `src/story-feed.ts`.
+
 **Wording first.** After the copy is resolved and before anything is designed, the bot shows the calendar's wording
 and two alternatives Claude wrote (shorter and punchier; warmer and story-led) and asks which to use; tap a button
 or type your own headline. Every set is kept in `copy_options` and listed on the Day page under "Wording", where

@@ -1,7 +1,7 @@
 /** Key/value settings the owner edits from Telegram (/set address|hours|website) or that have defaults. */
 import type { Db } from './db/pool.js';
 
-export type SettingKey = 'store_address' | 'open_hours' | 'website_url' | 'post_time_default' | 'story_time_default' | 'instagram_handle' | 'paused' | 'design_notes' | 'wording_choice';
+export type SettingKey = 'store_address' | 'open_hours' | 'website_url' | 'post_time_default' | 'story_time_default' | 'instagram_handle' | 'paused' | 'design_notes' | 'wording_choice' | 'tv_story_key';
 
 export const SET_ALIASES: Record<string, SettingKey> = {
   address: 'store_address',

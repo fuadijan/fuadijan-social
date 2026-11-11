@@ -11,6 +11,7 @@ import { config, hubMode } from './config.js';
 import type { AppContext } from './context.js';
 import { authenticate } from './auth/hubSession.js';
 import { registerApi } from './api/routes.js';
+import { registerStoryFeed } from './story-feed.js';
 import { REMINDERS, type ReminderJob } from './reminders/index.js';
 import type { Worker } from './pipeline/worker.js';
 
@@ -103,6 +104,7 @@ export function buildServer(ctx: AppContext, opts: ServerOptions = {}): FastifyI
   });
 
   registerApi(app, ctx);
+  registerStoryFeed(app, ctx.pool, ctx.now);
 
   // The web app. A page request without a hub session is redirected to the hub (never to a login page of our own).
   if (hasWeb) {

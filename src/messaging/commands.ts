@@ -18,6 +18,8 @@ import { addSlogan, forgetSloganFor, listSlogans, slogansByItem } from '../sloga
 import { SET_ALIASES, allDishFacts, getSetting, removeDishFact, setDishFact, setSetting } from '../settings.js';
 import { formatDay, sydneyDate, sydneyTime, addDays } from '../time.js';
 import { weekLines } from '../reminders/brief.js';
+import { storyFeedKey, tvStoryLink } from '../story-feed.js';
+import { config } from '../config.js';
 
 export const HELP = [
   '/today · /week · /status · /ask',
@@ -30,6 +32,7 @@ export const HELP = [
   '/fact <dish> -- <what is true about it> — remembered for every post about that dish (/fact alone lists them; /fact <dish> -- remove)',
   '/slogan <item> -- <headline> | <line> | <caption> — add a slogan offered as a wording for posts about that item ("all" = every post) · /slogan <item> lists · /slogan <item> -- remove <n>',
   '/custom <product> [style] [feed|story] [date] [time] [-- headline | line | caption] — a one-off design outside the plan (/custom alone explains)',
+  '/tvlink — the address for the portrait TV that shows the last week of stories · /tvlink new — a fresh address (the old one stops working)',
   'posted N — mark Day N posted',
   'Send a photo with a caption like "chapli kebab", "chicken karahi -- cooked to order #day4", "karahi clip 1".',
 ].join('\n');
@@ -122,6 +125,15 @@ export async function handleCommand(app: AppContext, text: string): Promise<void
       if (!Number.isInteger(days) || !days) return void say(`/push ${row.day_no} <days>`);
       const next = await pushRow(pool, row, days, 'owner-telegram');
       return void say(`${rowTitle(row)} moved to ${formatDay(next)}.`);
+    }
+    case '/tvlink': {
+      const rotate = (rest[0] ?? '').toLowerCase() === 'new';
+      const key = await storyFeedKey(pool, rotate);
+      return void say([
+        rotate ? 'New portrait TV address (the old one no longer works):' : 'Open this on the portrait TV:',
+        tvStoryLink(key, config.webUrl),
+        'It shows the stories of the last 7 days, one after another. Keep it to yourself: anyone with it can see them. /tvlink new makes a fresh one.',
+      ].join('\n'));
     }
     case '/set': {
       const key = SET_ALIASES[(rest[0] ?? '').toLowerCase()];
