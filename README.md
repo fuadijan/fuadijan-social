@@ -42,7 +42,7 @@ GoDaddy, hub tile, Telegram).
    - `HUB_COOKIE_DOMAIN=.nutrimeals.au`, the hub's `NEXTAUTH_SECRET`, `WEB_URL=https://social.nutrimeals.au`.
    - In `fuadijan-hub`: add `"social"` to `APP_KEYS` in `lib/apps.ts` (label "Social"), a tile in `app/page.tsx`
      (`APP_URL_SOCIAL`), and grant the owner's account `social`. The hub and this app both cap a sign-in at
-     **48 hours** (`HUB_SESSION_MAX_HOURS`).
+     **7 days** (`HUB_SESSION_MAX_HOURS=168`).
    - `RUN_TOKEN` so `POST /run/morning-brief` etc. can be fired by hand.
 
 ### Local Postgres

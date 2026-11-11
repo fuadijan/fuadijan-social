@@ -44,7 +44,7 @@ export const config = {
     url: str('HUB_URL', 'https://apps.nutrimeals.au').replace(/\/$/, ''),
     cookieDomain: str('HUB_COOKIE_DOMAIN'),
     nextAuthSecret: str('NEXTAUTH_SECRET'),
-    maxHours: num('HUB_SESSION_MAX_HOURS', 48),
+    maxHours: num('HUB_SESSION_MAX_HOURS', 168),
     devUser: str('DEV_USER', 'Ahmad'),
     appKey: 'social',
   },

@@ -5,7 +5,7 @@
  * mints tokens with the real next-auth encoder so an upstream change fails there, not in production.
  *
  * A valid session is not enough: the `apps` claim must include `social`, and the sign-in (`auth_time`, stamped
- * once by the hub) must be under HUB_SESSION_MAX_HOURS (48) old.
+ * once by the hub) must be under HUB_SESSION_MAX_HOURS (168, a week) old.
  */
 import { hkdf } from '@panva/hkdf';
 import { jwtDecrypt } from 'jose';

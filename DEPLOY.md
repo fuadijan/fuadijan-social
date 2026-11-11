@@ -44,7 +44,7 @@ size. Everything else is already paid for (GoDaddy domain, Vercel hub, Anthropic
    HUB_URL=https://apps.nutrimeals.au
    HUB_COOKIE_DOMAIN=.nutrimeals.au
    NEXTAUTH_SECRET=<the hub's NEXTAUTH_SECRET, byte for byte>
-   HUB_SESSION_MAX_HOURS=48
+   HUB_SESSION_MAX_HOURS=168
 
    TELEGRAM_BOT_TOKEN=<from BotFather>
    TELEGRAM_CHAT_ID=<your chat id; see step 5>
@@ -146,7 +146,7 @@ Review, commit and push them (`git diff` first). Then on Vercel set `APP_URL_SOC
 cd ~/Documents/fuadijan-hub && npm run user -- grant <your hub email> social
 ```
 
-Sign out and in again at the hub so the token carries the new grant; the 48-hour cap is already in place on both
+Sign out and in again at the hub so the token carries the new grant; the 7-day cap is already in place on both
 sides.
 
 ## 7. The brand kit (fuadijan-brand)
